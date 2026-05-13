@@ -2989,21 +2989,24 @@ function App() {
       const { open } = await import('@tauri-apps/plugin-dialog');
       const selected = await open({ directory: true, multiple: false });
       if (selected && typeof selected === 'string') {
-        const name = selected.split('/').pop() || selected;
+        const normalizedPath = selected.replace(/[/\\]+$/, '');
+        const name = normalizedPath.split('/').pop() || normalizedPath.split('\\').pop() || normalizedPath;
         const id = crypto.randomUUID();
-        const updated = [...workspaceRoots, { id, name, path: selected }];
+        const updated = [...workspaceRoots, { id, name, path: normalizedPath }];
         setWorkspaceRoots(updated);
+        setActiveRootId(id);
       }
     } else {
       try {
         const res = await fetch('/api/pick-folder');
         const data = await res.json();
         if (!data.path) return;
-        const selected: string = data.path;
-        const name = selected.split('/').pop() || selected;
+        const normalizedPath: string = data.path.replace(/[/\\]+$/, '');
+        const name = normalizedPath.split('/').pop() || normalizedPath;
         const id = crypto.randomUUID();
-        const updated = [...workspaceRoots, { id, name, path: selected }];
+        const updated = [...workspaceRoots, { id, name, path: normalizedPath }];
         setWorkspaceRoots(updated);
+        setActiveRootId(id);
       } catch (e: any) {
         if (e.name !== 'AbortError') showToast('폴더 선택 실패: ' + e.message, 'error');
       }
