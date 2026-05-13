@@ -2080,6 +2080,62 @@ fn open_cmux_terminal(name: String, folder_path: Option<String>) -> Result<Strin
     Ok("cmux 터미널 열림".into())
 }
 
+#[tauri::command]
+fn open_cmux_tmux(name: String, folder_path: Option<String>, worktree_path: Option<String>, bypass: bool, fresh: bool) -> Result<String, String> {
+    if cfg!(windows) { return Err("cmux는 맥에서만 가능합니다".into()); }
+    let cd_path = worktree_path
+        .as_deref()
+        .and_then(|s| s.split(',').next())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .or_else(|| folder_path.clone())
+        .filter(|s| !s.trim().is_empty())
+        .ok_or("프로젝트 경로가 없습니다.")?;
+    let claude_cli = if bypass { "claude --dangerously-skip-permissions" } else { "claude" };
+    let session_name = name.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).collect::<String>();
+    let session_name = if session_name.is_empty() { "port".to_string() } else { session_name };
+    let tmux_cmd = if fresh {
+        format!("tmux kill-session -t {session_name} 2>/dev/null; tmux new-session -s {session_name} -c '{cd_path}' {claude_cli}")
+    } else {
+        format!("tmux new-session -A -s {session_name} -c '{cd_path}' {claude_cli}")
+    };
+    let title = format!("{} (tmux){}", name, if bypass { " ⚡" } else { "" });
+    let cli = resolve_cmux_cli().ok_or_else(cmux_install_error)?;
+    let _ = Command::new("open").args(["-a", "cmux"]).status();
+    if !wait_cmux_ready(&cli, std::time::Duration::from_secs(5)) {
+        return Err(cmux_access_help_msg("cmux 소켓 준비 대기 시간 초과 (5초)"));
+    }
+    let out = Command::new(&cli)
+        .args(["new-workspace", "--cwd", &cd_path, "--command", &tmux_cmd, "--name", &title])
+        .output()
+        .map_err(|e| format!("cmux tmux 실행 실패: {}", e))?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        return Err(cmux_access_help_msg(&format!("cmux tmux 실패: {}", stderr)));
+    }
+    Ok(format!("cmux tmux{} 실행 중", if bypass { " bypass" } else { "" }))
+}
+
+#[tauri::command]
+fn open_cmux_localhost(port: u16, name: String) -> Result<String, String> {
+    if cfg!(windows) { return Err("cmux는 맥에서만 가능합니다".into()); }
+    let url = format!("http://localhost:{}", port);
+    let cli = resolve_cmux_cli().ok_or_else(cmux_install_error)?;
+    let _ = Command::new("open").args(["-a", "cmux"]).status();
+    if !wait_cmux_ready(&cli, std::time::Duration::from_secs(5)) {
+        return Err(cmux_access_help_msg("cmux 소켓 준비 대기 시간 초과 (5초)"));
+    }
+    let out = Command::new(&cli)
+        .args(["new-pane", "--type", "browser", "--url", &url, "--focus", "true"])
+        .output()
+        .map_err(|e| format!("cmux browser 실행 실패: {}", e))?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        return Err(cmux_access_help_msg(&format!("cmux browser 실패: {}", stderr)));
+    }
+    Ok(format!("cmux 브라우저로 localhost:{} 열림", port))
+}
+
 /// If the error pattern suggests access denied (cmuxOnly mode), append guidance.
 fn cmux_access_help_msg(base: &str) -> String {
     format!(
@@ -2203,6 +2259,8 @@ pub fn run() {
         open_cmux_claude,
         open_cmux_claude_new,
         open_cmux_terminal,
+        open_cmux_tmux,
+        open_cmux_localhost,
         get_global_shortcut,
         set_global_shortcut,
         get_platform,

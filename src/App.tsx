@@ -1455,9 +1455,9 @@ function App() {
 
   // cmux invocation — Tauri uses Rust commands, browser falls back to api-server.
   const callCmux = async (
-    rustCmd: 'open_cmux_claude' | 'open_cmux_claude_new' | 'open_cmux_terminal',
-    httpPath: '/api/open-cmux-claude' | '/api/open-cmux-claude-new' | '/api/open-cmux-terminal',
-    body: { folderPath?: string; worktreePath?: string; bypass?: boolean; name?: string }
+    rustCmd: 'open_cmux_claude' | 'open_cmux_claude_new' | 'open_cmux_terminal' | 'open_cmux_localhost' | 'open_cmux_tmux',
+    httpPath: '/api/open-cmux-claude' | '/api/open-cmux-claude-new' | '/api/open-cmux-terminal' | '/api/open-cmux-localhost' | '/api/open-cmux-tmux',
+    body: { folderPath?: string; worktreePath?: string; bypass?: boolean; name?: string; port?: number; fresh?: boolean }
   ): Promise<string> => {
     if (isTauri()) {
       return await invoke<string>(rustCmd, body as any);
@@ -1526,6 +1526,34 @@ function App() {
     } catch (e: any) {
       const raw = typeof e === 'string' ? e : (e?.message ?? String(e));
       showToast(`cmux 터미널 실패: ${raw}`, 'error');
+    }
+  };
+
+  const openTmuxOnCmux = async (item: PortInfo, fresh = false) => {
+    if (isWindows()) { cmuxMacOnlyToast(); return; }
+    recordVisit(item.id);
+    try {
+      const msg = await callCmux('open_cmux_tmux', '/api/open-cmux-tmux', {
+        name: getSessionName(item), folderPath: item.folderPath, bypass: bypassPermissions, fresh,
+      });
+      showToast(msg, 'success');
+    } catch (e: any) {
+      const raw = typeof e === 'string' ? e : (e?.message ?? String(e));
+      showToast(`cmux tmux 실패: ${raw}`, 'error');
+    }
+  };
+
+  const openCmuxLocalhost = async (item: PortInfo) => {
+    if (isWindows()) { cmuxMacOnlyToast(); return; }
+    if (!item.port) { showToast('포트 번호가 없습니다', 'error'); return; }
+    try {
+      const msg = await callCmux('open_cmux_localhost', '/api/open-cmux-localhost', {
+        port: item.port, name: item.name,
+      });
+      showToast(msg, 'success');
+    } catch (e: any) {
+      const raw = typeof e === 'string' ? e : (e?.message ?? String(e));
+      showToast(`cmux localhost 실패: ${raw}`, 'error');
     }
   };
 
@@ -3496,6 +3524,12 @@ function App() {
             style={{...btnBase, gap:3, fontFamily:'inherit', color:'#c8a8f0', borderColor:'rgba(200,168,240,0.25)'}}
             title={`cmux 새창${bypassPermissions?' (bypass)':''} — 기존 워크스페이스 닫고 새로 시작`}
           ><Zap style={{width:9,height:9}}/>{bypassPermissions?'cmux ⚡↺':'cmux ↺'}</button>
+          {item.port && (
+            <button data-help-key="card-cmux-localhost" onClick={e=>{e.stopPropagation(); openCmuxLocalhost(item);}}
+              style={{...btnBase, gap:3, fontFamily:'inherit', color:'#c8a8f0', borderColor:'rgba(200,168,240,0.25)'}}
+              title={`cmux 내장 브라우저로 localhost:${item.port} 열기`}
+            ><Laptop style={{width:9,height:9}}/>cmux localhost</button>
+          )}
           </>)}
           <button data-help-key="card-worktree" onClick={e=>{e.stopPropagation(); toggleWorktreePanel(item.id, item.folderPath);}} style={{...btnBase, color:expandedWorktreeIds.has(item.id)?'#e8a557':'#ede7dd', borderColor:expandedWorktreeIds.has(item.id)?'rgba(232,165,87,0.3)':'rgba(255,240,220,0.07)'}} title="워크트리 관리">
             <GitBranch style={{width:11,height:11}}/>
@@ -3552,9 +3586,12 @@ function App() {
               Claude {bypassPermissions ? '⚡bypass' : ''}
             </div>
             {[
-              {label:'Terminal Claude', icon:<Zap style={{width:11,height:11}}/>, action:()=>openTerminalClaude(item), title:`Terminal.app으로 Claude 실행${bypassPermissions ? ' — bypass 모드' : ''}`, helpKey:'menu-terminal-claude'},
-              {label:'tmux', icon:<SquareTerminal style={{width:11,height:11}}/>, action:()=>openTmuxClaude(item), title:`tmux 세션으로 Claude 실행 (Mac·Windows)${bypassPermissions ? ' — bypass 모드' : ''}`, helpKey:'menu-tmux'},
-              {label:'tmux ↺ 새창', icon:<SquareTerminal style={{width:11,height:11}}/>, action:()=>openTmuxClaudeNew(item), title:`기존 tmux 세션 삭제 후 새창으로 시작${bypassPermissions ? ' — bypass 모드' : ''}`, helpKey:'menu-tmux-new'},
+              {label:'tmux on iTerm', icon:<SquareTerminal style={{width:11,height:11}}/>, action:()=>openTmuxClaude(item), title:`tmux 세션으로 Claude 실행 (Mac·Windows)${bypassPermissions ? ' — bypass 모드' : ''}`, helpKey:'menu-tmux'},
+              {label:'tmux ↺ on iTerm', icon:<SquareTerminal style={{width:11,height:11}}/>, action:()=>openTmuxClaudeNew(item), title:`기존 tmux 세션 삭제 후 새창으로 시작${bypassPermissions ? ' — bypass 모드' : ''}`, helpKey:'menu-tmux-new'},
+              ...(!isWindows() ? [
+              {label:'tmux on cmux', icon:<Terminal style={{width:11,height:11}}/>, action:()=>openTmuxOnCmux(item), title:`cmux에서 tmux 세션으로 Claude 실행${bypassPermissions ? ' — bypass 모드' : ''}`, helpKey:'menu-cmux-tmux'},
+              {label:'tmux ↺ on cmux', icon:<Terminal style={{width:11,height:11}}/>, action:()=>openTmuxOnCmux(item, true), title:`cmux tmux 세션 초기화 후 새로 시작${bypassPermissions ? ' — bypass 모드' : ''}`, helpKey:'menu-cmux-tmux-new'},
+              ] : []),
               ...(!isWindows() ? [
               {label:'cmux (Mac 전용)', icon:<Terminal style={{width:11,height:11}}/>, action:()=>openCmuxClaude(item), title:`cmux 앱으로 Claude 실행 (macOS 전용)${bypassPermissions ? ' — bypass 모드' : ''}`, helpKey:'menu-cmux-mac'},
               {label:'cmux ↺ 새창 (Mac 전용)', icon:<Terminal style={{width:11,height:11}}/>, action:()=>openCmuxClaudeNew(item), title:`cmux 새 워크스페이스를 프로젝트 경로로 열고 Claude 실행${bypassPermissions ? ' — bypass 모드' : ''}`, helpKey:'menu-cmux-mac-new'},
@@ -3886,18 +3923,26 @@ function App() {
               <button onClick={() => openCmuxClaudeNew(sel)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title="cmux 새 워크스페이스">
                 <Terminal style={{width:11,height:11}}/>cmux ↺ 새창
               </button>
+              {sel.port && (
+              <button onClick={() => openCmuxLocalhost(sel)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title={`cmux 내장 브라우저로 localhost:${sel.port} 열기`}>
+                <Laptop style={{width:11,height:11}}/>cmux localhost
+              </button>
+              )}
               <button onClick={() => openCmuxTerminal(sel)} style={rowBtn} title="cmux 터미널 (Claude 없이)">
                 <Terminal style={{width:11,height:11}}/>cmux 터미널
               </button>
-              </>)}
-              <button onClick={() => openTerminalClaude(sel)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title="Terminal.app으로 Claude 실행">
-                <Zap style={{width:11,height:11}}/>Terminal Claude
+              <button onClick={() => openTmuxOnCmux(sel)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title="cmux에서 tmux 세션으로 Claude 실행">
+                <Terminal style={{width:11,height:11}}/>tmux on cmux
               </button>
+              <button onClick={() => openTmuxOnCmux(sel, true)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title="cmux tmux 세션 초기화 후 새로 시작">
+                <Terminal style={{width:11,height:11}}/>tmux ↺ on cmux
+              </button>
+              </>)}
               <button onClick={() => openTmuxClaude(sel)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title="tmux 세션으로 Claude 실행">
-                <SquareTerminal style={{width:11,height:11}}/>tmux
+                <SquareTerminal style={{width:11,height:11}}/>tmux on iTerm
               </button>
               <button onClick={() => openTmuxClaudeNew(sel)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title="기존 tmux 삭제 후 새창">
-                <SquareTerminal style={{width:11,height:11}}/>tmux ↺ 새창
+                <SquareTerminal style={{width:11,height:11}}/>tmux ↺ on iTerm
               </button>
             </div>
 

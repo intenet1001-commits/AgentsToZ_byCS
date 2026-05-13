@@ -1380,13 +1380,14 @@ vercel login
 vercel
 vercel env add VITE_SUPABASE_URL
 vercel env add VITE_SUPABASE_ANON_KEY
-vercel env add VITE_PORTAL_PASSWORD_HASH
+vercel env add VITE_GOOGLE_CLIENT_ID
+vercel env add VITE_ALLOWED_EMAIL
 vercel --prod`;
 
   const steps = [
     { title: 'Fork & Vercel CLI 설치' },
     { title: 'Supabase 테이블 생성' },
-    { title: '비밀번호 해시 생성' },
+    { title: 'Google OAuth 설정' },
     { title: 'Vercel 환경 변수 & 배포' },
     { title: '기기 연결' },
   ];
@@ -1470,45 +1471,57 @@ vercel --prod`;
       )}
     </div>,
 
-    /* 2: Password hash */
+    /* 2: Google OAuth */
     <div key={2} className="space-y-5">
       <InfoBox color="blue">
-        포털 접근 비밀번호를 설정합니다. 입력하면 해시가 자동으로 생성됩니다.<br />
-        <span className="text-zinc-400">비밀번호 없이 공개 운영하려면 비워두고 다음으로 넘어가세요.</span>
+        Google 로그인으로 포털 접근을 제한합니다. <strong>Client ID</strong>만 있으면 되고, Secret은 필요 없습니다.
       </InfoBox>
-      <div>
-        <label className="block text-xs text-zinc-400 mb-2">비밀번호 입력</label>
-        <div className="flex gap-2">
-          <input
-            type={showPassword ? 'text' : 'password'}
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            placeholder="포털 접근 비밀번호"
-            className="flex-1 px-3 py-2 text-sm bg-black/40 border border-zinc-700 text-white placeholder-zinc-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 transition-all"
-          />
-          <button onClick={() => setShowPassword(p => !p)}
-            className="px-3 py-2 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-400 rounded-lg transition-colors">
-            {showPassword ? '숨기기' : '표시'}
-          </button>
-        </div>
-      </div>
-      {passwordHash ? (
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-xs text-zinc-400">SHA-256 해시 (다음 단계에서 사용)</p>
-            <button onClick={() => copy('hash', passwordHash)}
-              className="text-[11px] text-violet-400 hover:text-violet-300 flex items-center gap-1 transition-colors">
-              <Copy className="w-3 h-3" />{copied['hash'] ? '복사됨!' : '복사'}
-            </button>
+      <ol className="space-y-4 text-sm text-zinc-300">
+        <li className="flex gap-3">
+          <span className="w-6 h-6 rounded-full bg-violet-500/20 border border-violet-500/40 flex items-center justify-center text-xs text-violet-400 shrink-0 mt-0.5">1</span>
+          <div className="space-y-1.5">
+            <p className="font-medium">Google Cloud Console 접속</p>
+            <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-600 rounded-lg text-xs text-white transition-colors">
+              <ExternalLink className="w-3 h-3" /> console.cloud.google.com/apis/credentials
+            </a>
           </div>
-          <div className="bg-black/50 border border-zinc-700 rounded-xl px-4 py-3 font-mono text-xs text-emerald-300 break-all">{passwordHash}</div>
-          <p className="text-[10px] text-zinc-600 mt-1">비밀번호 원문은 저장되지 않습니다. 해시값만 Vercel 환경 변수에 저장됩니다.</p>
-        </div>
-      ) : (
-        <div className="bg-zinc-800/40 border border-zinc-700/50 rounded-xl px-4 py-3 text-xs text-zinc-500">
-          비밀번호를 입력하면 해시가 여기에 표시됩니다.
-        </div>
-      )}
+        </li>
+        <li className="flex gap-3">
+          <span className="w-6 h-6 rounded-full bg-violet-500/20 border border-violet-500/40 flex items-center justify-center text-xs text-violet-400 shrink-0 mt-0.5">2</span>
+          <div>
+            <p className="font-medium">OAuth 2.0 클라이언트 ID 생성</p>
+            <p className="text-xs text-zinc-500 mt-1">
+              <strong className="text-zinc-300">+ 사용자 인증 정보 만들기</strong> → <strong className="text-zinc-300">OAuth 클라이언트 ID</strong><br />
+              유형: <code className="text-violet-400">웹 애플리케이션</code>
+            </p>
+          </div>
+        </li>
+        <li className="flex gap-3">
+          <span className="w-6 h-6 rounded-full bg-violet-500/20 border border-violet-500/40 flex items-center justify-center text-xs text-violet-400 shrink-0 mt-0.5">3</span>
+          <div>
+            <p className="font-medium">승인된 JavaScript 출처 추가</p>
+            <div className="mt-1.5 space-y-1">
+              <div className="flex items-center gap-2">
+                <code className="flex-1 px-2.5 py-1.5 bg-black/50 border border-zinc-700 rounded text-xs text-emerald-300 font-mono">https://portmanager-portal.vercel.app</code>
+                <button onClick={() => copy('origin', 'https://portmanager-portal.vercel.app')}
+                  className="text-[11px] text-violet-400 hover:text-violet-300 flex items-center gap-1"><Copy className="w-3 h-3" />{copied['origin'] ? '복사됨!' : '복사'}</button>
+              </div>
+              <p className="text-[10px] text-zinc-600">로컬 테스트 시 http://localhost:5173 도 추가</p>
+            </div>
+          </div>
+        </li>
+        <li className="flex gap-3">
+          <span className="w-6 h-6 rounded-full bg-violet-500/20 border border-violet-500/40 flex items-center justify-center text-xs text-violet-400 shrink-0 mt-0.5">4</span>
+          <div>
+            <p className="font-medium">Client ID 복사 → 다음 단계 환경 변수에 입력</p>
+            <p className="text-xs text-zinc-500 mt-1">
+              형식: <code className="text-violet-400">123456789-abc.apps.googleusercontent.com</code><br />
+              <span className="text-zinc-600">Client Secret은 필요 없습니다.</span>
+            </p>
+          </div>
+        </li>
+      </ol>
     </div>,
 
     /* 3: Vercel deploy */
@@ -1598,12 +1611,8 @@ vercel --prod`;
             <div className="space-y-1">
               <p><code className="text-violet-400">VITE_SUPABASE_URL</code> — Supabase → Project Settings → API → Project URL</p>
               <p><code className="text-violet-400">VITE_SUPABASE_ANON_KEY</code> — 같은 페이지 anon/public key</p>
-              <p><code className="text-violet-400">VITE_PORTAL_PASSWORD_HASH</code> —{' '}
-                {passwordHash
-                  ? <span className="text-emerald-400 font-mono break-all">{passwordHash.slice(0, 20)}…  (Step 2 생성값 ✓)</span>
-                  : <span>Step 2 해시</span>
-                }
-              </p>
+              <p><code className="text-violet-400">VITE_GOOGLE_CLIENT_ID</code> — Step 2에서 생성한 OAuth Client ID</p>
+              <p><code className="text-violet-400">VITE_ALLOWED_EMAIL</code> — 로그인 허용할 Google 계정 이메일</p>
             </div>
           </div>
         </div>
@@ -1627,7 +1636,7 @@ vercel --prod`;
           <span className="w-6 h-6 rounded-full bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-xs text-blue-400 shrink-0 mt-0.5">2</span>
           <div>
             <p className="font-medium">배포된 URL 접속</p>
-            <p className="text-xs text-zinc-500 mt-1">비밀번호 입력 → 기기 목록에서 이 기기 선택 → 데이터 자동 Pull</p>
+            <p className="text-xs text-zinc-500 mt-1">Google 로그인 → 기기 목록에서 이 기기 선택 → 데이터 자동 Pull</p>
           </div>
         </li>
         <li className="flex gap-3">

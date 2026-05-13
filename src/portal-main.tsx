@@ -11,8 +11,10 @@ import {
 import { createClient } from '@supabase/supabase-js';
 import { fetchPushHistory, type PushSnapshot } from './pushHistory';
 
-const PW_VERIFIED_KEY = 'portal_pw_verified';
-const REQUIRED_HASH = (import.meta.env.VITE_PORTAL_PASSWORD_HASH as string | undefined) ?? '';
+const GOOGLE_VERIFIED_KEY = 'portal_google_verified';
+const ALLOWED_EMAIL = (import.meta.env.VITE_ALLOWED_EMAIL as string | undefined) ?? 'intenet1001@gmail.com';
+const ENV_SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? '';
+const ENV_SUPABASE_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? '';
 const PORTAL_WEB_KEY = 'portalData_v1';
 const VIEW_MODE_KEY = 'portalViewMode';
 const SELECTED_DEVICE_KEY = 'portalSelectedDevice';
@@ -66,14 +68,9 @@ interface DeviceRow {
   last_push_at: string;
 }
 
-async function sha256(text: string): Promise<string> {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-function isPasswordVerified(): boolean {
-  if (!REQUIRED_HASH) return true;
-  return localStorage.getItem(PW_VERIFIED_KEY) === REQUIRED_HASH;
+function isGoogleVerified(): boolean {
+  if (!ALLOWED_EMAIL) return true;
+  return localStorage.getItem(GOOGLE_VERIFIED_KEY) === ALLOWED_EMAIL;
 }
 
 function getSupabaseCreds(): { url: string; key: string } | null {
@@ -89,54 +86,102 @@ function getSupabaseCreds(): { url: string; key: string } | null {
       if (supabaseUrl && supabaseAnonKey) return { url: supabaseUrl, key: supabaseAnonKey };
     }
   } catch {}
+  // 새 단말: env vars에서 자동 제공 (Vercel 환경변수로 배포 시 항상 사용 가능)
+  if (ENV_SUPABASE_URL && ENV_SUPABASE_KEY) return { url: ENV_SUPABASE_URL, key: ENV_SUPABASE_KEY };
   return null;
 }
 
-// ─── PasswordGate ─────────────────────────────────────────────────────────────
+// ─── GoogleAuthGate ───────────────────────────────────────────────────────────
 
-function PasswordGate({ onVerified }: { onVerified: () => void }) {
-  const [pw, setPw] = useState('');
-  const [remember, setRemember] = useState(true);
+function GoogleAuthGate({ onVerified }: { onVerified: () => void }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(true);
 
-  async function verify() {
-    if (!pw.trim()) return;
-    setLoading(true); setError('');
-    const hash = await sha256(pw.trim());
-    if (hash === REQUIRED_HASH) {
-      if (remember) localStorage.setItem(PW_VERIFIED_KEY, REQUIRED_HASH);
-      onVerified();
-    } else {
-      setError('비밀번호가 틀렸습니다');
+  const sbUrl = ENV_SUPABASE_URL || getSupabaseCreds()?.url || '';
+  const sbKey = ENV_SUPABASE_KEY || getSupabaseCreds()?.key || '';
+
+  function injectCreds(email: string) {
+    localStorage.setItem(GOOGLE_VERIFIED_KEY, email);
+    if (ENV_SUPABASE_URL && ENV_SUPABASE_KEY) {
+      try {
+        const existing = JSON.parse(localStorage.getItem(PORTAL_WEB_KEY) ?? '{}');
+        if (!existing.supabaseUrl) {
+          existing.supabaseUrl = ENV_SUPABASE_URL;
+          existing.supabaseAnonKey = ENV_SUPABASE_KEY;
+          localStorage.setItem(PORTAL_WEB_KEY, JSON.stringify(existing));
+        }
+      } catch {}
     }
-    setLoading(false);
   }
 
-  const inp = 'w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-blue-500';
+  // OAuth 콜백 후 세션 확인
+  useEffect(() => {
+    if (!sbUrl || !sbKey) { setChecking(false); return; }
+    const sb = createClient(sbUrl, sbKey);
+
+    function check(email: string) {
+      if (email.trim() === ALLOWED_EMAIL.trim()) {
+        injectCreds(email.trim());
+        onVerified();
+      } else if (email) {
+        setChecking(false);
+        setError(`접근 권한이 없습니다 (${email})`);
+        sb.auth.signOut();
+      }
+    }
+
+    const { data: { subscription } } = sb.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION') {
+        setChecking(false);
+        if (session?.user?.email) check(session.user.email);
+      } else if (event === 'SIGNED_IN' && session?.user?.email) {
+        check(session.user.email);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  async function handleLogin() {
+    if (!sbUrl || !sbKey) { setError('Supabase 설정이 없습니다'); return; }
+    setLoading(true);
+    setError('');
+    const sb = createClient(sbUrl, sbKey);
+    const { error: err } = await sb.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin + '/' },
+    });
+    if (err) { setError(err.message); setLoading(false); }
+  }
+
   return (
     <div className="min-h-screen bg-[#0a0a0b] flex items-center justify-center p-4">
-      <div className="w-full max-w-xs bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-4">
+      <div className="w-full max-w-xs bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-5">
         <div className="flex items-center gap-2.5">
           <div className="p-1.5 bg-blue-500/10 rounded-lg border border-blue-500/20">
             <BookMarked className="w-4 h-4 text-blue-400" />
           </div>
           <span className="font-semibold text-white text-sm">북마크</span>
         </div>
-        <div>
-          <label className="text-xs text-zinc-400 mb-1 block">비밀번호</label>
-          <input className={inp} type="password" placeholder="••••••••" value={pw}
-            onChange={e => setPw(e.target.value)} onKeyDown={e => e.key === 'Enter' && verify()} autoFocus />
-        </div>
-        <label className="flex items-center gap-2 cursor-pointer select-none">
-          <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} className="accent-blue-500 w-3.5 h-3.5" />
-          <span className="text-xs text-zinc-400">이 브라우저에서 기억하기</span>
-        </label>
+        {checking ? (
+          <div className="text-xs text-zinc-500 text-center py-3">확인 중…</div>
+        ) : (
+          <>
+            <p className="text-xs text-zinc-400">Google 계정으로 로그인하세요.</p>
+            <button onClick={handleLogin} disabled={loading}
+              className="w-full py-2.5 bg-white hover:bg-zinc-100 disabled:opacity-50 text-zinc-900 text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
+              <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+              </svg>
+              {loading ? '이동 중…' : 'Google로 로그인'}
+            </button>
+          </>
+        )}
         {error && <p className="text-xs text-red-400">{error}</p>}
-        <button className="w-full py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm rounded font-medium transition-colors"
-          onClick={verify} disabled={loading || !pw.trim()}>
-          {loading ? '확인 중…' : '입장'}
-        </button>
       </div>
     </div>
   );
@@ -369,7 +414,7 @@ function DeviceManagerModal({ devices, creds, onClose, onUpdate }: {
 // ─── App ──────────────────────────────────────────────────────────────────────
 
 function App() {
-  const [pwOk, setPwOk] = useState(isPasswordVerified);
+  const [pwOk, setPwOk] = useState(isGoogleVerified);
   const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'error' }[]>([]);
   const [openSettings, setOpenSettings] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('bookmarks');
@@ -426,7 +471,7 @@ function App() {
       showToast('Supabase 설정이 없습니다', 'error');
       return;
     }
-    const pwHash = localStorage.getItem(PW_VERIFIED_KEY) ?? '';
+    const pwHash = '';
     // 현재 보고 있는 device 의 ID/이름을 함께 전달 → 로컬에서 "이어받기" 가능
     const target = devices.find(d => d.id === selectedDeviceId);
     const payload = {
@@ -600,7 +645,7 @@ function App() {
     localStorage.setItem(VIEW_MODE_KEY, next);
   }
 
-  if (!pwOk) return <PasswordGate onVerified={() => setPwOk(true)} />;
+  if (!pwOk) return <GoogleAuthGate onVerified={() => setPwOk(true)} />;
 
   const selectedDevice = devices.find(d => d.id === selectedDeviceId);
 

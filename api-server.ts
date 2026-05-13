@@ -1429,6 +1429,56 @@ end try`);
       }
     }
 
+    if (url.pathname === "/api/open-cmux-localhost" && req.method === "POST") {
+      if (IS_WIN) return new Response(JSON.stringify({ error: 'cmux는 맥에서만 가능합니다' }), { status: 400, headers });
+      try {
+        const { port, name = '' } = await req.json();
+        if (!port) return new Response(JSON.stringify({ success: false, error: '포트 번호가 없습니다.' }), { status: 400, headers });
+        const targetUrl = `http://localhost:${port}`;
+        const cli = resolveCmuxCli();
+        if (!cli && !cmuxAppExists()) {
+          return new Response(JSON.stringify({ error: 'cmux가 설치되지 않았습니다.\n설치: brew tap manaflow-ai/cmux && brew install --cask cmux' }), { status: 400, headers });
+        }
+        if (cmuxAppExists()) nodeSpawnSync('open', ['-a', 'cmux'], { stdio: 'pipe' });
+        const cliPath = cli ?? 'cmux';
+        if (!(await waitCmuxReadyNode(cliPath))) {
+          return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp('cmux 소켓 준비 대기 시간 초과 (5초)') }), { status: 500, headers });
+        }
+        const result = nodeCmuxRun(cliPath, ['new-pane', '--type', 'browser', '--url', targetUrl, '--focus', 'true']);
+        if (!result.ok) {
+          return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp(`cmux browser open 실패: ${result.stderr || 'unknown'}`) }), { status: 500, headers });
+        }
+        return new Response(JSON.stringify({ success: true, message: `cmux 브라우저로 localhost:${port} 열림` }), { headers });
+      } catch (error: any) {
+        return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers });
+      }
+    }
+
+    if (url.pathname === "/api/open-cmux-tmux" && req.method === "POST") {
+      if (IS_WIN) return new Response(JSON.stringify({ error: 'cmux는 맥에서만 가능합니다' }), { status: 400, headers });
+      try {
+        const { folderPath, worktreePath, bypass = true, name = '', fresh = false } = await req.json();
+        const cdPath = (worktreePath ? worktreePath.split(',')[0].trim() : null) || folderPath;
+        if (!cdPath) return new Response(JSON.stringify({ success: false, error: '프로젝트 경로가 없습니다.' }), { status: 400, headers });
+        const claudeCli = bypass ? 'claude --dangerously-skip-permissions' : 'claude';
+        const sessionName = (name || cdPath.split('/').filter(Boolean).pop() || 'port').replace(/[^a-zA-Z0-9_-]/g, '_');
+        const tmuxCmd = fresh
+          ? `tmux kill-session -t ${sessionName} 2>/dev/null; tmux new-session -s ${sessionName} -c '${cdPath}' ${claudeCli}`
+          : `tmux new-session -A -s ${sessionName} -c '${cdPath}' ${claudeCli}`;
+        const title = buildCmuxTitle((name || sessionName) + ' (tmux)', worktreePath, bypass);
+        const cli = resolveCmuxCli();
+        if (!cli && !cmuxAppExists()) return new Response(JSON.stringify({ error: 'cmux가 설치되지 않았습니다.' }), { status: 400, headers });
+        if (cmuxAppExists()) nodeSpawnSync('open', ['-a', 'cmux'], { stdio: 'pipe' });
+        const cliPath = cli ?? 'cmux';
+        if (!(await waitCmuxReadyNode(cliPath))) return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp('cmux 소켓 준비 대기 시간 초과') }), { status: 500, headers });
+        const ws = nodeCmuxRun(cliPath, ['new-workspace', '--cwd', cdPath, '--command', tmuxCmd, '--name', title]);
+        if (!ws.ok) return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp(`cmux tmux 실패: ${ws.stderr || 'unknown'}`) }), { status: 500, headers });
+        return new Response(JSON.stringify({ success: true, message: `cmux tmux${bypass ? ' bypass' : ''} 실행 중` }), { headers });
+      } catch (error: any) {
+        return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers });
+      }
+    }
+
     if (url.pathname.startsWith("/api/open-log/") && req.method === "GET") {
       const portId = decodeURIComponent(url.pathname.slice("/api/open-log/".length));
       if (!portId) return new Response(JSON.stringify({ error: 'portId 필요' }), { status: 400, headers });
