@@ -2188,17 +2188,16 @@ fn open_cmux_project_agents(folder_path: Option<String>, name: String) -> Result
     } else {
         cd_path.split('/').filter(|s| !s.is_empty()).last().unwrap_or("project").to_string()
     };
-    let title = format!("🤖 {} sessions", base_name);
-    // claude --resume opens interactive TUI session picker (claude agents just lists and exits)
+    let title = format!("🤖 {}", base_name);
     let out = Command::new(&cli)
-        .args(["new-workspace", "--cwd", &cd_path, "--command", &format!("{} --resume", resolve_claude_cli()), "--name", &title])
+        .args(["new-workspace", "--cwd", &cd_path, "--command", &resolve_claude_cli(), "--name", &title])
         .output()
         .map_err(|e| format!("cmux new-workspace 실행 실패: {}", e))?;
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
         return Err(cmux_access_help_msg(&format!("cmux new-workspace 실패: {}", stderr)));
     }
-    Ok(format!("cmux Session Resume 열림 ({})", base_name))
+    Ok(format!("cmux Agent View 열림 ({})", base_name))
 }
 
 /// If the error pattern suggests access denied (cmuxOnly mode), append guidance.
