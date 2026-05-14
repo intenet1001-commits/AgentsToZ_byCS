@@ -237,7 +237,7 @@ async function getPidsByPort(port: number): Promise<string[]> {
     const out = await new Response(proc.stdout).text();
     return out.trim().split('\n').map(p => p.trim()).filter(p => /^\d+$/.test(p));
   } else {
-    const proc = spawn({ cmd: ['lsof', '-ti', `:${port}`], stdout: 'pipe', stderr: 'pipe' });
+    const proc = spawn({ cmd: ['/usr/sbin/lsof', '-ti', `:${port}`], stdout: 'pipe', stderr: 'pipe' });
     await proc.exited;
     const out = await new Response(proc.stdout).text();
     return out.trim().split('\n').filter(p => p.length > 0);
@@ -851,7 +851,7 @@ const server = Bun.serve({
           return new Response(JSON.stringify({ success: true, port: null }), { headers });
         }
         // 1) 10001-10499 범위에서 LISTEN 중인 포트+PID 수집
-        const r1 = Bun.spawnSync(['lsof', '-iTCP:10001-10499', '-sTCP:LISTEN', '-P', '-n', '-F', 'pn'], { stderr: 'pipe' });
+        const r1 = Bun.spawnSync(['/usr/sbin/lsof', '-iTCP:10001-10499', '-sTCP:LISTEN', '-P', '-n', '-F', 'pn'], { stderr: 'pipe' });
         const lines1 = r1.stdout.toString().split('\n');
         const pidPortPairs: { pid: string; port: number }[] = [];
         let curPid = '';
@@ -865,7 +865,7 @@ const server = Bun.serve({
         // 2) 각 고유 PID의 CWD가 folderPath 와 일치하는지 확인
         const uniquePids = [...new Set(pidPortPairs.map(e => e.pid))];
         for (const pid of uniquePids) {
-          const r2 = Bun.spawnSync(['lsof', '-a', '-p', pid, '-d', 'cwd', '-Fn'], { stderr: 'pipe' });
+          const r2 = Bun.spawnSync(['/usr/sbin/lsof', '-a', '-p', pid, '-d', 'cwd', '-Fn'], { stderr: 'pipe' });
           const cwdLine = r2.stdout.toString().split('\n').find(l => l.startsWith('n'));
           if (!cwdLine) continue;
           const cwd = cwdLine.slice(1).trim();
