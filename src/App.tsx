@@ -4005,6 +4005,11 @@ function App() {
               <button onClick={() => openTmuxClaudeNew(sel)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title="기존 tmux 삭제 후 새창">
                 <SquareTerminal style={{width:11,height:11}}/>tmux ↺ on iTerm
               </button>
+              {sel.folderPath && (
+              <button onClick={() => openClaudeBg(sel)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title="claude --bg로 백그라운드 세션 시작 → agent view에 표시">
+                <Sparkles style={{width:11,height:11}}/>claude --bg
+              </button>
+              )}
             </div>
 
             {/* 편집/삭제 */}
