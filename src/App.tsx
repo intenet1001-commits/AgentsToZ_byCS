@@ -3639,7 +3639,6 @@ function App() {
               {label:'cmux (Mac 전용)', icon:<Terminal style={{width:11,height:11}}/>, action:()=>openCmuxClaude(item), title:`cmux 앱으로 Claude 실행 (macOS 전용)${bypassPermissions ? ' — bypass 모드' : ''}`, helpKey:'menu-cmux-mac'},
               {label:'cmux ↺ 새창 (Mac 전용)', icon:<Terminal style={{width:11,height:11}}/>, action:()=>openCmuxClaudeNew(item), title:`cmux 새 워크스페이스를 프로젝트 경로로 열고 Claude 실행${bypassPermissions ? ' — bypass 모드' : ''}`, helpKey:'menu-cmux-mac-new'},
               {label:'sessions (이 프로젝트)', icon:<Sparkles style={{width:11,height:11}}/>, action:()=>openCmuxProjectAgents(item), title:'이 프로젝트 세션 Resume 열기 (인터랙티브 TUI)', helpKey:'menu-cmux-project-agents'},
-              {label:'sessions (전체)', icon:<Sparkles style={{width:11,height:11}}/>, action:()=>openCmuxAgentView(), title:'전체 세션 Resume 열기 (홈 기준, 인터랙티브 TUI)', helpKey:'menu-cmux-agent-view'},
               ] : []),
             ].map(({label,icon,action,title,helpKey}) => (
               <button key={label} data-help-key={helpKey} title={title} onClick={e=>{e.stopPropagation(); action(); setV3MenuOpenId(null);}} style={{
@@ -3984,9 +3983,6 @@ function App() {
               </button>
               <button onClick={() => openCmuxProjectAgents(sel)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title="이 프로젝트 세션 Resume 열기 (인터랙티브 TUI)">
                 <Sparkles style={{width:11,height:11}}/>sessions (프로젝트)
-              </button>
-              <button onClick={openCmuxAgentView} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title="전체 세션 Resume 열기 (홈 기준, 인터랙티브 TUI)">
-                <Sparkles style={{width:11,height:11}}/>sessions (전체)
               </button>
               </>)}
               <button onClick={() => openTmuxClaude(sel)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title="tmux 세션으로 Claude 실행">
@@ -5275,12 +5271,6 @@ function App() {
                 <button data-help-key="header-cmux-root" onClick={openCmuxTerminalAtRoot} title="cmux 터미널로 작업 루트 열기 (macOS 전용)" style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(255,240,220,0.07)',borderRadius:5,color:'#a39a8c',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
                   <SquareTerminal style={{width:13,height:13}} />
                   cmux
-                </button>
-                )}
-                {!isWindows() && (
-                <button data-help-key="header-cmux-agent-view" onClick={openCmuxAgentView} title="Session Resume — claude --resume 인터랙티브 TUI (macOS 전용)" style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(200,168,240,0.15)',borderRadius:5,color:'#c8a8f0',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
-                  <Sparkles style={{width:13,height:13}} />
-                  sessions
                 </button>
                 )}
                 {!isTauri() && !isDeployedWeb() && (

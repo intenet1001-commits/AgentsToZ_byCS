@@ -1518,8 +1518,8 @@ end try`);
           return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp('cmux 소켓 준비 대기 시간 초과 (5초)') }), { status: 500, headers });
         }
         const baseName = (name && String(name).trim()) || cdPath.split('/').filter(Boolean).pop() || 'project';
-        const title = `🤖 ${baseName}`;
-        const ws = nodeCmuxRun(cliPath, ['new-workspace', '--cwd', cdPath, '--command', `${CLAUDE_PATH ?? 'claude'}`, '--name', title]);
+        const title = `🤖 ${baseName} agents`;
+        const ws = nodeCmuxRun(cliPath, ['new-workspace', '--cwd', cdPath, '--command', `${CLAUDE_PATH ?? 'claude'} --resume`, '--name', title]);
         if (!ws.ok) {
           return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp(`cmux new-workspace 실패: ${ws.stderr || 'unknown'}`) }), { status: 500, headers });
         }

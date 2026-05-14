@@ -2188,9 +2188,9 @@ fn open_cmux_project_agents(folder_path: Option<String>, name: String) -> Result
     } else {
         cd_path.split('/').filter(|s| !s.is_empty()).last().unwrap_or("project").to_string()
     };
-    let title = format!("🤖 {}", base_name);
+    let title = format!("🤖 {} agents", base_name);
     let out = Command::new(&cli)
-        .args(["new-workspace", "--cwd", &cd_path, "--command", &resolve_claude_cli(), "--name", &title])
+        .args(["new-workspace", "--cwd", &cd_path, "--command", &format!("{} --resume", resolve_claude_cli()), "--name", &title])
         .output()
         .map_err(|e| format!("cmux new-workspace 실행 실패: {}", e))?;
     if !out.status.success() {
