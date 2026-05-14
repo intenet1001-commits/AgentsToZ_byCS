@@ -1598,6 +1598,16 @@ function App() {
     }
   };
 
+  const openClaudeAtDotClaude = async () => {
+    const item: PortInfo = { id: '.claude', name: '.claude', port: 0, folderPath: '~/.claude', isRunning: false };
+    try {
+      await openClaudeMain(item);
+    } catch (e: any) {
+      const raw = typeof e === 'string' ? e : (e?.message ?? String(e));
+      showToast(`Claude 열기 실패: ${raw}`, 'error');
+    }
+  };
+
   const openCmuxProjectAgents = async (item: PortInfo) => {
     if (isWindows()) { cmuxMacOnlyToast(); return; }
     recordVisit(item.id);
@@ -5322,9 +5332,9 @@ function App() {
                   agents
                 </button>
                 )}
-                <button onClick={() => API.openFolder('~/.claude').catch(()=>showToast('.claude 폴더를 열 수 없습니다', 'error'))} title="~/.claude 폴더 열기 (Claude Code 전역 설정)" style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(200,168,240,0.15)',borderRadius:5,color:'#c8a8f0',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
-                  <FolderOpen style={{width:13,height:13}} />
-                  .claude
+                <button onClick={openClaudeAtDotClaude} title={`~/.claude 에서 Claude 열기 (${terminalApp}${bgMode?' --bg':''}${bypassPermissions?' ⚡':''})`} style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(200,168,240,0.15)',borderRadius:5,color:'#c8a8f0',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
+                  <Sparkles style={{width:13,height:13}} />
+                  Claude 열기
                 </button>
                 {!isTauri() && !isDeployedWeb() && (
                   isWindows() ? (
