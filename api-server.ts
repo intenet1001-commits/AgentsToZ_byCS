@@ -1577,12 +1577,16 @@ end try`);
         const r = nodeSpawnSync(claudeCli, bgArgs, {
           cwd: cdPath,
           encoding: 'utf-8',
-          timeout: 10000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+          timeout: 15000,
           env: { ...process.env, PATH: enhancedPath },
         });
-        if (r.status !== 0) {
-          // 프론트엔드에서 "claude --bg 실패:" 프리픽스를 붙이므로, 여기서는 raw 에러만 반환
-          return new Response(JSON.stringify({ success: false, error: r.stderr || '알 수 없는 오류' }), { status: 500, headers });
+        if (r.error || r.status !== 0) {
+          const spawnErr = r.error?.message ?? '';
+          const stderr = (r.stderr ?? '').trim();
+          const stdout = (r.stdout ?? '').trim();
+          const detail = spawnErr || stderr || stdout || '알 수 없는 오류';
+          return new Response(JSON.stringify({ success: false, error: detail }), { status: 500, headers });
         }
         const output = (r.stdout || '').trim();
         return new Response(JSON.stringify({ success: true, message: `agent view에 등록됨: ${label}`, output }), { headers });

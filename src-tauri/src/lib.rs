@@ -1934,14 +1934,28 @@ fn resolve_cmux_cli() -> Option<String> {
 
 fn resolve_claude_cli() -> String {
     use std::path::Path;
-    if Path::new("/Applications/cmux.app/Contents/Resources/bin/claude").exists() {
-        return "/Applications/cmux.app/Contents/Resources/bin/claude".into();
+    use std::process::Command;
+    // login shell로 which claude 실행 — Finder 실행 시 PATH가 제한되므로 zsh -l 필요
+    if let Ok(out) = Command::new("/bin/zsh").args(["-l", "-c", "which claude"]).output() {
+        let p = String::from_utf8_lossy(&out.stdout).trim().split('\n').next().unwrap_or("").trim().to_string();
+        if !p.is_empty() && Path::new(&p).exists() {
+            return p;
+        }
     }
-    if Path::new("/opt/homebrew/bin/claude").exists() {
-        return "/opt/homebrew/bin/claude".into();
+    // fallback: bash login shell
+    if let Ok(out) = Command::new("/bin/bash").args(["-l", "-c", "which claude"]).output() {
+        let p = String::from_utf8_lossy(&out.stdout).trim().split('\n').next().unwrap_or("").trim().to_string();
+        if !p.is_empty() && Path::new(&p).exists() {
+            return p;
+        }
     }
-    if Path::new("/usr/local/bin/claude").exists() {
-        return "/usr/local/bin/claude".into();
+    // 알려진 고정 경로 (homebrew/local 우선, cmux 번들은 마지막)
+    for p in &[
+        "/opt/homebrew/bin/claude",
+        "/usr/local/bin/claude",
+        "/Applications/cmux.app/Contents/Resources/bin/claude",
+    ] {
+        if Path::new(p).exists() { return (*p).into(); }
     }
     "claude".into()
 }
