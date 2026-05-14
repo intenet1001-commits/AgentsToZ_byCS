@@ -8,6 +8,7 @@ import SetupWizard from './SetupWizard';
 import { savePushSnapshot, fetchPushHistory, fetchSnapshotRows, type PushSnapshot } from './pushHistory';
 import { isTauri, isDeployedWeb } from './lib/env';
 import { GuideOverlay } from './guide/GuideMode';
+import { type Lang, t } from './i18n';
 
 // OS 감지 — navigator.platform('Win32')이 WebView2/Tauri 포함 가장 신뢰성 높음
 const isWindows = () => {
@@ -930,6 +931,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<'ports' | 'portal'>(() =>
     typeof window !== 'undefined' && window.innerWidth < 768 ? 'portal' : 'ports'
   );
+  const [lang, setLang] = useState<Lang>(() => (localStorage.getItem('portmanager-lang') as Lang) ?? 'ko');
   const [openPortalSettings, setOpenPortalSettings] = useState(false);
   const [showSetupWizard, setShowSetupWizard] = useState(false);
   const [guideMode, setGuideMode] = useState<boolean>(() => {
@@ -4660,7 +4662,7 @@ function App() {
                   }}
                 >
                   <Server className="w-3.5 h-3.5" />
-                  프로젝트·폴더
+                  {t(lang, 'tabProjects')}
                 </button>
               )}
               <button
@@ -4673,7 +4675,7 @@ function App() {
                 }}
               >
                 <BookMarked className="w-3.5 h-3.5" />
-                {isMobile ? '북마크' : '포털'}
+                {isMobile ? t(lang, 'tabBookmarks') : t(lang, 'tabPortal')}
               </button>
             </div>
 
@@ -4845,7 +4847,7 @@ function App() {
               className="px-2.5 py-1.5 bg-[#1c1916] hover:bg-[#221f1b] text-zinc-500 hover:text-[#ede7dd]/90 text-xs rounded-xl border border-stone-800/40 hover:border-stone-700/60 transition-all flex items-center gap-1"
             >
               <Rocket className="w-3.5 h-3.5" />
-              <span>세팅</span>
+              <span>{t(lang, 'settings')}</span>
             </button>
 
             {/* 로그 복사 버튼 */}
@@ -4860,7 +4862,7 @@ function App() {
               }`}
             >
               {logCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{logCopied ? '복사됨' : '로그'}</span>
+              <span>{logCopied ? t(lang, 'logCopied') : t(lang, 'copyLog')}</span>
             </button>
 
             {/* 가이드 모드 토글 */}
@@ -4875,7 +4877,21 @@ function App() {
               }`}
             >
               <BookOpen className="w-3.5 h-3.5" />
-              <span>{guideMode ? '가이드 ON' : '가이드'}</span>
+              <span>{guideMode ? t(lang, 'guideOn') : t(lang, 'guide')}</span>
+            </button>
+
+            {/* 언어 토글 */}
+            <button
+              onClick={() => {
+                const next: Lang = lang === 'ko' ? 'en' : 'ko';
+                setLang(next);
+                localStorage.setItem('portmanager-lang', next);
+              }}
+              title={lang === 'ko' ? 'Switch to English' : '한국어로 전환'}
+              className="px-2.5 py-1.5 bg-[#1c1916] hover:bg-[#221f1b] text-zinc-400 hover:text-[#ede7dd]/90 text-xs rounded-xl border border-stone-800/40 hover:border-stone-700/60 transition-all flex items-center gap-1 font-medium"
+            >
+              <Globe className="w-3.5 h-3.5" />
+              <span>{t(lang, 'langToggle')}</span>
             </button>
           </div>
         </div>
@@ -5115,8 +5131,8 @@ function App() {
                   width:22,height:22,borderRadius:6,background:'#e8a557',
                   display:'flex',alignItems:'center',justifyContent:'center',
                   fontSize:11,fontWeight:700,fontFamily:'JetBrains Mono, monospace',color:'#15120f',
-                }}>P</div>
-                <span style={{fontSize:13,fontWeight:600,color:'#ede7dd'}}>Port Manager</span>
+                }}>{t(lang, 'appNameShort')}</div>
+                <span style={{fontSize:13,fontWeight:600,color:'#ede7dd'}}>{t(lang, 'appName')}</span>
               </div>
 
               {/* Search */}
@@ -5127,7 +5143,7 @@ function App() {
                     data-help-key="sidebar-search"
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
-                    placeholder="Search…"
+                    placeholder={t(lang, 'search')}
                     style={{
                       width:'100%',paddingLeft:26,paddingRight:8,paddingTop:6,paddingBottom:6,
                       background:'#221f1b',border:'1px solid rgba(255,240,220,0.07)',
@@ -5140,12 +5156,12 @@ function App() {
 
               {/* Section nav */}
               {([
-                {id:'all',    label:'All projects', count: ports.length,                              Icon: Server},
-                {id:'running',label:'Running now',  count: ports.filter((p:PortInfo)=>p.isRunning).length,      Icon: Play},
-                {id:'recent', label:'Recent',       count: (() => { const cutoff = Date.now() - 7*86400000; return ports.filter((p:PortInfo)=>{ const last = lastVisits[p.id]; return !!last && last >= cutoff; }).length; })(), Icon: History},
-                {id:'starred',label:'Starred',      count: ports.filter((p:PortInfo)=>p.favorite).length,       Icon: Star},
-                {id:'wt',     label:'Worktrees',    count: ports.filter((p:PortInfo)=>!!p.worktreePath).length, Icon: GitBranch},
-                {id:'stale',  label:'Stale',        count: (() => { const cutoff = Date.now() - 14*86400000; return ports.filter((p:PortInfo)=>{ const last = lastVisits[p.id]; return !last || last < cutoff; }).length; })(), Icon: Clock},
+                {id:'all',    label: t(lang,'sectionAll'),        count: ports.length,                              Icon: Server},
+                {id:'running',label: t(lang,'sectionRunning'),    count: ports.filter((p:PortInfo)=>p.isRunning).length,      Icon: Play},
+                {id:'recent', label: t(lang,'sectionRecent'),     count: (() => { const cutoff = Date.now() - 7*86400000; return ports.filter((p:PortInfo)=>{ const last = lastVisits[p.id]; return !!last && last >= cutoff; }).length; })(), Icon: History},
+                {id:'starred',label: t(lang,'sectionStarred'),    count: ports.filter((p:PortInfo)=>p.favorite).length,       Icon: Star},
+                {id:'wt',     label: t(lang,'sectionWorktrees'),  count: ports.filter((p:PortInfo)=>!!p.worktreePath).length, Icon: GitBranch},
+                {id:'stale',  label: t(lang,'sectionStale'),      count: (() => { const cutoff = Date.now() - 14*86400000; return ports.filter((p:PortInfo)=>{ const last = lastVisits[p.id]; return !last || last < cutoff; }).length; })(), Icon: Clock},
               ] as const).map(({id,label,count,Icon}) => (
                 <button key={id} data-help-key={`sidebar-${id === 'wt' ? 'worktrees' : id}`} onClick={() => setSidebarSection(id)} style={{
                   display:'flex',alignItems:'center',gap:8,
@@ -5171,7 +5187,7 @@ function App() {
                       padding:'12px 12px 4px',fontSize:10,
                       fontFamily:'JetBrains Mono, monospace',
                       color:'#6b6459',textTransform:'uppercase' as const,letterSpacing:0.5,
-                    }} data-help-key="sidebar-tags">Tags</div>
+                    }} data-help-key="sidebar-tags">{t(lang, 'sectionTags')}</div>
                     {tags.map((tag:string) => {
                       const n = ports.filter((p:PortInfo)=>p.category===tag).length;
                       const active = sidebarSection === `tag:${tag}`;
@@ -5283,15 +5299,15 @@ function App() {
                 borderBottom:'1px solid rgba(255,240,220,0.07)',
               }}>
                 <h1 data-help-key="header-section-title" style={{margin:0,fontSize:18,fontWeight:600,letterSpacing:-0.3,color:'#ede7dd'}}>
-                  {sidebarSection === 'all' ? 'All projects'
-                    : sidebarSection === 'running' ? 'Running now'
-                    : sidebarSection === 'starred' ? 'Starred'
-                    : sidebarSection === 'wt' ? 'Worktrees'
-                    : sidebarSection === 'stale' ? 'Stale (2주+ 미접속)'
+                  {sidebarSection === 'all' ? t(lang,'sectionAll')
+                    : sidebarSection === 'running' ? t(lang,'sectionRunning')
+                    : sidebarSection === 'starred' ? t(lang,'sectionStarred')
+                    : sidebarSection === 'wt' ? t(lang,'sectionWorktrees')
+                    : sidebarSection === 'stale' ? t(lang,'sectionStale')
                     : sidebarSection.startsWith('tag:') ? sidebarSection.slice(4)
-                    : 'All projects'}
+                    : t(lang,'sectionAll')}
                 </h1>
-                <span data-help-key="header-project-count" style={{fontSize:12,color:'#a39a8c'}}>{v3Ports.length} projects</span>
+                <span data-help-key="header-project-count" style={{fontSize:12,color:'#a39a8c'}}>{v3Ports.length} {t(lang,'projects')}</span>
                 <div style={{flex:1}} />
                 {!isWindows() && (
                 <button data-help-key="header-cmux-root" onClick={openCmuxTerminalAtRoot} title="cmux 터미널로 작업 루트 열기 (macOS 전용)" style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(255,240,220,0.07)',borderRadius:5,color:'#a39a8c',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
@@ -5310,11 +5326,11 @@ function App() {
                     <>
                       <button data-help-key="header-build-windows" onClick={handleBuildWindows} disabled={isBuilding} title="Windows 빌드 (.exe)" style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(255,240,220,0.07)',borderRadius:5,color:'#a39a8c',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
                         <Monitor style={{width:13,height:13}} className={isBuilding && buildType==='windows' ? 'animate-spin' : ''} />
-                        Win 빌드
+                        {t(lang, 'buildWin')}
                       </button>
                       <button onClick={() => API.openBuildFolder().catch(()=>{})} title="빌드 폴더 열기" style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(255,240,220,0.07)',borderRadius:5,color:'#a39a8c',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
                         <FolderOpen style={{width:13,height:13}} />
-                        폴더 열기
+                        {t(lang, 'openBuildFolder')}
                       </button>
                     </>
                   ) : (
