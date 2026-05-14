@@ -1607,6 +1607,7 @@ function App() {
       const msg = await callCmux('open_claude_bg', '/api/open-claude-bg', {
         folderPath: item.folderPath,
         name: getSessionName(item),
+        bypass: bypassPermissions,
       });
       showToast(msg, 'success');
     } catch (e: any) {

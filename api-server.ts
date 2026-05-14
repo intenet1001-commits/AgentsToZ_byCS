@@ -1531,11 +1531,14 @@ end try`);
     if (url.pathname === "/api/open-claude-bg" && req.method === "POST") {
       if (IS_WIN) return new Response(JSON.stringify({ error: 'claude --bg는 맥에서만 가능합니다' }), { status: 400, headers });
       try {
-        const { folderPath, name = '' } = await req.json();
+        const { folderPath, name = '', bypass = false } = await req.json();
         const cdPath = (folderPath && String(folderPath).trim()) || homedir();
         const claudeCli = CLAUDE_PATH ?? 'claude';
         const label = (name && String(name).trim()) || cdPath.split('/').filter(Boolean).pop() || 'project';
-        const r = nodeSpawnSync(claudeCli, ['--bg', `${label} 작업 시작`], {
+        const bgArgs = bypass
+          ? ['--dangerously-skip-permissions', '--bg', `${label} 작업 시작`]
+          : ['--bg', `${label} 작업 시작`];
+        const r = nodeSpawnSync(claudeCli, bgArgs, {
           cwd: cdPath,
           encoding: 'utf-8',
           timeout: 10000,

@@ -2200,7 +2200,7 @@ fn open_cmux_project_agents(folder_path: Option<String>, name: String) -> Result
 }
 
 #[tauri::command]
-fn open_claude_bg(folder_path: Option<String>, name: String) -> Result<String, String> {
+fn open_claude_bg(folder_path: Option<String>, name: String, bypass: Option<bool>) -> Result<String, String> {
     if cfg!(windows) { return Err("claude --bg는 맥에서만 가능합니다".into()); }
     let home = std::env::var("HOME").unwrap_or_else(|_| "/".into());
     let cd_path = folder_path.filter(|s| !s.trim().is_empty()).unwrap_or_else(|| home.clone());
@@ -2210,8 +2210,11 @@ fn open_claude_bg(folder_path: Option<String>, name: String) -> Result<String, S
         cd_path.split('/').filter(|s| !s.is_empty()).last().unwrap_or("project").to_string()
     };
     let prompt = format!("{} 작업 시작", label);
-    let out = Command::new(resolve_claude_cli())
-        .args(["--bg", &prompt])
+    let use_bypass = bypass.unwrap_or(false);
+    let mut cmd = Command::new(resolve_claude_cli());
+    if use_bypass { cmd.arg("--dangerously-skip-permissions"); }
+    cmd.arg("--bg").arg(&prompt);
+    let out = cmd
         .current_dir(&cd_path)
         .output()
         .map_err(|e| format!("claude --bg 실행 실패: {}", e))?;
