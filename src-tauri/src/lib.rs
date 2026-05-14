@@ -2160,15 +2160,16 @@ fn open_cmux_agent_view() -> Result<String, String> {
     }
     ensure_cmux_window(&cli);
     let home = std::env::var("HOME").unwrap_or_else(|_| "/".into());
+    // claude --resume opens interactive TUI session picker (claude agents just lists and exits)
     let out = Command::new(&cli)
-        .args(["new-workspace", "--cwd", &home, "--command", &format!("{} agents", resolve_claude_cli()), "--name", "🤖 Agent View"])
+        .args(["new-workspace", "--cwd", &home, "--command", &format!("{} --resume", resolve_claude_cli()), "--name", "🤖 Session Resume"])
         .output()
         .map_err(|e| format!("cmux new-workspace 실행 실패: {}", e))?;
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
         return Err(cmux_access_help_msg(&format!("cmux new-workspace 실패: {}", stderr)));
     }
-    Ok("cmux Agent View 열림".into())
+    Ok("cmux Session Resume 열림".into())
 }
 
 #[tauri::command]
@@ -2187,16 +2188,17 @@ fn open_cmux_project_agents(folder_path: Option<String>, name: String) -> Result
     } else {
         cd_path.split('/').filter(|s| !s.is_empty()).last().unwrap_or("project").to_string()
     };
-    let title = format!("🤖 {} agents", base_name);
+    let title = format!("🤖 {} sessions", base_name);
+    // claude --resume opens interactive TUI session picker (claude agents just lists and exits)
     let out = Command::new(&cli)
-        .args(["new-workspace", "--cwd", &cd_path, "--command", &format!("{} agents", resolve_claude_cli()), "--name", &title])
+        .args(["new-workspace", "--cwd", &cd_path, "--command", &format!("{} --resume", resolve_claude_cli()), "--name", &title])
         .output()
         .map_err(|e| format!("cmux new-workspace 실행 실패: {}", e))?;
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
         return Err(cmux_access_help_msg(&format!("cmux new-workspace 실패: {}", stderr)));
     }
-    Ok(format!("cmux Agent View 열림 ({})", base_name))
+    Ok(format!("cmux Session Resume 열림 ({})", base_name))
 }
 
 /// If the error pattern suggests access denied (cmuxOnly mode), append guidance.

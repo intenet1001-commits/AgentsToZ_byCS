@@ -1580,7 +1580,7 @@ function App() {
       showToast(msg, 'success');
     } catch (e: any) {
       const raw = typeof e === 'string' ? e : (e?.message ?? String(e));
-      showToast(`cmux Agent View 실패: ${raw}`, 'error');
+      showToast(`cmux Session Resume 실패: ${raw}`, 'error');
     }
   };
 
@@ -1595,7 +1595,7 @@ function App() {
       showToast(msg, 'success');
     } catch (e: any) {
       const raw = typeof e === 'string' ? e : (e?.message ?? String(e));
-      showToast(`cmux Project Agents 실패: ${raw}`, 'error');
+      showToast(`cmux Project Sessions 실패: ${raw}`, 'error');
     }
   };
 
@@ -3571,8 +3571,8 @@ function App() {
           )}
           <button data-help-key="card-cmux-agents" onClick={e=>{e.stopPropagation(); openCmuxProjectAgents(item);}}
             style={{...btnBase, gap:3, fontFamily:'inherit', color:'#c8a8f0', borderColor:'rgba(200,168,240,0.25)'}}
-            title="이 프로젝트 기준 Claude Agent View 열기 (macOS 전용)"
-          ><Sparkles style={{width:9,height:9}}/>agents</button>
+            title="이 프로젝트 세션 Resume 열기 (인터랙티브 TUI, macOS 전용)"
+          ><Sparkles style={{width:9,height:9}}/>sessions</button>
           </>)}
           <button data-help-key="card-worktree" onClick={e=>{e.stopPropagation(); toggleWorktreePanel(item.id, item.folderPath);}} style={{...btnBase, color:expandedWorktreeIds.has(item.id)?'#e8a557':'#ede7dd', borderColor:expandedWorktreeIds.has(item.id)?'rgba(232,165,87,0.3)':'rgba(255,240,220,0.07)'}} title="워크트리 관리">
             <GitBranch style={{width:11,height:11}}/>
@@ -3638,8 +3638,8 @@ function App() {
               ...(!isWindows() ? [
               {label:'cmux (Mac 전용)', icon:<Terminal style={{width:11,height:11}}/>, action:()=>openCmuxClaude(item), title:`cmux 앱으로 Claude 실행 (macOS 전용)${bypassPermissions ? ' — bypass 모드' : ''}`, helpKey:'menu-cmux-mac'},
               {label:'cmux ↺ 새창 (Mac 전용)', icon:<Terminal style={{width:11,height:11}}/>, action:()=>openCmuxClaudeNew(item), title:`cmux 새 워크스페이스를 프로젝트 경로로 열고 Claude 실행${bypassPermissions ? ' — bypass 모드' : ''}`, helpKey:'menu-cmux-mac-new'},
-              {label:'agents (이 프로젝트)', icon:<Sparkles style={{width:11,height:11}}/>, action:()=>openCmuxProjectAgents(item), title:'이 프로젝트 기준 Claude Agent View 열기', helpKey:'menu-cmux-project-agents'},
-              {label:'agents (전체)', icon:<Sparkles style={{width:11,height:11}}/>, action:()=>openCmuxAgentView(), title:'전체 Claude Agent View 열기 (홈 기준)', helpKey:'menu-cmux-agent-view'},
+              {label:'sessions (이 프로젝트)', icon:<Sparkles style={{width:11,height:11}}/>, action:()=>openCmuxProjectAgents(item), title:'이 프로젝트 세션 Resume 열기 (인터랙티브 TUI)', helpKey:'menu-cmux-project-agents'},
+              {label:'sessions (전체)', icon:<Sparkles style={{width:11,height:11}}/>, action:()=>openCmuxAgentView(), title:'전체 세션 Resume 열기 (홈 기준, 인터랙티브 TUI)', helpKey:'menu-cmux-agent-view'},
               ] : []),
             ].map(({label,icon,action,title,helpKey}) => (
               <button key={label} data-help-key={helpKey} title={title} onClick={e=>{e.stopPropagation(); action(); setV3MenuOpenId(null);}} style={{
@@ -3982,11 +3982,11 @@ function App() {
               <button onClick={() => openTmuxOnCmux(sel, true)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title="cmux tmux 세션 초기화 후 새로 시작">
                 <Terminal style={{width:11,height:11}}/>tmux ↺ on cmux
               </button>
-              <button onClick={() => openCmuxProjectAgents(sel)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title="이 프로젝트 기준 Claude Agent View 열기">
-                <Sparkles style={{width:11,height:11}}/>agents (프로젝트)
+              <button onClick={() => openCmuxProjectAgents(sel)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title="이 프로젝트 세션 Resume 열기 (인터랙티브 TUI)">
+                <Sparkles style={{width:11,height:11}}/>sessions (프로젝트)
               </button>
-              <button onClick={openCmuxAgentView} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title="전체 Claude Agent View 열기 (홈 기준)">
-                <Sparkles style={{width:11,height:11}}/>agents (전체)
+              <button onClick={openCmuxAgentView} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title="전체 세션 Resume 열기 (홈 기준, 인터랙티브 TUI)">
+                <Sparkles style={{width:11,height:11}}/>sessions (전체)
               </button>
               </>)}
               <button onClick={() => openTmuxClaude(sel)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title="tmux 세션으로 Claude 실행">
@@ -5278,9 +5278,9 @@ function App() {
                 </button>
                 )}
                 {!isWindows() && (
-                <button data-help-key="header-cmux-agent-view" onClick={openCmuxAgentView} title="Claude Agent View — 모든 백그라운드 세션 관리 (macOS 전용)" style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(200,168,240,0.15)',borderRadius:5,color:'#c8a8f0',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
+                <button data-help-key="header-cmux-agent-view" onClick={openCmuxAgentView} title="Session Resume — claude --resume 인터랙티브 TUI (macOS 전용)" style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(200,168,240,0.15)',borderRadius:5,color:'#c8a8f0',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
                   <Sparkles style={{width:13,height:13}} />
-                  agents
+                  sessions
                 </button>
                 )}
                 {!isTauri() && !isDeployedWeb() && (
