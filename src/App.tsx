@@ -3633,10 +3633,10 @@ function App() {
         {/* 터미널 액션 버튼 — 항상 노출 */}
         <div style={{display:'flex', gap:4, marginTop:5, paddingTop:5, borderTop:'1px solid #27272a'}} onClick={e=>e.stopPropagation()}>
           <button onClick={()=>openClaudeMain(item, false)} style={terminalBtnStyle('#7c3aed')} title={`Claude 열기 (${terminalApp}${bgMode?' --bg':''})`}>
-            🤖 Claude 열기
+            Claude 열기
           </button>
           <button onClick={()=>openClaudeMain(item, true)} style={terminalBtnStyle('#5b21b6')} title="새 워크스페이스에서 Claude 열기">
-            🤖 새창
+            새창
           </button>
           {item.port && (
             <button onClick={()=>API.openInChrome(`http://localhost:${item.port}`).catch(()=>{})} style={terminalBtnStyle('#0e7490')} title={`localhost:${item.port} 열기`}>
@@ -3932,6 +3932,14 @@ function App() {
               <h2 style={{margin:0,fontSize:20,fontWeight:600,letterSpacing:-0.3,color:'#ede7dd'}}>{sel.name}</h2>
               {sel.port && <span style={{fontSize:15,fontFamily:monoFont,color:'#e8a557'}}>:{sel.port}</span>}
               {sel.favorite && <Star style={{width:13,height:13,color:'#e8a557',fill:'#e8a557'}}/>}
+              <div style={{marginLeft:'auto',display:'flex',gap:4}}>
+                <button onClick={() => startEdit(sel)} style={{padding:'4px 6px',background:'transparent',border:'1px solid rgba(255,240,220,0.08)',borderRadius:5,cursor:'pointer',display:'flex',alignItems:'center',color:'#6b6459'}} title="수정">
+                  <Pencil style={{width:11,height:11}}/>
+                </button>
+                <button onClick={() => setDeleteConfirmId(sel.id)} style={{padding:'4px 6px',background:'transparent',border:'1px solid rgba(201,106,90,0.15)',borderRadius:5,cursor:'pointer',display:'flex',alignItems:'center',color:'#c96a5a'}} title="삭제">
+                  <Trash2 style={{width:11,height:11}}/>
+                </button>
+              </div>
             </div>
 
             {/* 메타 정보 */}
@@ -3976,20 +3984,13 @@ function App() {
             {/* Claude 실행 — 헤더 터미널 컨트롤 기반 */}
             <div style={{display:'flex',gap:6,flexWrap:'wrap' as const,marginBottom:8}}>
               <button onClick={() => openClaudeMain(sel, false)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title={`Claude 열기 (${terminalApp}${bgMode?' --bg':''})`}>
-                🤖 Claude 열기
+                Claude 열기
               </button>
               <button onClick={() => openClaudeMain(sel, true)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title="새 워크스페이스에서 Claude 열기">
-                🤖 새창
+                새창
               </button>
             </div>
 
-            {/* 편집/삭제 */}
-            <div style={{display:'flex',gap:6,flexWrap:'wrap' as const}}>
-              <button onClick={() => startEdit(sel)} style={rowBtn}><Pencil style={{width:11,height:11}}/>수정</button>
-              <button onClick={() => setDeleteConfirmId(sel.id)} style={{...rowBtn,color:'#c96a5a',borderColor:'rgba(201,106,90,0.2)'}}>
-                <Trash2 style={{width:11,height:11}}/>삭제
-              </button>
-            </div>
 
             {/* 워크트리 패널 */}
             {expandedWorktreeIds.has(sel.id) && <div style={{marginTop:8}}>{renderWorktreePanel(sel)}</div>}
