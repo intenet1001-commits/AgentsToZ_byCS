@@ -268,15 +268,17 @@ function openPath(target: string): void {
   }
 }
 
-// Resolve claude binary path once at startup (Homebrew first, then PATH fallback)
+// Resolve claude binary path once at startup (PATH first, then Homebrew fallback)
+// which claude는 사용자 PATH 기준 — cmux 버전 등 실제 사용 중인 claude를 우선한다
 function resolveClaudePath(): string | null {
-  if (existsSync('/opt/homebrew/bin/claude')) return '/opt/homebrew/bin/claude';
-  if (existsSync('/usr/local/bin/claude')) return '/usr/local/bin/claude';
   const isWin = process.platform === 'win32';
   const finder = isWin ? ['where', 'claude'] : ['which', 'claude'];
   const result = Bun.spawnSync(finder, { env: { ...process.env } });
   const resolved = result.stdout.toString().trim().split('\n')[0].trim();
-  return resolved || null;
+  if (resolved && existsSync(resolved)) return resolved;
+  if (existsSync('/opt/homebrew/bin/claude')) return '/opt/homebrew/bin/claude';
+  if (existsSync('/usr/local/bin/claude')) return '/usr/local/bin/claude';
+  return null;
 }
 const CLAUDE_PATH = resolveClaudePath();
 
