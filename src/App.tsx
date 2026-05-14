@@ -5322,6 +5322,10 @@ function App() {
                   agents
                 </button>
                 )}
+                <button onClick={() => API.openFolder('~/.claude').catch(()=>showToast('.claude 폴더를 열 수 없습니다', 'error'))} title="~/.claude 폴더 열기 (Claude Code 전역 설정)" style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(200,168,240,0.15)',borderRadius:5,color:'#c8a8f0',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
+                  <FolderOpen style={{width:13,height:13}} />
+                  .claude
+                </button>
                 {!isTauri() && !isDeployedWeb() && (
                   isWindows() ? (
                     <>
