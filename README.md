@@ -1,6 +1,11 @@
 # 포트 관리 프로그램
 
-> **개발자의 로컬 환경을, 어디서나 쓸 수 있게.**
+> **개발자의 로컬 환경을, 어디서나 쓸 수 있게.** — Build v75
+
+[![Bun](https://img.shields.io/badge/Bun-1.x-F9F1E1?logo=bun)](https://bun.sh)
+[![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri)](https://tauri.app)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev)
+[![Supabase](https://img.shields.io/badge/Supabase-sync-3ECF8E?logo=supabase)](https://supabase.com)
 
 터미널을 열고, 포트 번호를 외우고, 어떤 서버가 켜져 있는지 확인하는 데 지치셨나요?  
 포트 관리 프로그램은 로컬 개발 서버를 **한 화면에서 실행·중지·모니터링**하고,  
@@ -16,7 +21,87 @@
 
 ---
 
+## ⚡ 30초 시작 (처음이세요?)
+
+> **Supabase 없이도 포트 관리 기능은 모두 사용할 수 있습니다.**  
+> 다기기 동기화·북마크 포털이 필요할 때 Supabase를 연결하면 됩니다.
+
+### 최소 설치 (macOS)
+
+```bash
+# 1. Bun 설치 (Node.js 대신 사용하는 빠른 JS 런타임)
+curl -fsSL https://bun.sh/install | bash
+
+# 2. 저장소 받기
+git clone https://github.com/intenet1001-commits/portmanagement.git
+cd portmanagement
+bun install
+
+# 3. 실행
+bun run start
+```
+
+브라우저에서 **http://localhost:9000** 열기 → 완료!
+
+### 최소 설치 (Windows)
+
+```powershell
+# PowerShell에서 실행
+powershell -c "irm bun.sh/install.ps1 | iex"
+git clone https://github.com/intenet1001-commits/portmanagement.git
+cd portmanagement
+bun install
+bun run start
+```
+
+> **다음 단계**: 앱 첫 실행 시 **초기 설정 마법사**가 자동으로 뜹니다.  
+> "건너뛰기"를 누르면 Supabase 없이 바로 사용할 수 있습니다.
+
+---
+
+## 🗺️ 어디서 시작할까요?
+
+나에게 맞는 경로를 고르세요.
+
+```
+나는 어떤 사용자인가요?
+│
+├── 🆕 이 앱을 처음 써보는 사람
+│   └── → 위 "30초 시작" 3개 명령어만 실행 후 http://localhost:9000 열기
+│       → 마법사가 뜨면 "건너뛰기" 눌러도 바로 사용 가능
+│
+├── 📱 맥·윈도우·폰 여러 기기에서 쓰고 싶은 사람
+│   └── → 30초 시작 먼저 실행 → 마법사 "🆕 처음 사용" 클릭
+│       → Supabase 무료 계정 만들기 (약 10분)
+│
+├── 💻 이미 다른 기기에서 쓰고 있고 새 기기에 추가하는 사람
+│   └── → 30초 시작 실행 → 마법사 "🔗 추가 기기 연결" 클릭
+│
+└── 🛠️ 이 앱을 본인 깃허브에 포크해서 직접 관리하고 싶은 사람
+    └── → 아래 "Fork 후 5분 체크리스트" 읽기
+```
+
+---
+
+## 📖 처음 보는 단어 빠르게 이해하기
+
+| 단어 | 한 줄 설명 |
+|---|---|
+| **Bun** | Node.js보다 빠른 JavaScript 실행 도구. `bun install` = 패키지 설치, `bun run start` = 앱 실행 |
+| **Supabase** | 무료 클라우드 데이터베이스. 여러 기기 간 데이터 동기화에 사용. 회원가입만 하면 됨 |
+| **Supabase Anon Key** | Supabase 프로젝트의 공개 API 키. 비밀번호 아님. 앱에서 DB 읽기/쓰기에 사용 |
+| **Tauri** | 웹 기술(React)로 맥/윈도우 앱을 만드는 도구. 자동으로 처리됨, 따로 설정 불필요 |
+| **cmux** | Claude Code 전용 macOS 터미널 앱. 없어도 포트 관리 기능은 모두 사용 가능 |
+| **포트(Port)** | 서버가 통신하는 번호. 예: 3000, 8080 — 브라우저에서 `localhost:3000`으로 접속하는 그 숫자 |
+| **Fork** | GitHub에서 남의 저장소를 내 계정으로 복사하는 것. 단순 사용이면 불필요 |
+| **Vercel** | 웹앱을 인터넷에 무료로 배포하는 서비스. 북마크 포털을 외부에서 열고 싶을 때만 필요 |
+
+---
+
 ## Fork 후 5분 체크리스트
+
+> **이 섹션은 "내 GitHub 계정에 저장소를 복사해서 직접 관리하고 싶은 분"만 필요합니다.**  
+> 단순히 앱을 쓰고 싶은 분은 건너뛰고 [macOS 시작하기](#macOS-시작하기)로 이동하세요.
 
 포크해서 본인의 저장소로 옮긴 직후, 다음 파일만 업데이트하면 그대로 사용할 수 있습니다.
 
@@ -46,27 +131,75 @@ bun run build:portal
 | 기능 | 설명 |
 |---|---|
 | 포트 실행/중지 | 실행 파일 연동, 강제 재실행 지원 |
-| 실시간 상태 감지 | 포트 점유 여부 자동 감지 |
-| 다기기 동기화 | Supabase Push/Pull — 기기별 독립 ID |
-| 다른 기기 데이터 보기 | 설정 → 고급 설정 → 단말 조회 → 선택 → Pull |
-| AI 추천 이름 | Claude Code로 프로젝트명 자동 생성 |
+| 실시간 상태 감지 | 포트 점유 여부 자동 감지 (10초 자동 폴링) |
+| 폴더 기반 서버 실행 | `.command` 없이 `folderPath`만으로 자동 기동 (package.json / pyproject.toml / Cargo.toml 탐색) |
+| 다기기 동기화 | Supabase Push/Pull — 기기별 독립 ID (`device_id`) |
+| 다른 기기 데이터 보기 | 설정 → 고급 설정 → 단말 조회 → 기기 선택 → Pull |
+| AI 추천 이름 | Claude Code로 프로젝트명·카테고리 자동 생성 (단일 호출 일괄 처리) |
 | 북마크 포털 | 자주 쓰는 링크·폴더 카테고리 관리 + Vercel 외부 배포 |
+| Google OAuth 포털 | Google 계정으로 포털 접근 제한 (Client ID만 필요) |
 | **cmux 통합 (macOS)** | 메인 로우·점3개 메뉴·헤더 툴바 3곳에서 cmux 1-click 실행 |
+| **Claude Agent View** | cmux에서 claude agents 전역/프로젝트별 통합 뷰 |
+| **claude --bg bypass** | `--dangerously-skip-permissions`로 Claude 무중단 백그라운드 실행 |
+| **claude --resume TUI** | 프로젝트 폴더에서 claude 인터랙티브 세션 재개 (TUI) |
+| 작업루트 패널 | 터미널형 뷰에서 작업루트 직접 관리 |
+| 실시간 로그 | 앱 내 모달에서 서버 로그 실시간 확인 (파일 재생성 자동 감지, 500줄 슬라이딩 윈도우) |
 | 검색 | 이름, AI 별칭, URL, 경로 통합 검색 |
+
+---
+
+## Claude Agent 통합 (macOS)
+
+포트 관리기는 Claude Code 및 cmux와 깊이 통합되어, 코딩 에이전트 워크플로를 포트 카드에서 직접 실행합니다.
+
+### claude --bg (bypass 모드)
+
+`--dangerously-skip-permissions` 옵션으로 Claude를 백그라운드에서 실행합니다. 권한 프롬프트 없이 자동화된 에이전트 작업에 적합합니다.
+
+| 위치 | 동작 |
+|---|---|
+| 포트 카드 `▼` → `claude --bg` | 프로젝트 폴더에서 bypass Claude 실행 |
+| 터미널뷰 `[--bg]` 버튼 | 현재 선택 포트에서 bypass Claude 실행 |
+| 헤더 `[--bg]` 버튼 | HOME(`~`)에서 전역 bypass Claude 실행 |
+
+**bypass 토글 (`bypass ON`)** 활성화 시 모든 cmux 항목이 `--dangerously-skip-permissions` 옵션으로 실행됩니다.
+
+### claude --resume (TUI 세션 재개)
+
+프로젝트 폴더에서 `claude --resume`으로 인터랙티브 Claude 세션을 재개합니다. cmux 내에서 TUI 모드로 열립니다.
+
+| 위치 | 동작 |
+|---|---|
+| 포트 카드 `▼` → `Project Agents` | 프로젝트 폴더에서 claude --resume TUI 실행 |
+
+### Claude Agent View (전역 Agents)
+
+헤더 툴바의 `[Agents]` 버튼으로 cmux에서 claude agents 뷰를 엽니다.
+
+| 버튼 | 동작 |
+|---|---|
+| 헤더 `[Agents]` | `~/.claude` 디렉토리에서 claude agents 전역 뷰 |
+| 포트 카드 `▼` → `Agent View` | cmux_claude_agent — 현재 워크스페이스에서 agent 뷰 |
+
+> Claude Agent View는 **cmux 전용** 기능입니다. cmux 미설치 시 자동으로 설치 안내가 표시됩니다.
 
 ---
 
 ## cmux 통합 (macOS 전용)
 
-가장 자주 쓰는 cmux 워크플로를 3개 진입점에서 1-click으로 호출합니다.
+가장 자주 쓰는 cmux 워크플로를 여러 진입점에서 1-click으로 호출합니다.
 
 | 위치 | 동작 |
 |---|---|
 | 포트 카드 메인 로우 `[⚡cmux]` | 기존 cmux 워크스페이스에서 Claude 실행 |
 | 포트 카드 메인 로우 `[⚡cmux ↺]` | 새 cmux 워크스페이스 생성 후 Claude 실행 |
 | 포트 카드 `▼` → `cmux 터미널` | 폴더만 cmux로 열기 (Claude 미실행) |
+| 포트 카드 `▼` → `claude --bg` | bypass 모드로 Claude 백그라운드 실행 |
+| 포트 카드 `▼` → `Project Agents` | 프로젝트 폴더에서 claude --resume TUI |
 | 헤더 툴바 `[>_ cmux]` | HOME(`~`) 디렉토리에서 cmux 워크스페이스 |
-| `▼` → `cmux (Mac 전용)` / `cmux ↺ 새창 (Mac 전용)` | bypass/일반 모드 모두 지원 |
+| 헤더 툴바 `[Agents]` | 전역 claude agents 뷰 (cmux 통합) |
+| 헤더 툴바 `[--bg]` | HOME에서 bypass Claude 실행 |
+| `▼` → `cmux (Mac 전용)` / `cmux ↺ 새창` | bypass/일반 모드 모두 지원 |
 
 bypass 모드 토글(`bypass ON`) 활성화 시 모든 cmux 항목이 `--dangerously-skip-permissions` 옵션으로 Claude를 실행합니다.
 
@@ -75,8 +208,10 @@ cmux 미설치 시 자동 안내:
 brew tap manaflow-ai/cmux && brew install --cask cmux
 ```
 
-> cmux Socket Control이 `cmuxOnly`로 설정되어 있으면 외부 앱 호출이 차단됩니다.
-> cmux 메뉴 → Settings → Socket Control → **Allow All** 로 변경해 주세요.
+> **Socket Control 설정 필수**: cmux 메뉴 → Settings → Socket Control → **Allow All**  
+> 또는 터미널에서: `defaults write com.cmuxterm.app socketControlMode -string "allowAll"`
+
+> **Windows에서는 cmux 버튼이 자동으로 숨겨집니다.** Windows 플랫폼에서는 WSL2 + tmux 워크플로를 사용하세요.
 
 ---
 
@@ -244,6 +379,9 @@ start.bat   ← 탐색기에서 더블클릭
 
 브라우저에서 **http://localhost:9000** 열기
 
+> **Windows 플랫폼 자동 감지**: cmux 관련 버튼은 Windows에서 자동으로 숨겨지고,  
+> 플랫폼에 맞는 Windows 빌드 버튼이 표시됩니다.
+
 ---
 
 ### Step 4. 초기 설정 마법사
@@ -298,10 +436,14 @@ bun run start
 
 앱을 처음 사용한다면 설정 마법사에서 Supabase 연결, 기기 등록, 환경 설정을 한 번에 완료하세요.
 
-**🌐 [portmanager-portal.vercel.app](https://portmanager-portal.vercel.app)**  
-**🌐 [portmanager-portal.vercel.app/setup](https://portmanager-portal.vercel.app/setup)**
+> **포털 URL은 본인이 직접 Vercel에 배포한 후 생성됩니다.**  
+> 저장소를 Fork → Vercel에 배포 → `https://your-app-name.vercel.app` 형태의 고유 URL이 발급됩니다.  
+> 배포 방법은 앱 내 설정 마법사 → **북마크 포털 배포** 탭에서 단계별로 안내합니다.
 
-> 로컬에서 실행하려면: `bun run dev` 후 `http://localhost:9000/setup` 접속
+로컬에서 설정 마법사 실행:
+```bash
+bun run start   # → http://localhost:9000/setup
+```
 
 ---
 
@@ -321,7 +463,8 @@ bun run tauri:build:dmg  # DMG 배포 패키지
 ```
 
 > 빌드 버전은 마지막 git 커밋 날짜 기준으로 자동 생성됩니다.  
-> 오늘 날짜로 DMG를 만들려면 빌드 전에 커밋을 먼저 완료하세요.
+> 오늘 날짜로 DMG를 만들려면 빌드 전에 커밋을 먼저 완료하세요.  
+> 빌드 완료 후 앱 내 "DMG 출시하기" 버튼으로 Desktop에 자동 복사됩니다.
 
 ---
 
@@ -342,16 +485,16 @@ winget install Microsoft.VisualStudio.2022.BuildTools
 
 **빌드:**
 ```powershell
-bun run tauri:build:windows
+bun run tauri:build:win
 ```
 
 빌드 결과물:
 ```
-src-tauri\target\release\bundle\msi\포트관리기_x.x.x_x64_en-US.msi
-src-tauri\target\release\bundle\nsis\포트관리기_x.x.x_x64-setup.exe
+%USERPROFILE%\cargo-targets\portmanager\release\bundle\nsis\*.exe
 ```
 
-> Windows 빌드는 Windows 환경에서 직접 실행해야 합니다 (크로스 컴파일 미지원).
+> Windows 빌드는 Windows 환경에서 직접 실행해야 합니다 (크로스 컴파일 미지원).  
+> `CARGO_TARGET_DIR`이 홈 디렉토리로 고정되어 시스템 경로 권한 문제를 자동 우회합니다.
 
 ---
 
@@ -360,11 +503,14 @@ src-tauri\target\release\bundle\nsis\포트관리기_x.x.x_x64-setup.exe
 | 항목 | macOS | Windows |
 |---|---|---|
 | 간편 실행 | `실행.command` 더블클릭 | `start.bat` 더블클릭 |
-| 포트 상태 감지 | `lsof` 기반 | `netstat` 기반 (자동 처리) |
+| 포트 상태 감지 | `lsof` 기반 (절대경로) | `netstat` 기반 (자동 처리) |
 | 프로세스 강제 종료 | `SIGKILL` | `taskkill /F` (자동 처리) |
 | 실행 파일 등록 | `.command` 파일 | `.bat` 또는 `.ps1` 파일 |
-| Tauri 앱 빌드 | `.app` / `.dmg` | `.msi` / `.exe` |
+| Tauri 앱 빌드 | `.app` / `.dmg` | `.exe` (NSIS) |
 | 데이터 경로 | `~/Library/Application Support/...` | `%APPDATA%\...` |
+| cmux 통합 | ✅ 지원 | ❌ (자동 숨김) |
+| Claude Agent View | ✅ cmux 통합 | WSL2 + tmux 사용 |
+| claude --bg bypass | ✅ 버튼 제공 | 수동 실행 필요 |
 
 ---
 
@@ -396,7 +542,37 @@ src-tauri\target\release\bundle\nsis\포트관리기_x.x.x_x64-setup.exe
 | 스타일링 | Tailwind CSS |
 | API 서버 | Bun.serve() (포트 3001) |
 | DB 동기화 | Supabase |
+| 인증 | Google OAuth 2.0 (포털) |
 | 웹 배포 | Vercel |
+| 에이전트 터미널 | cmux (macOS) / tmux (macOS·Windows) |
+
+---
+
+## ❓ 자주 묻는 질문 (FAQ)
+
+**Q. Supabase 없이도 쓸 수 있나요?**  
+A. 네. 포트 실행·중지·모니터링·로그 보기 등 핵심 기능은 모두 Supabase 없이 사용 가능합니다. 여러 기기에서 데이터를 공유하고 싶을 때만 Supabase가 필요합니다.
+
+**Q. bun이 뭔가요? Node.js랑 달라요?**  
+A. Bun은 Node.js보다 빠른 JavaScript 실행 환경입니다. `npm install` 대신 `bun install`, `node index.js` 대신 `bun index.js`를 씁니다. 이 앱은 Bun으로만 동작합니다.
+
+**Q. 포트(Port)가 뭔가요?**  
+A. 서버가 통신하는 번호입니다. `bun run dev`를 실행하면 보통 `localhost:3000` 또는 `localhost:5173` 같은 주소로 접속하는데, 여기서 3000, 5173이 포트 번호입니다. 이 앱은 그런 포트들을 한눈에 관리합니다.
+
+**Q. cmux가 없으면 못 쓰나요?**  
+A. 아니요. cmux는 macOS 전용 부가 기능이며, 없어도 포트 관리 기능 전체를 사용할 수 있습니다. Claude Code와 함께 쓸 때 편리한 추가 도구입니다.
+
+**Q. 설정 마법사를 건너뛰었는데 다시 열 수 있나요?**  
+A. 네. 앱 우측 상단 **⚙ 설정** 버튼 → **초기 설정** 또는 **Supabase 설정** 메뉴에서 언제든 다시 열 수 있습니다.
+
+**Q. `bun run start`를 실행했는데 아무것도 안 보여요.**  
+A. 브라우저에서 **http://localhost:9000** 을 직접 열어보세요. 앱이 자동으로 브라우저를 열지 않는 경우가 있습니다.
+
+**Q. 포트 9000이 이미 사용 중이라는 오류가 나요.**  
+A. 다른 프로그램이 9000번 포트를 쓰고 있습니다. 터미널에서 `lsof -ti:9000 | xargs kill -9` (macOS) 또는 `netstat -ano | findstr :9000` (Windows)으로 확인 후 종료하세요.
+
+**Q. Windows에서 `bun`이 인식이 안 돼요.**  
+A. 설치 후 반드시 **새 PowerShell 창**을 열어야 합니다. 현재 창에서는 PATH가 갱신되지 않습니다.
 
 ---
 
@@ -426,6 +602,51 @@ Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
 없는 경우:
 - **Microsoft Store** → "앱 설치 관리자" 검색 → 업데이트/설치
 - 또는 https://github.com/microsoft/winget-cli/releases 에서 `.msixbundle` 직접 설치
+
+---
+
+### ❌ API 서버가 시작되지 않는 경우 (PATH 문제)
+
+`lsof`, `which` 등 시스템 명령이 실행되지 않으면 API 서버의 PATH 설정 문제일 수 있습니다.
+
+```bash
+# api-server.ts는 /usr/sbin/lsof 절대경로를 사용하므로
+# 별도 PATH 설정 없이 동작합니다.
+# 문제 지속 시 실행.command로 재시작:
+./실행.command
+```
+
+---
+
+### ❌ claude 명령을 찾을 수 없는 경우 (DMG 빌드 후)
+
+Tauri 앱(DMG 빌드)은 일반 셸 PATH를 상속하지 않습니다.  
+앱은 자동으로 `which claude` → `/usr/local/bin/claude` → `~/.npm-global/bin/claude` 순으로 탐색합니다.
+
+```bash
+# claude 설치 경로 확인
+which claude
+
+# 심볼릭 링크가 없으면 수동으로 추가
+ln -sf $(which claude) /usr/local/bin/claude
+```
+
+---
+
+### ❌ cmux 버튼 클릭 시 반응 없음 (Socket Control 문제)
+
+```bash
+# Socket Control을 Allow All로 변경
+defaults write com.cmuxterm.app socketControlMode -string "allowAll"
+
+# cmux 재시작
+pkill -f "cmux.app/Contents/MacOS/cmux" 2>/dev/null
+sleep 2
+open -a cmux
+
+# 연결 확인 (PONG이 오면 성공)
+cmux ping
+```
 
 ---
 
