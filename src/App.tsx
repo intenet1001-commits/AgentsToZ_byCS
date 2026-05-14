@@ -3668,33 +3668,6 @@ function App() {
                 onMouseLeave={e=>(e.currentTarget.style.background='transparent')}
               >{icon}{label}</button>
             ))}
-            {/* Claude 실행 섹션 */}
-            <div style={{margin:'3px 8px',borderTop:'1px solid rgba(255,240,220,0.08)'}}/>
-            <div style={{padding:'3px 12px 2px',fontSize:10,color:'rgba(200,168,240,0.5)',fontWeight:600,letterSpacing:0.5,textTransform:'uppercase'}}>
-              Claude {bypassPermissions ? '⚡bypass' : ''}
-            </div>
-            {[
-              {label:'tmux on iTerm', icon:<SquareTerminal style={{width:11,height:11}}/>, action:()=>openTmuxClaude(item), title:`tmux 세션으로 Claude 실행 (Mac·Windows)${bypassPermissions ? ' — bypass 모드' : ''}`, helpKey:'menu-tmux'},
-              {label:'tmux ↺ on iTerm', icon:<SquareTerminal style={{width:11,height:11}}/>, action:()=>openTmuxClaudeNew(item), title:`기존 tmux 세션 삭제 후 새창으로 시작${bypassPermissions ? ' — bypass 모드' : ''}`, helpKey:'menu-tmux-new'},
-              ...(!isWindows() ? [
-              {label:'tmux on cmux', icon:<Terminal style={{width:11,height:11}}/>, action:()=>openTmuxOnCmux(item), title:`cmux에서 tmux 세션으로 Claude 실행${bypassPermissions ? ' — bypass 모드' : ''}`, helpKey:'menu-cmux-tmux'},
-              {label:'tmux ↺ on cmux', icon:<Terminal style={{width:11,height:11}}/>, action:()=>openTmuxOnCmux(item, true), title:`cmux tmux 세션 초기화 후 새로 시작${bypassPermissions ? ' — bypass 모드' : ''}`, helpKey:'menu-cmux-tmux-new'},
-              ] : []),
-              ...(!isWindows() ? [
-              {label:'cmux (Mac 전용)', icon:<Terminal style={{width:11,height:11}}/>, action:()=>openCmuxClaude(item), title:`cmux 앱으로 Claude 실행 (macOS 전용)${bypassPermissions ? ' — bypass 모드' : ''}`, helpKey:'menu-cmux-mac'},
-              {label:'cmux ↺ 새창 (Mac 전용)', icon:<Terminal style={{width:11,height:11}}/>, action:()=>openCmuxClaudeNew(item), title:`cmux 새 워크스페이스를 프로젝트 경로로 열고 Claude 실행${bypassPermissions ? ' — bypass 모드' : ''}`, helpKey:'menu-cmux-mac-new'},
-              ...(item.folderPath ? [{label:'bg (agent view 등록)', icon:<Sparkles style={{width:11,height:11}}/>, action:()=>openClaudeBg(item), title:'claude --bg로 백그라운드 세션 시작 → agent view에 표시', helpKey:'menu-claude-bg'}] : []),
-              ] : []),
-            ].map(({label,icon,action,title,helpKey}) => (
-              <button key={label} data-help-key={helpKey} title={title} onClick={e=>{e.stopPropagation(); action(); setV3MenuOpenId(null);}} style={{
-                display:'flex',alignItems:'center',gap:8,padding:'6px 12px',width:'100%',
-                background:'transparent',border:'none',cursor:'pointer',
-                fontSize:12,color:bypassPermissions?'#c8a8f0':'#ede7dd',fontFamily:'inherit',textAlign:'left',
-              }}
-                onMouseEnter={e=>(e.currentTarget.style.background='rgba(200,168,240,0.07)')}
-                onMouseLeave={e=>(e.currentTarget.style.background='transparent')}
-              >{icon}{label}</button>
-            ))}
             {/* 편집/삭제 섹션 */}
             <div style={{margin:'3px 8px',borderTop:'1px solid rgba(255,240,220,0.08)'}}/>
             {[
