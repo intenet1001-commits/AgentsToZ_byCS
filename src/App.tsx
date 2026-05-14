@@ -5273,6 +5273,12 @@ function App() {
                   cmux
                 </button>
                 )}
+                {!isWindows() && (
+                <button data-help-key="header-cmux-agent-view" onClick={openCmuxAgentView} title="전체 Agent View — claude agents (HOME 기준, macOS 전용)" style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(200,168,240,0.15)',borderRadius:5,color:'#c8a8f0',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
+                  <Sparkles style={{width:13,height:13}} />
+                  agents
+                </button>
+                )}
                 {!isTauri() && !isDeployedWeb() && (
                   isWindows() ? (
                     <>

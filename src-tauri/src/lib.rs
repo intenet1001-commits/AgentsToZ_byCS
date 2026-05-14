@@ -2160,9 +2160,8 @@ fn open_cmux_agent_view() -> Result<String, String> {
     }
     ensure_cmux_window(&cli);
     let home = std::env::var("HOME").unwrap_or_else(|_| "/".into());
-    // claude --resume opens interactive TUI session picker (claude agents just lists and exits)
     let out = Command::new(&cli)
-        .args(["new-workspace", "--cwd", &home, "--command", &format!("{} --resume", resolve_claude_cli()), "--name", "🤖 Session Resume"])
+        .args(["new-workspace", "--cwd", &home, "--command", &format!("{} agents", resolve_claude_cli()), "--name", "🤖 Agent View"])
         .output()
         .map_err(|e| format!("cmux new-workspace 실행 실패: {}", e))?;
     if !out.status.success() {
@@ -2190,7 +2189,7 @@ fn open_cmux_project_agents(folder_path: Option<String>, name: String) -> Result
     };
     let title = format!("🤖 {} agents", base_name);
     let out = Command::new(&cli)
-        .args(["new-workspace", "--cwd", &cd_path, "--command", &format!("{} --resume", resolve_claude_cli()), "--name", &title])
+        .args(["new-workspace", "--cwd", &cd_path, "--command", &format!("{} agents", resolve_claude_cli()), "--name", &title])
         .output()
         .map_err(|e| format!("cmux new-workspace 실행 실패: {}", e))?;
     if !out.status.success() {

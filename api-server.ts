@@ -1492,8 +1492,7 @@ end try`);
           return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp('cmux 소켓 준비 대기 시간 초과 (5초)') }), { status: 500, headers });
         }
         const cdPath = homedir() || '/';
-        // claude --resume opens interactive TUI session picker (claude agents just lists and exits)
-        const ws = nodeCmuxRun(cliPath, ['new-workspace', '--cwd', cdPath, '--command', `${CLAUDE_PATH ?? 'claude'} --resume`, '--name', '🤖 Session Resume']);
+        const ws = nodeCmuxRun(cliPath, ['new-workspace', '--cwd', cdPath, '--command', `${CLAUDE_PATH ?? 'claude'} agents`, '--name', '🤖 Agent View']);
         if (!ws.ok) {
           return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp(`cmux new-workspace 실패: ${ws.stderr || 'unknown'}`) }), { status: 500, headers });
         }
@@ -1519,7 +1518,7 @@ end try`);
         }
         const baseName = (name && String(name).trim()) || cdPath.split('/').filter(Boolean).pop() || 'project';
         const title = `🤖 ${baseName} agents`;
-        const ws = nodeCmuxRun(cliPath, ['new-workspace', '--cwd', cdPath, '--command', `${CLAUDE_PATH ?? 'claude'} --resume`, '--name', title]);
+        const ws = nodeCmuxRun(cliPath, ['new-workspace', '--cwd', cdPath, '--command', `${CLAUDE_PATH ?? 'claude'} agents`, '--name', title]);
         if (!ws.ok) {
           return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp(`cmux new-workspace 실패: ${ws.stderr || 'unknown'}`) }), { status: 500, headers });
         }
