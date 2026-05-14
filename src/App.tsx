@@ -1676,11 +1676,16 @@ function App() {
                 const { data: rootData } = await supabase
                   .from('portmgr_workspace_roots').select('*').eq('device_id', deviceId);
                 if (rootData && rootData.length > 0) {
-                  const restoredRoots: WorkspaceRoot[] = rootData
+                  const remoteRoots: WorkspaceRoot[] = rootData
                     .filter((r: any) => !r.path?.startsWith('__device__'))
                     .map((r: any) => ({ id: r.id, name: r.name, path: r.path }));
-                  setWorkspaceRoots(restoredRoots);
-                  await API.saveWorkspaceRoots(restoredRoots);
+                  // Merge: Supabase roots + local-only roots not in Supabase (by ID)
+                  const localRoots = await API.loadWorkspaceRoots();
+                  const remoteIds = new Set(remoteRoots.map(r => r.id));
+                  const localOnly = localRoots.filter(r => !remoteIds.has(r.id));
+                  const mergedRoots = [...remoteRoots, ...localOnly];
+                  setWorkspaceRoots(mergedRoots);
+                  await API.saveWorkspaceRoots(mergedRoots);
                 }
                 // guard: rootData.length === 0 → skip, keep local roots intact
               }
@@ -2429,13 +2434,17 @@ function App() {
           if (fallback.data && fallback.data.length > 0) rootData = fallback.data;
         }
         if (rootData && rootData.length > 0) {
-          const restoredRoots: WorkspaceRoot[] = rootData
+          const remoteRoots2: WorkspaceRoot[] = rootData
             .filter((r: any) => !r.path?.startsWith('__device__'))
             .map((r: any) => ({ id: r.id, name: r.name, path: r.path }));
-          if (restoredRoots.length > 0) {
-            setWorkspaceRoots(restoredRoots);
-            await API.saveWorkspaceRoots(restoredRoots);
-            rootsMsg = ` + ${restoredRoots.length}개 작업루트`;
+          if (remoteRoots2.length > 0) {
+            const localRoots2 = await API.loadWorkspaceRoots();
+            const remoteIds2 = new Set(remoteRoots2.map(r => r.id));
+            const localOnly2 = localRoots2.filter(r => !remoteIds2.has(r.id));
+            const mergedRoots2 = [...remoteRoots2, ...localOnly2];
+            setWorkspaceRoots(mergedRoots2);
+            await API.saveWorkspaceRoots(mergedRoots2);
+            rootsMsg = ` + ${mergedRoots2.length}개 작업루트`;
           }
         }
       }
