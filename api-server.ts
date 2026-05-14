@@ -1496,8 +1496,10 @@ end try`);
         if (!(await waitCmuxReadyNode(cliPath))) {
           return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp('cmux 소켓 준비 대기 시간 초과 (10초)') }), { status: 500, headers });
         }
+        const { bypass = false } = await req.json().catch(() => ({}));
         const cdPath = homedir() || '/';
-        const ws = nodeCmuxRun(cliPath, ['new-workspace', '--cwd', cdPath, '--command', `${CLAUDE_PATH ?? 'claude'} agents`, '--name', '🤖 Agent View']);
+        const claudeCmd = bypass ? `${CLAUDE_PATH ?? 'claude'} --dangerously-skip-permissions agents` : `${CLAUDE_PATH ?? 'claude'} agents`;
+        const ws = nodeCmuxRun(cliPath, ['new-workspace', '--cwd', cdPath, '--command', claudeCmd, '--name', '🤖 Agent View']);
         if (!ws.ok) {
           return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp(`cmux new-workspace 실패: ${ws.stderr || 'unknown'}`) }), { status: 500, headers });
         }
@@ -1510,7 +1512,7 @@ end try`);
     if (url.pathname === "/api/open-cmux-project-agents" && req.method === "POST") {
       if (IS_WIN) return new Response(JSON.stringify({ error: 'cmux는 맥에서만 가능합니다' }), { status: 400, headers });
       try {
-        const { folderPath, name = '' } = await req.json();
+        const { folderPath, name = '', bypass = false } = await req.json();
         const cdPath = (folderPath && String(folderPath).trim()) || homedir() || '/';
         const cli = resolveCmuxCli();
         if (!cli && !cmuxAppExists()) {
@@ -1523,7 +1525,8 @@ end try`);
         }
         const baseName = (name && String(name).trim()) || cdPath.split('/').filter(Boolean).pop() || 'project';
         const title = `🤖 ${baseName} agents`;
-        const ws = nodeCmuxRun(cliPath, ['new-workspace', '--cwd', cdPath, '--command', `${CLAUDE_PATH ?? 'claude'} agents`, '--name', title]);
+        const claudeCmd2 = bypass ? `${CLAUDE_PATH ?? 'claude'} --dangerously-skip-permissions agents` : `${CLAUDE_PATH ?? 'claude'} agents`;
+        const ws = nodeCmuxRun(cliPath, ['new-workspace', '--cwd', cdPath, '--command', claudeCmd2, '--name', title]);
         if (!ws.ok) {
           return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp(`cmux new-workspace 실패: ${ws.stderr || 'unknown'}`) }), { status: 500, headers });
         }

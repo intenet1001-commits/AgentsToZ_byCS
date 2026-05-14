@@ -955,6 +955,15 @@ function App() {
   const [bypassPermissions, setBypassPermissions] = useState(
     () => localStorage.getItem('portmanager-bypassPermissions') !== 'false'
   );
+  const [terminalApp, setTerminalApp] = useState<'cmux' | 'iterm' | 'terminal'>(
+    () => (localStorage.getItem('portmanager-terminalApp') as 'cmux' | 'iterm' | 'terminal') ?? 'cmux'
+  );
+  const [bgMode, setBgMode] = useState(
+    () => localStorage.getItem('portmanager-bgMode') !== 'false'
+  );
+  const [tmuxMode, setTmuxMode] = useState(
+    () => localStorage.getItem('portmanager-tmuxMode') !== 'false'
+  );
   const [globalShortcut, setGlobalShortcut] = useState('CommandOrControl+Alt+P');
   const [showShortcutModal, setShowShortcutModal] = useState(false);
   const [shortcutInput, setShortcutInput] = useState('');
@@ -1576,11 +1585,13 @@ function App() {
   const openCmuxAgentView = async () => {
     if (isWindows()) { cmuxMacOnlyToast(); return; }
     try {
-      const msg = await callCmux('open_cmux_agent_view', '/api/open-cmux-agent-view', {});
+      const msg = await callCmux('open_cmux_agent_view', '/api/open-cmux-agent-view', {
+        bypass: bypassPermissions,
+      });
       showToast(msg, 'success');
     } catch (e: any) {
       const raw = typeof e === 'string' ? e : (e?.message ?? String(e));
-      showToast(`cmux Session Resume 실패: ${raw}`, 'error');
+      showToast(`cmux Agent View 실패: ${raw}`, 'error');
     }
   };
 
@@ -1591,6 +1602,7 @@ function App() {
       const msg = await callCmux('open_cmux_project_agents', '/api/open-cmux-project-agents', {
         folderPath: item.folderPath,
         name: getSessionName(item),
+        bypass: bypassPermissions,
       });
       showToast(msg, 'success');
     } catch (e: any) {
@@ -1615,6 +1627,28 @@ function App() {
       showToast(`claude --bg 실패: ${raw}`, 'error');
     }
   };
+
+  // 통합 터미널 핸들러 — terminalApp / bgMode / tmuxMode / bypassPermissions 조합으로 라우팅
+  const openClaudeMain = async (item: PortInfo, isNew = false) => {
+    if (bgMode) { await openClaudeBg(item); return; }
+    if (terminalApp === 'cmux') {
+      if (isNew) await openCmuxClaudeNew(item);
+      else await openCmuxClaude(item);
+    } else if (terminalApp === 'iterm') {
+      if (isNew) await openTmuxClaudeNew(item);
+      else await openTmuxClaude(item);
+    } else {
+      // Terminal.app fallback
+      if (isNew) await openTmuxClaudeNew(item);
+      else await openTmuxClaude(item);
+    }
+  };
+
+  const terminalBtnStyle = (color: string): React.CSSProperties => ({
+    flex: 1, padding: '4px 0', fontSize: 11, borderRadius: 6,
+    background: `${color}20`, border: `1px solid ${color}50`,
+    color: '#d4d4d8', cursor: 'pointer', fontFamily: 'inherit',
+  });
 
   // 초기 데이터 로드
   useEffect(() => {
@@ -3618,6 +3652,21 @@ function App() {
           </button>
         </div>
 
+        {/* 터미널 액션 버튼 — 항상 노출 */}
+        <div style={{display:'flex', gap:4, marginTop:5, paddingTop:5, borderTop:'1px solid #27272a'}} onClick={e=>e.stopPropagation()}>
+          <button onClick={()=>openClaudeMain(item, false)} style={terminalBtnStyle('#7c3aed')} title={`Claude 열기 (${terminalApp}${bgMode?' --bg':''})`}>
+            🤖 Claude 열기
+          </button>
+          <button onClick={()=>openClaudeMain(item, true)} style={terminalBtnStyle('#5b21b6')} title="새 워크스페이스에서 Claude 열기">
+            🤖 새창
+          </button>
+          {item.port && (
+            <button onClick={()=>API.openInChrome(`http://localhost:${item.port}`).catch(()=>{})} style={terminalBtnStyle('#0e7490')} title={`localhost:${item.port} 열기`}>
+              🌐 localhost
+            </button>
+          )}
+        </div>
+
         {/* Worktree panel */}
         {expandedWorktreeIds.has(item.id) && renderWorktreePanel(item)}
 
@@ -4815,6 +4864,40 @@ function App() {
                 <Keyboard className="w-3.5 h-3.5" />
                 <span className="font-mono">{globalShortcut.replace('CommandOrControl', '⌘').replace('Alt', '⌥').replace('Shift', '⇧').replace('Control', '⌃')}</span>
               </button>
+            )}
+
+            {/* 터미널 앱 선택기 + 모드 토글 — macOS + 포털 탭 제외 */}
+            {!isWindows() && activeTab !== 'portal' && (
+              <div style={{display:'flex', alignItems:'center', gap:4}}>
+                {/* 터미널 앱 선택 */}
+                <div style={{display:'flex', background:'#1a1a1c', border:'1px solid #3f3f46', borderRadius:8, overflow:'hidden'}}>
+                  {(['cmux','iterm','terminal'] as const).map(app => (
+                    <button key={app} onClick={() => { setTerminalApp(app); localStorage.setItem('portmanager-terminalApp', app); }}
+                      style={{ padding:'3px 8px', fontSize:11, background: terminalApp===app ? '#3f3f46' : 'transparent',
+                        color: terminalApp===app ? '#e4e4e7' : '#71717a', border:'none', cursor:'pointer', fontFamily:'inherit' }}>
+                      {app}
+                    </button>
+                  ))}
+                </div>
+                {/* --bg 토글 */}
+                <button onClick={() => { const v=!bgMode; setBgMode(v); localStorage.setItem('portmanager-bgMode', String(v)); }}
+                  title="--bg 모드: claude --bg 로 백그라운드 실행"
+                  style={{ padding:'3px 8px', fontSize:11, borderRadius:6, border:'1px solid', cursor:'pointer', fontFamily:'inherit',
+                    background: bgMode ? '#2d1f42' : '#18181b',
+                    borderColor: bgMode ? '#7c3aed' : '#3f3f46',
+                    color: bgMode ? '#c4b5fd' : '#71717a' }}>
+                  --bg
+                </button>
+                {/* tmux 토글 */}
+                <button onClick={() => { const v=!tmuxMode; setTmuxMode(v); localStorage.setItem('portmanager-tmuxMode', String(v)); }}
+                  title="tmux 모드: iTerm 선택 시 tmux 세션으로 실행"
+                  style={{ padding:'3px 8px', fontSize:11, borderRadius:6, border:'1px solid', cursor:'pointer', fontFamily:'inherit',
+                    background: tmuxMode ? '#1f2d20' : '#18181b',
+                    borderColor: tmuxMode ? '#22c55e' : '#3f3f46',
+                    color: tmuxMode ? '#86efac' : '#71717a' }}>
+                  tmux
+                </button>
+              </div>
             )}
 
             {/* bypass 토글 — 포털 탭에서 숨김 */}
