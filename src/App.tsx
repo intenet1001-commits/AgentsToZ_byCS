@@ -1147,7 +1147,7 @@ function App() {
   };
 
   // 토스트 배너 표시 함수
-  const showToast = (message: string, type: 'success' | 'error' = 'success', duration = 3000): number => {
+  const showToast = (message: string, type: 'success' | 'error' = 'success', duration = type === 'error' ? 8000 : 3000): number => {
     const id = Date.now();
     setToasts(prev => [...prev, { id, message, type }]);
     if (duration > 0) {
@@ -4645,7 +4645,7 @@ function App() {
           <div
             key={toast.id}
             className={`
-              flex items-center gap-2.5 px-4 py-2.5 rounded-lg shadow-xl
+              flex items-start gap-2.5 px-4 py-2.5 rounded-lg shadow-xl
               backdrop-blur-sm border
               transform transition-all duration-300 ease-in-out
               animate-slide-in-right
@@ -4654,8 +4654,9 @@ function App() {
                 : 'bg-red-500/10 border-red-500/30 text-red-400'
               }
             `}
+            style={{ maxWidth: '380px' }}
           >
-            <div className="flex-1 font-medium text-sm">
+            <div className="flex-1 font-medium text-sm" style={{ whiteSpace: 'pre-line', wordBreak: 'break-word' }}>
               {toast.message}
             </div>
             <button

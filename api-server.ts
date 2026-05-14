@@ -83,7 +83,7 @@ function cmuxAppExists(): boolean {
  *  Using osascript routes through macOS's AppleScript engine (fully detached
  *  from Bun's subprocess state) and stripping CMUX_* prevents the daemon from
  *  treating the call as a stale-pane request. */
-function nodeCmuxRun(cli: string, args: string[]): { ok: boolean; stderr: string; stdout: string } {
+function nodeCmuxRun(cli: string, args: string[], timeoutMs = 8000): { ok: boolean; stderr: string; stdout: string } {
   const escape = (s: string) => s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   const shellEscape = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
   const shellCmd = `${shellEscape(cli)} ${args.map(shellEscape).join(' ')}`;
@@ -95,7 +95,7 @@ function nodeCmuxRun(cli: string, args: string[]): { ok: boolean; stderr: string
   }
   const r = nodeSpawnSync('osascript', ['-e', appleScript], {
     encoding: 'utf-8',
-    timeout: 8000,
+    timeout: timeoutMs,
     env: cleanEnv,
   });
   return {
@@ -105,11 +105,14 @@ function nodeCmuxRun(cli: string, args: string[]): { ok: boolean; stderr: string
   };
 }
 
-async function waitCmuxReadyNode(cli: string, totalMs = 5000): Promise<boolean> {
+async function waitCmuxReadyNode(cli: string, totalMs = 10000): Promise<boolean> {
   const deadline = Date.now() + totalMs;
   while (Date.now() < deadline) {
-    if (nodeCmuxRun(cli, ['ping']).ok) return true;
-    await new Promise(res => setTimeout(res, 250));
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    // ping timeout: 2초로 제한 — 8초 기본값이면 10초 윈도우에서 1번밖에 못 시도
+    if (nodeCmuxRun(cli, ['ping'], Math.min(2000, remaining)).ok) return true;
+    await new Promise(res => setTimeout(res, 200));
   }
   return false;
 }
@@ -1360,7 +1363,7 @@ end try`);
         if (cmuxAppExists()) nodeSpawnSync('open', ['-a', 'cmux'], { stdio: 'pipe' });
         const cliPath = cli ?? 'cmux';
         if (!(await waitCmuxReadyNode(cliPath))) {
-          return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp('cmux 소켓 준비 대기 시간 초과 (5초)') }), { status: 500, headers });
+          return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp('cmux 소켓 준비 대기 시간 초과 (10초)') }), { status: 500, headers });
         }
         const ws = nodeCmuxRun(cliPath, ['new-workspace', '--cwd', cdPath, '--command', claudeCli, '--name', title]);
         if (!ws.ok) {
@@ -1390,7 +1393,7 @@ end try`);
         if (cmuxAppExists()) nodeSpawnSync('open', ['-a', 'cmux'], { stdio: 'pipe' });
         const cliPath = cli ?? 'cmux';
         if (!(await waitCmuxReadyNode(cliPath))) {
-          return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp('cmux 소켓 준비 대기 시간 초과 (5초)') }), { status: 500, headers });
+          return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp('cmux 소켓 준비 대기 시간 초과 (10초)') }), { status: 500, headers });
         }
         const ws = nodeCmuxRun(cliPath, ['new-workspace', '--cwd', cdPath, '--command', claudeCli, '--name', title]);
         if (!ws.ok) {
@@ -1415,7 +1418,7 @@ end try`);
         if (cmuxAppExists()) nodeSpawnSync('open', ['-a', 'cmux'], { stdio: 'pipe' });
         const cliPath = cli ?? 'cmux';
         if (!(await waitCmuxReadyNode(cliPath))) {
-          return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp('cmux 소켓 준비 대기 시간 초과 (5초)') }), { status: 500, headers });
+          return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp('cmux 소켓 준비 대기 시간 초과 (10초)') }), { status: 500, headers });
         }
         const baseName = (name && String(name).trim()) || cdPath.split('/').filter(Boolean).pop() || 'terminal';
         const title = `🪟 ${baseName}`;
@@ -1442,7 +1445,7 @@ end try`);
         if (cmuxAppExists()) nodeSpawnSync('open', ['-a', 'cmux'], { stdio: 'pipe' });
         const cliPath = cli ?? 'cmux';
         if (!(await waitCmuxReadyNode(cliPath))) {
-          return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp('cmux 소켓 준비 대기 시간 초과 (5초)') }), { status: 500, headers });
+          return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp('cmux 소켓 준비 대기 시간 초과 (10초)') }), { status: 500, headers });
         }
         const result = nodeCmuxRun(cliPath, ['new-pane', '--type', 'browser', '--url', targetUrl, '--focus', 'true']);
         if (!result.ok) {
@@ -1489,7 +1492,7 @@ end try`);
         if (cmuxAppExists()) nodeSpawnSync('open', ['-a', 'cmux'], { stdio: 'pipe' });
         const cliPath = cli ?? 'cmux';
         if (!(await waitCmuxReadyNode(cliPath))) {
-          return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp('cmux 소켓 준비 대기 시간 초과 (5초)') }), { status: 500, headers });
+          return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp('cmux 소켓 준비 대기 시간 초과 (10초)') }), { status: 500, headers });
         }
         const cdPath = homedir() || '/';
         const ws = nodeCmuxRun(cliPath, ['new-workspace', '--cwd', cdPath, '--command', `${CLAUDE_PATH ?? 'claude'} agents`, '--name', '🤖 Agent View']);
@@ -1514,7 +1517,7 @@ end try`);
         if (cmuxAppExists()) nodeSpawnSync('open', ['-a', 'cmux'], { stdio: 'pipe' });
         const cliPath = cli ?? 'cmux';
         if (!(await waitCmuxReadyNode(cliPath))) {
-          return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp('cmux 소켓 준비 대기 시간 초과 (5초)') }), { status: 500, headers });
+          return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp('cmux 소켓 준비 대기 시간 초과 (10초)') }), { status: 500, headers });
         }
         const baseName = (name && String(name).trim()) || cdPath.split('/').filter(Boolean).pop() || 'project';
         const title = `🤖 ${baseName} agents`;
