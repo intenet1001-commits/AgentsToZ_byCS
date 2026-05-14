@@ -1479,6 +1479,57 @@ end try`);
       }
     }
 
+    if (url.pathname === "/api/open-cmux-agent-view" && req.method === "POST") {
+      if (IS_WIN) return new Response(JSON.stringify({ error: 'cmux는 맥에서만 가능합니다' }), { status: 400, headers });
+      try {
+        const cli = resolveCmuxCli();
+        if (!cli && !cmuxAppExists()) {
+          return new Response(JSON.stringify({ error: 'cmux가 설치되지 않았습니다.\n설치: brew tap manaflow-ai/cmux && brew install --cask cmux' }), { status: 400, headers });
+        }
+        if (cmuxAppExists()) nodeSpawnSync('open', ['-a', 'cmux'], { stdio: 'pipe' });
+        const cliPath = cli ?? 'cmux';
+        if (!(await waitCmuxReadyNode(cliPath))) {
+          return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp('cmux 소켓 준비 대기 시간 초과 (5초)') }), { status: 500, headers });
+        }
+        const cdPath = homedir() || '/';
+        const claudeCli = CLAUDE_PATH ?? 'claude';
+        const ws = nodeCmuxRun(cliPath, ['new-workspace', '--cwd', cdPath, '--command', `${claudeCli} agents`, '--name', '🤖 Agent View']);
+        if (!ws.ok) {
+          return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp(`cmux new-workspace 실패: ${ws.stderr || 'unknown'}`) }), { status: 500, headers });
+        }
+        return new Response(JSON.stringify({ success: true, message: 'cmux Agent View 열림' }), { headers });
+      } catch (error: any) {
+        return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers });
+      }
+    }
+
+    if (url.pathname === "/api/open-cmux-project-agents" && req.method === "POST") {
+      if (IS_WIN) return new Response(JSON.stringify({ error: 'cmux는 맥에서만 가능합니다' }), { status: 400, headers });
+      try {
+        const { folderPath, name = '' } = await req.json();
+        const cdPath = (folderPath && String(folderPath).trim()) || homedir() || '/';
+        const cli = resolveCmuxCli();
+        if (!cli && !cmuxAppExists()) {
+          return new Response(JSON.stringify({ error: 'cmux가 설치되지 않았습니다.\n설치: brew tap manaflow-ai/cmux && brew install --cask cmux' }), { status: 400, headers });
+        }
+        if (cmuxAppExists()) nodeSpawnSync('open', ['-a', 'cmux'], { stdio: 'pipe' });
+        const cliPath = cli ?? 'cmux';
+        if (!(await waitCmuxReadyNode(cliPath))) {
+          return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp('cmux 소켓 준비 대기 시간 초과 (5초)') }), { status: 500, headers });
+        }
+        const claudeCli = CLAUDE_PATH ?? 'claude';
+        const baseName = (name && String(name).trim()) || cdPath.split('/').filter(Boolean).pop() || 'project';
+        const title = `🤖 ${baseName} agents`;
+        const ws = nodeCmuxRun(cliPath, ['new-workspace', '--cwd', cdPath, '--command', `${claudeCli} agents`, '--name', title]);
+        if (!ws.ok) {
+          return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp(`cmux new-workspace 실패: ${ws.stderr || 'unknown'}`) }), { status: 500, headers });
+        }
+        return new Response(JSON.stringify({ success: true, message: `cmux Agent View 열림 (${baseName})` }), { headers });
+      } catch (error: any) {
+        return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers });
+      }
+    }
+
     if (url.pathname.startsWith("/api/open-log/") && req.method === "GET") {
       const portId = decodeURIComponent(url.pathname.slice("/api/open-log/".length));
       if (!portId) return new Response(JSON.stringify({ error: 'portId 필요' }), { status: 400, headers });

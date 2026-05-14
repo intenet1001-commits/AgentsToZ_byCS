@@ -2136,6 +2136,55 @@ fn open_cmux_localhost(port: u16, name: String) -> Result<String, String> {
     Ok(format!("cmux 브라우저로 localhost:{} 열림", port))
 }
 
+#[tauri::command]
+fn open_cmux_agent_view() -> Result<String, String> {
+    if cfg!(windows) { return Err("cmux는 맥에서만 가능합니다".into()); }
+    let cli = resolve_cmux_cli().ok_or_else(cmux_install_error)?;
+    let _ = Command::new("open").args(["-a", "cmux"]).status();
+    if !wait_cmux_ready(&cli, std::time::Duration::from_secs(5)) {
+        return Err(cmux_access_help_msg("cmux 소켓 준비 대기 시간 초과 (5초)"));
+    }
+    ensure_cmux_window(&cli);
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/".into());
+    let out = Command::new(&cli)
+        .args(["new-workspace", "--cwd", &home, "--command", "claude agents", "--name", "🤖 Agent View"])
+        .output()
+        .map_err(|e| format!("cmux new-workspace 실행 실패: {}", e))?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        return Err(cmux_access_help_msg(&format!("cmux new-workspace 실패: {}", stderr)));
+    }
+    Ok("cmux Agent View 열림".into())
+}
+
+#[tauri::command]
+fn open_cmux_project_agents(folder_path: Option<String>, name: String) -> Result<String, String> {
+    if cfg!(windows) { return Err("cmux는 맥에서만 가능합니다".into()); }
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/".into());
+    let cd_path = folder_path.filter(|s| !s.trim().is_empty()).unwrap_or_else(|| home.clone());
+    let cli = resolve_cmux_cli().ok_or_else(cmux_install_error)?;
+    let _ = Command::new("open").args(["-a", "cmux"]).status();
+    if !wait_cmux_ready(&cli, std::time::Duration::from_secs(5)) {
+        return Err(cmux_access_help_msg("cmux 소켓 준비 대기 시간 초과 (5초)"));
+    }
+    ensure_cmux_window(&cli);
+    let base_name = if !name.trim().is_empty() {
+        name.clone()
+    } else {
+        cd_path.split('/').filter(|s| !s.is_empty()).last().unwrap_or("project").to_string()
+    };
+    let title = format!("🤖 {} agents", base_name);
+    let out = Command::new(&cli)
+        .args(["new-workspace", "--cwd", &cd_path, "--command", "claude agents", "--name", &title])
+        .output()
+        .map_err(|e| format!("cmux new-workspace 실행 실패: {}", e))?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        return Err(cmux_access_help_msg(&format!("cmux new-workspace 실패: {}", stderr)));
+    }
+    Ok(format!("cmux Agent View 열림 ({})", base_name))
+}
+
 /// If the error pattern suggests access denied (cmuxOnly mode), append guidance.
 fn cmux_access_help_msg(base: &str) -> String {
     format!(
@@ -2261,6 +2310,8 @@ pub fn run() {
         open_cmux_terminal,
         open_cmux_tmux,
         open_cmux_localhost,
+        open_cmux_agent_view,
+        open_cmux_project_agents,
         get_global_shortcut,
         set_global_shortcut,
         get_platform,
