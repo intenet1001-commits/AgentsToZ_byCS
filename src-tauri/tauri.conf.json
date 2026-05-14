@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "CS_Manager",
-  "version": "79.0.0",
+  "version": "80.0.0",
   "identifier": "com.portmanager.portmanager",
   "build": {
     "frontendDist": "../dist",
