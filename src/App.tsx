@@ -3973,44 +3973,14 @@ function App() {
               </button>
             </div>
 
-            {/* Claude 실행 */}
+            {/* Claude 실행 — 헤더 터미널 컨트롤 기반 */}
             <div style={{display:'flex',gap:6,flexWrap:'wrap' as const,marginBottom:8}}>
-              <div style={{width:'100%',fontSize:10,color:'rgba(200,168,240,0.5)',fontWeight:600,letterSpacing:0.5,textTransform:'uppercase' as const,marginBottom:2}}>
-                Claude {bypassPermissions?'⚡bypass':''}
-              </div>
-              {!isWindows() && (<>
-              <button onClick={() => openCmuxClaude(sel)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title="cmux 앱으로 Claude 실행 (macOS)">
-                <Terminal style={{width:11,height:11}}/>cmux
+              <button onClick={() => openClaudeMain(sel, false)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title={`Claude 열기 (${terminalApp}${bgMode?' --bg':''})`}>
+                🤖 Claude 열기
               </button>
-              <button onClick={() => openCmuxClaudeNew(sel)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title="cmux 새 워크스페이스">
-                <Terminal style={{width:11,height:11}}/>cmux ↺ 새창
+              <button onClick={() => openClaudeMain(sel, true)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title="새 워크스페이스에서 Claude 열기">
+                🤖 새창
               </button>
-              {sel.port && (
-              <button onClick={() => openCmuxLocalhost(sel)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title={`cmux 내장 브라우저로 localhost:${sel.port} 열기`}>
-                <Laptop style={{width:11,height:11}}/>cmux localhost
-              </button>
-              )}
-              <button onClick={() => openCmuxTerminal(sel)} style={rowBtn} title="cmux 터미널 (Claude 없이)">
-                <Terminal style={{width:11,height:11}}/>cmux 터미널
-              </button>
-              <button onClick={() => openTmuxOnCmux(sel)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title="cmux에서 tmux 세션으로 Claude 실행">
-                <Terminal style={{width:11,height:11}}/>tmux on cmux
-              </button>
-              <button onClick={() => openTmuxOnCmux(sel, true)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title="cmux tmux 세션 초기화 후 새로 시작">
-                <Terminal style={{width:11,height:11}}/>tmux ↺ on cmux
-              </button>
-              </>)}
-              <button onClick={() => openTmuxClaude(sel)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title="tmux 세션으로 Claude 실행">
-                <SquareTerminal style={{width:11,height:11}}/>tmux on iTerm
-              </button>
-              <button onClick={() => openTmuxClaudeNew(sel)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title="기존 tmux 삭제 후 새창">
-                <SquareTerminal style={{width:11,height:11}}/>tmux ↺ on iTerm
-              </button>
-              {sel.folderPath && (
-              <button onClick={() => openClaudeBg(sel)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title="claude --bg로 백그라운드 세션 시작 → agent view에 표시">
-                <Sparkles style={{width:11,height:11}}/>claude --bg
-              </button>
-              )}
             </div>
 
             {/* 편집/삭제 */}
