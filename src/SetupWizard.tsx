@@ -386,81 +386,149 @@ npm install -g supabase`;
         </>
       )}
       <CodeBlock label="버전 확인" code="supabase --version" comment="1.x 이상이면 정상" />
-      <CodeBlock label="로그인 (브라우저 인증)" code="supabase login" comment="브라우저가 열리면 Supabase 계정으로 인증 완료 후 돌아오세요" />
+      <CodeBlock label="로그인 (브라우저 인증)" code="supabase login" comment="브라우저가 자동으로 열립니다 — Supabase 계정으로 로그인 후 터미널로 돌아오세요" />
+      <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 space-y-2 text-xs text-zinc-400">
+        <p className="font-semibold text-amber-300">브라우저가 안 열리거나 인증이 안 될 때</p>
+        <CodeBlock code="supabase login --no-browser" label="→ 대신 이 명령 실행 (URL을 직접 복사해서 브라우저에 붙여넣기)" />
+        <p className="text-[11px] text-zinc-500">그래도 안 되면 터미널을 완전히 닫고 새로 열어 다시 시도하세요.</p>
+      </div>
     </div>,
 
     // 2: 프로젝트 생성
     <div key={2} className="space-y-4">
-      <p className="text-zinc-400 text-sm">CLI로 Supabase 프로젝트를 생성합니다.</p>
+      <p className="text-zinc-400 text-sm">CLI로 Supabase 프로젝트를 생성합니다. 아래 순서대로 진행하세요.</p>
       <OsToggle os={os} onChange={setOs} />
-      <CodeBlock label="Org ID 확인 + 프로젝트 생성" code={createProjectCmd} />
-      <div className="grid grid-cols-2 gap-3">
+
+      {/* Step 2-1: Org ID 확인 */}
+      <div className="rounded-xl border border-zinc-700/50 bg-zinc-800/30 p-3 space-y-2">
+        <p className="text-xs font-semibold text-zinc-300">① 내 Org ID 확인 (터미널에서 실행)</p>
+        <CodeBlock code="supabase orgs list" />
+        <div className="bg-black/30 rounded-lg p-2.5 text-[11px] font-mono text-zinc-500 space-y-0.5">
+          <p className="text-zinc-600"># 출력 예시:</p>
+          <p><span className="text-emerald-400">ID</span>{'                    '}NAME</p>
+          <p><span className="text-yellow-300">abcdefg1234567</span>{'    '}My Org</p>
+          <p className="text-zinc-600 mt-1"># ↑ 이 노란색 값이 Org ID 입니다</p>
+        </div>
         <div>
-          <label className="block text-xs text-zinc-500 mb-1">Org ID (위 결과에서 복사)</label>
-          <input value={orgId} onChange={e => setOrgId(e.target.value)} placeholder="예: abcorg123"
+          <label className="block text-[11px] text-zinc-500 mb-1">Org ID 입력 (위 결과에서 복사)</label>
+          <input value={orgId} onChange={e => setOrgId(e.target.value)} placeholder="예: abcdefg1234567"
             className="w-full px-3 py-2 text-sm bg-black/40 border border-zinc-700 text-white placeholder-zinc-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono" />
         </div>
-        <div>
-          <label className="block text-xs text-zinc-500 mb-1">DB Password (직접 설정)</label>
-          <input value={dbPassword} onChange={e => setDbPassword(e.target.value)} type="password" placeholder="강력한 비밀번호"
-            className="w-full px-3 py-2 text-sm bg-black/40 border border-zinc-700 text-white placeholder-zinc-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500" />
-        </div>
       </div>
+
+      {/* Step 2-2: DB Password */}
+      <div className="rounded-xl border border-zinc-700/50 bg-zinc-800/30 p-3 space-y-2">
+        <p className="text-xs font-semibold text-zinc-300">② DB 비밀번호 설정</p>
+        <p className="text-[11px] text-zinc-500">이 비밀번호는 Supabase 데이터베이스 전용입니다. 다음 단계(연결 시)에서 한 번 더 입력하니 메모해두세요.</p>
+        <input value={dbPassword} onChange={e => setDbPassword(e.target.value)} type="password" placeholder="영문+숫자+특수문자 조합 권장"
+          className="w-full px-3 py-2 text-sm bg-black/40 border border-zinc-700 text-white placeholder-zinc-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500" />
+      </div>
+
+      {/* Step 2-3: 완성된 명령어 */}
       {orgId && dbPassword && (
-        <CodeBlock label="복사해서 바로 실행" code={`supabase projects create portmanagement --org-id ${orgId} --db-password "${dbPassword}" --region ap-northeast-1`} />
+        <div className="space-y-2">
+          <p className="text-xs font-semibold text-zinc-300">③ 아래 명령어 복사해서 실행</p>
+          <CodeBlock code={`supabase projects create portmanagement --org-id ${orgId} --db-password "${dbPassword}" --region ap-northeast-1`} />
+        </div>
       )}
-      <InfoBox>
-        <p className="text-xs text-zinc-400">실행 결과에서 <code className="text-violet-300">Project Ref</code> 값을 복사해두세요. 다음 단계에서 필요합니다.</p>
+      {(!orgId || !dbPassword) && (
+        <p className="text-[11px] text-zinc-600">① ②를 모두 입력하면 실행 명령어가 자동 완성됩니다.</p>
+      )}
+
+      <InfoBox color="amber">
+        <p className="text-xs">실행 결과 마지막 줄에 <code className="text-yellow-200">Project Ref: xxxxxxxxxxxxxxx</code> 형태로 출력됩니다. 이 값을 <strong>복사해두세요</strong> — 다음 단계에서 필요합니다.</p>
+        <p className="text-[11px] text-zinc-400 mt-1">💡 무료 계정은 프로젝트를 최대 2개까지 만들 수 있습니다.</p>
       </InfoBox>
     </div>,
 
     // 3: 프로젝트 연결
     <div key={3} className="space-y-4">
-      <p className="text-zinc-400 text-sm">생성된 프로젝트를 현재 디렉토리에 연결합니다.</p>
-      <div>
-        <label className="block text-xs text-zinc-500 mb-1">Project Ref (이전 단계 결과)</label>
-        <input value={refId} onChange={e => setRefId(e.target.value)} placeholder="예: abcdefghijklmno"
+      <p className="text-zinc-400 text-sm">이전 단계에서 생성한 프로젝트를 이 앱 폴더에 연결합니다.</p>
+
+      <div className="rounded-xl border border-zinc-700/50 bg-zinc-800/30 p-3 space-y-2">
+        <p className="text-xs font-semibold text-zinc-300">Project Ref 입력</p>
+        <p className="text-[11px] text-zinc-500">
+          이전 단계 <code className="text-violet-400">supabase projects create</code> 실행 결과 맨 아래에 나온 값입니다.
+        </p>
+        <div className="bg-black/30 rounded-lg p-2.5 text-[11px] font-mono text-zinc-500 space-y-0.5">
+          <p className="text-zinc-600"># 이전 단계 출력 예시:</p>
+          <p>Created a new project <span className="text-white">portmanagement</span> in region <span className="text-white">ap-northeast-1</span></p>
+          <p>Project Ref: <span className="text-yellow-300">abcdefghijklmno</span></p>
+          <p className="text-zinc-600"># ↑ 이 값을 아래에 붙여넣으세요</p>
+        </div>
+        <input value={refId} onChange={e => setRefId(e.target.value)} placeholder="예: abcdefghijklmno (15자리)"
           className="w-full px-3 py-2 text-sm bg-black/40 border border-zinc-700 text-white placeholder-zinc-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-violet-500 font-mono" />
       </div>
+
       {refId && (
         <>
-          <CodeBlock label="프로젝트 연결" code={`supabase link --project-ref ${refId}`} comment={`DB 비밀번호 입력 요청 시 → "${dbPassword || '<설정한 비밀번호>'}" 입력`} />
+          <CodeBlock
+            label="연결 명령 실행"
+            code={`supabase link --project-ref ${refId}`}
+            comment={`DB 비밀번호 입력 요청 시 → 이전 단계에서 설정한 "${dbPassword ? '••••••••' : '<DB 비밀번호>'}" 입력`}
+          />
           <InfoBox color="green">
-            <p className="text-xs">Project URL이 자동 설정됩니다: <code className="text-white">https://{refId}.supabase.co</code></p>
+            <p className="text-xs">연결 성공 시 Project URL이 자동 설정됩니다: <code className="text-white">https://{refId}.supabase.co</code></p>
           </InfoBox>
+          <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-3 text-xs text-zinc-400 space-y-1">
+            <p className="text-red-300 font-semibold">연결 실패 시</p>
+            <p>• <strong>Error: Invalid DB password</strong> → DB 비밀번호를 다시 확인하세요 (이전 단계 Step 2에서 설정한 것)</p>
+            <p>• <strong>Error: Project not found</strong> → Project Ref가 정확한지 확인하세요 (15자리)</p>
+          </div>
         </>
       )}
-      {!refId && <InfoBox color="amber"><p className="text-xs">위에서 Project Ref를 먼저 입력하세요.</p></InfoBox>}
+      {!refId && <InfoBox color="amber"><p className="text-xs">위에서 Project Ref를 먼저 입력하면 연결 명령어가 자동 완성됩니다.</p></InfoBox>}
     </div>,
 
     // 4: 테이블 생성
     <div key={4} className="space-y-4">
-      <p className="text-zinc-400 text-sm">마이그레이션 파일을 만들고 DB에 적용합니다.</p>
+      <p className="text-zinc-400 text-sm">앱에서 사용할 데이터베이스 테이블을 만드는 단계입니다. 아래 3단계를 순서대로 진행하세요.</p>
       <OsToggle os={os} onChange={setOs} />
-      <CodeBlock label="1. 마이그레이션 파일 생성" code="supabase migration new init_portmanagement" comment="portmanagement 폴더 내 supabase/migrations/ 에 파일 생성됨" />
-      <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-3 text-xs text-zinc-400 space-y-2">
-        <p>생성된 파일을 열고 아래 SQL을 붙여넣기:</p>
-        <p className="text-zinc-600">
-          경로:{' '}
-          <code className="text-zinc-400">
-            {os === 'mac'
-              ? 'supabase/migrations/[타임스탬프]_init_portmanagement.sql'
-              : 'supabase\\migrations\\[타임스탬프]_init_portmanagement.sql'}
-          </code>
+
+      {/* 4-1 */}
+      <div className="rounded-xl border border-zinc-700/50 bg-zinc-800/30 p-3 space-y-2">
+        <p className="text-xs font-semibold text-zinc-300">① 마이그레이션 파일 생성</p>
+        <p className="text-[11px] text-zinc-500">portmanagement 폴더 안에 SQL 파일이 자동으로 만들어집니다.</p>
+        <CodeBlock code="supabase migration new init_portmanagement" />
+        <p className="text-[11px] text-zinc-600">
+          생성 위치: <code className="text-zinc-400">supabase/migrations/[숫자]_init_portmanagement.sql</code>
         </p>
+      </div>
+
+      {/* 4-2 */}
+      <div className="rounded-xl border border-zinc-700/50 bg-zinc-800/30 p-3 space-y-2">
+        <p className="text-xs font-semibold text-zinc-300">② 생성된 파일에 SQL 붙여넣기</p>
+        <p className="text-[11px] text-zinc-500">방금 만들어진 .sql 파일을 열고, 아래 SQL을 전체 선택 후 붙여넣기 하세요.</p>
         {os === 'windows' && (
-          <div className="pt-1 space-y-1">
-            <p className="text-zinc-500">파일 열기 (PowerShell):</p>
+          <div className="space-y-1">
+            <p className="text-[11px] text-zinc-500">파일 열기 (PowerShell에서 실행):</p>
             <div className="bg-black/40 rounded px-3 py-1.5 font-mono text-xs text-emerald-300 flex items-center justify-between">
               <span>{'notepad (Get-ChildItem supabase\\migrations\\*.sql | Select-Object -Last 1).FullName'}</span>
               <button onClick={() => navigator.clipboard.writeText('notepad (Get-ChildItem supabase\\migrations\\*.sql | Select-Object -Last 1).FullName')} className="text-zinc-500 hover:text-zinc-300 ml-2 shrink-0"><Copy className="w-3 h-3" /></button>
             </div>
-            <p className="text-[10px] text-zinc-600">또는 VS Code: <code className="text-zinc-400">code .</code> 로 폴더 열기</p>
           </div>
         )}
+        {os === 'mac' && (
+          <div className="space-y-1">
+            <p className="text-[11px] text-zinc-500">파일 열기 (터미널에서 실행):</p>
+            <CodeBlock code={'open supabase/migrations/$(ls supabase/migrations/ | tail -1)'} />
+          </div>
+        )}
+        <CodeBlock label="SQL 내용 (전체 복사 후 파일에 붙여넣기)" code={MIGRATION_SQL} />
+        <p className="text-[11px] text-zinc-500">붙여넣기 후 저장(<kbd className="bg-zinc-700 px-1 rounded text-zinc-300">{os === 'mac' ? 'Cmd+S' : 'Ctrl+S'}</kbd>)하세요.</p>
       </div>
-      <CodeBlock label="2. SQL 내용 (파일에 붙여넣기)" code={MIGRATION_SQL} />
-      <CodeBlock label="3. DB에 적용" code="supabase db push" comment="완료 시 'Finished supabase db push' 출력" />
+
+      {/* 4-3 */}
+      <div className="rounded-xl border border-zinc-700/50 bg-zinc-800/30 p-3 space-y-2">
+        <p className="text-xs font-semibold text-zinc-300">③ DB에 적용</p>
+        <CodeBlock code="supabase db push" comment="완료 시 'Finished supabase db push.' 출력" />
+        <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-2.5 text-[11px] text-zinc-400 space-y-1">
+          <p className="text-red-300 font-semibold">실패할 때</p>
+          <p>• <strong>already exists</strong> → 테이블이 이미 있는 것 — 다음 단계로 진행해도 됩니다</p>
+          <p>• <strong>password authentication failed</strong> → Step 3(연결) 단계로 돌아가서 다시 link</p>
+          <p>• <strong>기타 SQL 에러</strong> → SQL 파일 내용을 다시 붙여넣기 후 재시도</p>
+        </div>
+      </div>
     </div>,
 
     // 5: API Key
@@ -1501,13 +1569,13 @@ vercel --prod`;
           <span className="w-6 h-6 rounded-full bg-violet-500/20 border border-violet-500/40 flex items-center justify-center text-xs text-violet-400 shrink-0 mt-0.5">3</span>
           <div>
             <p className="font-medium">승인된 JavaScript 출처 추가</p>
-            <div className="mt-1.5 space-y-1">
-              <div className="flex items-center gap-2">
-                <code className="flex-1 px-2.5 py-1.5 bg-black/50 border border-zinc-700 rounded text-xs text-emerald-300 font-mono">https://portmanager-portal.vercel.app</code>
-                <button onClick={() => copy('origin', 'https://portmanager-portal.vercel.app')}
-                  className="text-[11px] text-violet-400 hover:text-violet-300 flex items-center gap-1"><Copy className="w-3 h-3" />{copied['origin'] ? '복사됨!' : '복사'}</button>
+            <div className="mt-1.5 space-y-2">
+              <div className="bg-zinc-800/60 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-400 space-y-1">
+                <p className="font-medium text-zinc-300">입력할 값 (본인 Vercel URL로 교체)</p>
+                <code className="block text-emerald-400 font-mono">https://your-app-name.vercel.app</code>
+                <p className="text-[10px] text-zinc-500">Vercel 배포 후 발급된 본인의 URL을 입력하세요. Step 0에서 <code>vercel</code> 명령 실행 후 표시된 URL입니다.</p>
               </div>
-              <p className="text-[10px] text-zinc-600">로컬 테스트 시 http://localhost:5173 도 추가</p>
+              <p className="text-[10px] text-zinc-600">로컬 테스트 시 <code>http://localhost:5173</code> 도 추가</p>
             </div>
           </div>
         </li>
@@ -1779,10 +1847,18 @@ sleep 2
 open -a cmux
 sleep 4
 
-## 6. 전체 연결 확인
+## 6. Claude 경로 확인
+# 포트 관리기는 which claude → /usr/local/bin/claude 순으로 탐색
+which claude 2>/dev/null && echo "✅ claude 경로: $(which claude)" || echo "⚠️ claude 미설치 — npm install -g @anthropic-ai/claude-code 로 설치하세요"
+
+## 7. 전체 연결 확인
 source ~/.cargo/env 2>/dev/null
 cargo --version   # Rust 확인
 cmux ping         # PONG 응답이면 cmux 성공
+
+## 8. claude --bg bypass 테스트 (선택)
+# 포트 관리기 "bypass ON" 토글 활성화 시 아래 명령으로 실행됨
+# claude --dangerously-skip-permissions (프로젝트 폴더에서)
 
 완료 여부와 각 항목 버전을 알려줘.`;
 
@@ -1855,6 +1931,15 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
                 )}
               </div>
 
+              {/* 초보자 안내 */}
+              <div className="w-full max-w-4xl bg-blue-500/5 border border-blue-500/20 rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2 text-xs text-zinc-400">
+                <span className="text-blue-400 font-semibold shrink-0">💡 처음이세요?</span>
+                <span>
+                  포트 관리 기능은 <strong className="text-zinc-200">Supabase 없이도</strong> 바로 사용 가능합니다. 지금 당장 설정이 필요 없다면 오른쪽 위 <strong className="text-zinc-200">건너뛰기</strong>를 누르세요.
+                  다기기 동기화가 필요하면 <span className="text-blue-400">🆕 처음 사용</span>을 선택하세요.
+                </span>
+              </div>
+
               {/* ⚡ 새 기기 퀵 설치 프롬프트 — 카드 위에 배치 */}
               <div className="w-full max-w-4xl bg-zinc-900 border border-yellow-500/20 rounded-2xl p-4 space-y-3">
                 <div className="flex items-center justify-between">
@@ -1886,7 +1971,8 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
                   <span className="text-zinc-500">1. Rust/Cargo 설치 확인 · 미설치 시 rustup 자동 설치</span>{'\n'}
                   <span className="text-zinc-500">2. cmux 설치 확인 · 미설치 시 brew cask 자동 설치</span>{'\n'}
                   <span className="text-zinc-500">3. cmux Socket Control → allowAll 설정 후 재시작</span>{'\n'}
-                  <span className="text-zinc-500">4. cargo --version + cmux ping 으로 전체 연결 확인</span>
+                  <span className="text-zinc-500">4. claude 경로 확인 (which claude · /usr/local/bin)</span>{'\n'}
+                  <span className="text-zinc-500">5. cargo + cmux ping + claude --bg bypass 확인</span>
                   <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-zinc-950 to-transparent" />
                 </div>
                 <p className="text-[11px] text-zinc-600">단계별 수동 설치는 아래 <span className="text-purple-400">터미널 도구 가이드</span> 카드를 이용하세요.</p>
@@ -1914,12 +2000,13 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
               )}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full max-w-4xl">
                 <button onClick={() => setMode('first')}
-                  className="group bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 hover:border-blue-500/50 rounded-2xl p-5 sm:p-7 text-left transition-all duration-200">
+                  className="group bg-zinc-900 hover:bg-zinc-800 border-2 border-blue-500/40 hover:border-blue-500/70 rounded-2xl p-5 sm:p-7 text-left transition-all duration-200 relative">
+                  <span className="absolute top-2 right-2 text-[9px] text-blue-300 bg-blue-500/20 border border-blue-500/30 px-2 py-0.5 rounded-full">처음이면 여기</span>
                   <div className="w-10 h-10 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center justify-center mb-3 sm:mb-4 group-hover:bg-blue-500/20 transition-all">
                     <Plus className="w-5 h-5 text-blue-400" />
                   </div>
                   <h3 className="text-base font-semibold text-white mb-1">🆕 처음 사용</h3>
-                  <p className="text-sm text-zinc-500 leading-relaxed">Supabase 가입부터<br />CLI로 모든 것을 설정</p>
+                  <p className="text-sm text-zinc-500 leading-relaxed">다기기 동기화 세팅<br /><span className="text-[11px] text-zinc-600">Supabase 가입 → 연결까지 단계별 안내</span></p>
                   <div className="flex items-center gap-1 text-blue-400 text-xs mt-3 sm:mt-4 group-hover:gap-2 transition-all">
                     시작하기 <ChevronRight className="w-3.5 h-3.5" />
                   </div>
@@ -1962,10 +2049,14 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
                   </div>
                 </button>
               </div>
-              {/* Portal 배포는 1st 완료 후 "다음 액션"으로 안내 → choose에서는 제외 */}
-              <p className="text-[11px] text-zinc-600 mt-2">
-                💡 다른 기기 연결을 위한 <span className="text-violet-400">북마크 포털 배포</span>는 1st 기기 완료 후 안내됩니다
-              </p>
+              <div className="w-full max-w-4xl space-y-1 mt-1">
+                <p className="text-[11px] text-zinc-600 text-center">
+                  💡 다른 기기 연결을 위한 <span className="text-violet-400">북마크 포털 배포</span>는 1st 기기 완료 후 안내됩니다
+                </p>
+                <p className="text-[11px] text-zinc-700 text-center">
+                  모르겠으면 <strong className="text-zinc-500">건너뛰기</strong> → 앱 사용 중 언제든 ⚙ 설정에서 다시 열 수 있습니다
+                </p>
+              </div>
             </div>
           )}
           {mode === 'first' && <FirstSetupWizard onComplete={onComplete} onBack={() => setMode('choose')} />}
@@ -2093,6 +2184,37 @@ function TerminalToolsWizard({ onBack }: { onBack: () => void }) {
               <CodeBlock code="cmux send 'claude --dangerously-skip-permissions'" label="Claude 실행 명령 전송" />
               <CodeBlock code="cmux read-screen" label="현재 패인 출력 읽기" />
               <CodeBlock code="cmux browser open https://localhost:3000" label="내장 브라우저 열기" />
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
+                Claude Agent View
+                <span className="text-xs font-normal text-violet-400 bg-violet-400/10 px-1.5 py-0.5 rounded">신규</span>
+              </h3>
+              <InfoBox color="blue">
+                헤더 <strong>[Agents]</strong> 버튼으로 cmux에서 claude agents 전역 뷰를 엽니다. 포트 카드 더보기 → <strong>Project Agents</strong>로 프로젝트 폴더에서 <code>claude --resume</code> TUI를 시작합니다.
+              </InfoBox>
+              <div className="rounded-xl border border-zinc-700/50 bg-zinc-800/30 p-3 space-y-1.5 text-xs text-zinc-400">
+                <p className="font-medium text-zinc-300 mb-1">진입점</p>
+                <p><span className="text-violet-400 font-mono">헤더 [Agents]</span> — <code>~/.claude</code>에서 claude agents 전역 뷰</p>
+                <p><span className="text-violet-400 font-mono">카드 ▼ → Project Agents</span> — 프로젝트에서 <code>claude --resume</code> TUI</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
+                claude --bg (bypass 모드)
+                <span className="text-xs font-normal text-yellow-400 bg-yellow-400/10 px-1.5 py-0.5 rounded">신규</span>
+              </h3>
+              <InfoBox color="amber">
+                <code>--dangerously-skip-permissions</code>으로 Claude를 권한 프롬프트 없이 실행합니다. <strong>bypass ON</strong> 토글을 켜면 모든 cmux 버튼이 bypass 모드로 전환됩니다.
+              </InfoBox>
+              <div className="rounded-xl border border-zinc-700/50 bg-zinc-800/30 p-3 space-y-1.5 text-xs text-zinc-400">
+                <p className="font-medium text-zinc-300 mb-1">진입점</p>
+                <p><span className="text-yellow-400 font-mono">헤더 [--bg]</span> — HOME(<code>~</code>)에서 bypass Claude 실행</p>
+                <p><span className="text-yellow-400 font-mono">터미널뷰 [--bg]</span> — 현재 포트 폴더에서 bypass 실행</p>
+                <p><span className="text-yellow-400 font-mono">bypass ON 토글</span> — 활성화 시 모든 cmux 버튼 bypass 모드</p>
+              </div>
             </div>
 
             <InfoBox color="green">
