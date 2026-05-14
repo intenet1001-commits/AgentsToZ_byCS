@@ -1057,6 +1057,7 @@ function App() {
   // Fix P2g: gate delete pass — only safe to delete remote rows after a successful auto-pull
   // (otherwise local state has only this Mac's rows and would delete other Macs' remote data)
   const autopullSucceeded = useRef(false);
+  const autopushReady = useRef(false); // Supabase 푸시 전용 게이트 (pull 완료 후 true)
   const appLogRef = useRef<string[]>([]);
   const [logCopied, setLogCopied] = useState(false);
 
@@ -1618,8 +1619,8 @@ function App() {
           });
 
         setPorts(updatedData);
-        // NOTE: hasInitiallyLoaded is set AFTER auto-pull completes (Fix P2c)
-        // Setting it here would let the 3s auto-push debounce fire on stale data.
+        hasInitiallyLoaded.current = true; // 파일 로드 완료 → 파일 자동저장 즉시 허용
+        // autopushReady는 Supabase pull 완료 후 true (stale 데이터 푸시 방지)
 
         // 포털 설정 로드 및 캐시 (자동 push/pull에서 재사용)
         try {
@@ -1667,7 +1668,7 @@ function App() {
                 if (Object.keys(pulledMemos).length > 0) setMemos(prev => ({ ...prev, ...pulledMemos }));
               }
 
-              hasInitiallyLoaded.current = true; // Fix P2c: set after pull completes
+              autopushReady.current = true;      // Supabase push 허용 (pull 완료)
               autopullSucceeded.current = true;  // Fix P2g: mark pull succeeded → delete pass is now safe
 
               // workspace_roots 자동 Pull (빈 결과면 로컬 덮어쓰기 방지)
@@ -1692,15 +1693,15 @@ function App() {
             } catch (pullErr) {
               console.warn('[App] Auto-pull Supabase failed:', pullErr);
               showToast('Supabase 자동 동기화 실패 (네트워크 확인)', 'error');
-              hasInitiallyLoaded.current = true; // Fix P2c: still enable auto-push on pull failure
+              autopushReady.current = true; // pull 실패해도 push 허용
             }
           } else {
             // No credentials at startup → still enable auto-push so it fires once credentials are added
-            hasInitiallyLoaded.current = true;
+            autopushReady.current = true;
           }
         } catch (portalErr) {
           console.warn('[App] Failed to load portal config:', portalErr);
-          hasInitiallyLoaded.current = true; // Fix P2c: still enable auto-push if portal load fails
+          autopushReady.current = true; // portal 로드 실패해도 push 허용
         }
 
         // 앱 시작 시 포트 상태 자동 확인 (병렬)
@@ -1906,7 +1907,7 @@ function App() {
 
   // 자동 Push: 포트 목록 변경 후 3초 debounce (Supabase 설정된 경우만)
   useEffect(() => {
-    if (!hasInitiallyLoaded.current) return;
+    if (!autopushReady.current) return;
     const config = portalConfigRef.current;
     if (!config?.supabaseUrl || !config?.supabaseAnonKey) return;
 
