@@ -2160,9 +2160,8 @@ fn open_cmux_agent_view() -> Result<String, String> {
     }
     ensure_cmux_window(&cli);
     let home = std::env::var("HOME").unwrap_or_else(|_| "/".into());
-    let claude_root = format!("{}/.claude", home);
     let out = Command::new(&cli)
-        .args(["new-workspace", "--cwd", &claude_root, "--command", &format!("{} agents", resolve_claude_cli()), "--name", "🤖 Agent View"])
+        .args(["new-workspace", "--cwd", &home, "--command", &format!("{} agents", resolve_claude_cli()), "--name", "🤖 Agent View"])
         .output()
         .map_err(|e| format!("cmux new-workspace 실행 실패: {}", e))?;
     if !out.status.success() {
