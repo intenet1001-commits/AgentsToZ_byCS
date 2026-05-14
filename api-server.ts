@@ -268,16 +268,38 @@ function openPath(target: string): void {
   }
 }
 
-// Resolve claude binary path once at startup (PATH first, then Homebrew fallback)
-// which claude는 사용자 PATH 기준 — cmux 버전 등 실제 사용 중인 claude를 우선한다
+// Resolve claude binary path once at startup.
+// GUI 앱 환경에서는 Bun.spawnSync PATH가 제한적이므로 zsh -l (login shell)로
+// 사용자 셸 프로파일을 로드한 뒤 which를 실행한다.
 function resolveClaudePath(): string | null {
   const isWin = process.platform === 'win32';
-  const finder = isWin ? ['where', 'claude'] : ['which', 'claude'];
-  const result = Bun.spawnSync(finder, { env: { ...process.env } });
-  const resolved = result.stdout.toString().trim().split('\n')[0].trim();
-  if (resolved && existsSync(resolved)) return resolved;
-  if (existsSync('/opt/homebrew/bin/claude')) return '/opt/homebrew/bin/claude';
-  if (existsSync('/usr/local/bin/claude')) return '/usr/local/bin/claude';
+  if (isWin) {
+    const r = Bun.spawnSync(['where', 'claude'], { env: { ...process.env } });
+    const p = r.stdout.toString().trim().split('\n')[0].trim();
+    if (p && existsSync(p)) return p;
+    return null;
+  }
+  // zsh login shell로 탐색
+  const zshR = Bun.spawnSync(['zsh', '-l', '-c', 'which claude'], { env: { ...process.env } });
+  const fromZsh = zshR.stdout.toString().trim().split('\n')[0].trim();
+  if (fromZsh && existsSync(fromZsh)) return fromZsh;
+  // bash login shell fallback
+  const bashR = Bun.spawnSync(['bash', '-l', '-c', 'which claude'], { env: { ...process.env } });
+  const fromBash = bashR.stdout.toString().trim().split('\n')[0].trim();
+  if (fromBash && existsSync(fromBash)) return fromBash;
+  // 알려진 고정 경로 탐색 (cmux 번들 포함)
+  const home = process.env.HOME ?? '';
+  for (const p of [
+    '/Applications/cmux.app/Contents/Resources/bin/claude',
+    '/opt/homebrew/bin/claude',
+    '/usr/local/bin/claude',
+    `${home}/.npm-global/bin/claude`,
+    `${home}/.npm/bin/claude`,
+    `${home}/.local/bin/claude`,
+    `${home}/.claude/local/bin/claude`,
+  ]) {
+    if (p && existsSync(p)) return p;
+  }
   return null;
 }
 const CLAUDE_PATH = resolveClaudePath();
