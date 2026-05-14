@@ -1528,6 +1528,29 @@ end try`);
       }
     }
 
+    if (url.pathname === "/api/open-claude-bg" && req.method === "POST") {
+      if (IS_WIN) return new Response(JSON.stringify({ error: 'claude --bg는 맥에서만 가능합니다' }), { status: 400, headers });
+      try {
+        const { folderPath, name = '' } = await req.json();
+        const cdPath = (folderPath && String(folderPath).trim()) || homedir();
+        const claudeCli = CLAUDE_PATH ?? 'claude';
+        const label = (name && String(name).trim()) || cdPath.split('/').filter(Boolean).pop() || 'project';
+        const r = nodeSpawnSync(claudeCli, ['--bg', `${label} 작업 시작`], {
+          cwd: cdPath,
+          encoding: 'utf-8',
+          timeout: 10000,
+          env: { ...process.env },
+        });
+        if (r.status !== 0) {
+          return new Response(JSON.stringify({ success: false, error: r.stderr || 'claude --bg 실패' }), { status: 500, headers });
+        }
+        const output = (r.stdout || '').trim();
+        return new Response(JSON.stringify({ success: true, message: `agent view에 등록됨: ${label}`, output }), { headers });
+      } catch (error: any) {
+        return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers });
+      }
+    }
+
     if (url.pathname.startsWith("/api/open-log/") && req.method === "GET") {
       const portId = decodeURIComponent(url.pathname.slice("/api/open-log/".length));
       if (!portId) return new Response(JSON.stringify({ error: 'portId 필요' }), { status: 400, headers });

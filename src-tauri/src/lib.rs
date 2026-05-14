@@ -2199,6 +2199,30 @@ fn open_cmux_project_agents(folder_path: Option<String>, name: String) -> Result
     Ok(format!("cmux Agent View 열림 ({})", base_name))
 }
 
+#[tauri::command]
+fn open_claude_bg(folder_path: Option<String>, name: String) -> Result<String, String> {
+    if cfg!(windows) { return Err("claude --bg는 맥에서만 가능합니다".into()); }
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/".into());
+    let cd_path = folder_path.filter(|s| !s.trim().is_empty()).unwrap_or_else(|| home.clone());
+    let label = if !name.trim().is_empty() {
+        name.clone()
+    } else {
+        cd_path.split('/').filter(|s| !s.is_empty()).last().unwrap_or("project").to_string()
+    };
+    let prompt = format!("{} 작업 시작", label);
+    let out = Command::new(resolve_claude_cli())
+        .args(["--bg", &prompt])
+        .current_dir(&cd_path)
+        .output()
+        .map_err(|e| format!("claude --bg 실행 실패: {}", e))?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        return Err(format!("claude --bg 실패: {}", stderr));
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    Ok(format!("agent view에 등록됨: {}\n{}", label, stdout))
+}
+
 /// If the error pattern suggests access denied (cmuxOnly mode), append guidance.
 fn cmux_access_help_msg(base: &str) -> String {
     format!(
@@ -2326,6 +2350,7 @@ pub fn run() {
         open_cmux_localhost,
         open_cmux_agent_view,
         open_cmux_project_agents,
+        open_claude_bg,
         get_global_shortcut,
         set_global_shortcut,
         get_platform,

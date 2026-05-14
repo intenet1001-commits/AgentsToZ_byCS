@@ -1456,8 +1456,8 @@ function App() {
 
   // cmux invocation — Tauri uses Rust commands, browser falls back to api-server.
   const callCmux = async (
-    rustCmd: 'open_cmux_claude' | 'open_cmux_claude_new' | 'open_cmux_terminal' | 'open_cmux_localhost' | 'open_cmux_tmux' | 'open_cmux_agent_view' | 'open_cmux_project_agents',
-    httpPath: '/api/open-cmux-claude' | '/api/open-cmux-claude-new' | '/api/open-cmux-terminal' | '/api/open-cmux-localhost' | '/api/open-cmux-tmux' | '/api/open-cmux-agent-view' | '/api/open-cmux-project-agents',
+    rustCmd: 'open_cmux_claude' | 'open_cmux_claude_new' | 'open_cmux_terminal' | 'open_cmux_localhost' | 'open_cmux_tmux' | 'open_cmux_agent_view' | 'open_cmux_project_agents' | 'open_claude_bg',
+    httpPath: '/api/open-cmux-claude' | '/api/open-cmux-claude-new' | '/api/open-cmux-terminal' | '/api/open-cmux-localhost' | '/api/open-cmux-tmux' | '/api/open-cmux-agent-view' | '/api/open-cmux-project-agents' | '/api/open-claude-bg',
     body: { folderPath?: string; worktreePath?: string; bypass?: boolean; name?: string; port?: number; fresh?: boolean }
   ): Promise<string> => {
     if (isTauri()) {
@@ -1599,6 +1599,21 @@ function App() {
     }
   };
 
+
+  const openClaudeBg = async (item: PortInfo) => {
+    if (isWindows()) { cmuxMacOnlyToast(); return; }
+    recordVisit(item.id);
+    try {
+      const msg = await callCmux('open_claude_bg', '/api/open-claude-bg', {
+        folderPath: item.folderPath,
+        name: getSessionName(item),
+      });
+      showToast(msg, 'success');
+    } catch (e: any) {
+      const raw = typeof e === 'string' ? e : (e?.message ?? String(e));
+      showToast(`claude --bg 실패: ${raw}`, 'error');
+    }
+  };
 
   // 초기 데이터 로드
   useEffect(() => {
@@ -3569,6 +3584,12 @@ function App() {
               title={`cmux 내장 브라우저로 localhost:${item.port} 열기`}
             ><Laptop style={{width:9,height:9}}/>cmux localhost</button>
           )}
+          {item.folderPath && (
+            <button data-help-key="card-claude-bg" onClick={e=>{e.stopPropagation(); openClaudeBg(item);}}
+              style={{...btnBase, gap:3, fontFamily:'inherit', color:'#c8a8f0', borderColor:'rgba(200,168,240,0.25)'}}
+              title="agent view에 등록 — claude --bg로 백그라운드 세션 시작"
+            ><Sparkles style={{width:9,height:9}}/>bg</button>
+          )}
           </>)}
           <button data-help-key="card-worktree" onClick={e=>{e.stopPropagation(); toggleWorktreePanel(item.id, item.folderPath);}} style={{...btnBase, color:expandedWorktreeIds.has(item.id)?'#e8a557':'#ede7dd', borderColor:expandedWorktreeIds.has(item.id)?'rgba(232,165,87,0.3)':'rgba(255,240,220,0.07)'}} title="워크트리 관리">
             <GitBranch style={{width:11,height:11}}/>
@@ -3634,6 +3655,7 @@ function App() {
               ...(!isWindows() ? [
               {label:'cmux (Mac 전용)', icon:<Terminal style={{width:11,height:11}}/>, action:()=>openCmuxClaude(item), title:`cmux 앱으로 Claude 실행 (macOS 전용)${bypassPermissions ? ' — bypass 모드' : ''}`, helpKey:'menu-cmux-mac'},
               {label:'cmux ↺ 새창 (Mac 전용)', icon:<Terminal style={{width:11,height:11}}/>, action:()=>openCmuxClaudeNew(item), title:`cmux 새 워크스페이스를 프로젝트 경로로 열고 Claude 실행${bypassPermissions ? ' — bypass 모드' : ''}`, helpKey:'menu-cmux-mac-new'},
+              ...(item.folderPath ? [{label:'bg (agent view 등록)', icon:<Sparkles style={{width:11,height:11}}/>, action:()=>openClaudeBg(item), title:'claude --bg로 백그라운드 세션 시작 → agent view에 표시', helpKey:'menu-claude-bg'}] : []),
               ] : []),
             ].map(({label,icon,action,title,helpKey}) => (
               <button key={label} data-help-key={helpKey} title={title} onClick={e=>{e.stopPropagation(); action(); setV3MenuOpenId(null);}} style={{
