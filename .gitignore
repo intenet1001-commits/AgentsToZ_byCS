@@ -56,3 +56,6 @@ test-load.mjs
 test-full.mjs
 test-tmux-api.ts
 tests/screenshots/
+worktrees
+tests/results/*.json
+tests/results/*.png

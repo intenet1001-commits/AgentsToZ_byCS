@@ -235,6 +235,8 @@ CREATE INDEX IF NOT EXISTS idx_portmgr_ports_device_id ON portmgr_ports(device_i
   - 위치: `PortalManager.tsx` `SetupGuide` 컴포넌트
 - **포트 정렬**: 3가지 옵션 + 오름차순/내림차순 토글 (최근 등록순, 이름순, 포트순)
 - **최적화된 창 크기**: MacBook 14인치 기준 세로 최대화 (1000x1050)
+- **터미널 스플릿뷰 수정/삭제 컨트롤**: 헤더 우측 아이콘 버튼(`Pencil`/`Trash2`)으로 배치 (App.tsx:3935–3941) — 워크트리 패널 버튼과의 혼동 방지
+- **Claude 버튼 레이블**: 이모지 없이 텍스트만 사용 (`Claude 열기` / `새창`) — 🤖 재추가 금지
 
 ### Tauri 빌드 & 배포
 - **앱 빌드 (macOS)**: .app 번들 생성 (Applications 폴더 설치용)
@@ -310,6 +312,22 @@ bun run tauri:build:win
 
 # 앱 내에서 "DMG 출시하기" 버튼으로 Desktop에 자동 복사 가능
 ```
+
+## 테스트
+
+Playwright 기반 E2E 테스트 파일이 `tests/` 디렉토리에 있습니다.
+
+```bash
+# bg 버튼 및 헤더 컨트롤 UI 검증 (localhost:5173 필요)
+bun tests/cs-test-bg-buttons.ts
+
+# 네트워크 에러 식별
+bun tests/cs-test-net-check.ts
+```
+
+- 결과물: `tests/results/cs-test-bg-report.json`, `tests/results/cs-test-screenshot.png`
+- 전제 조건: `./실행.command` 또는 `bun run dev`로 개발 서버 실행 중
+- `suggest-batch` API 500 에러는 Anthropic API 키 없는 테스트 환경에서 정상 — 치명적 에러 아님
 
 ## API 엔드포인트
 
