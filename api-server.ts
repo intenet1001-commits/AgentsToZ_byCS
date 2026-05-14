@@ -1543,14 +1543,21 @@ end try`);
         const bgArgs = bypass
           ? ['--dangerously-skip-permissions', '--bg', `${label} 작업 시작`]
           : ['--bg', `${label} 작업 시작`];
+        // claude --bg는 내부적으로 다른 claude 프로세스를 PATH에서 찾아 spawn한다.
+        // GUI 앱 환경에서는 PATH가 제한적이므로, claude 바이너리 디렉토리를 PATH에 명시적으로 추가한다.
+        const claudeDir = claudeCli.includes('/') ? claudeCli.substring(0, claudeCli.lastIndexOf('/')) : '';
+        const enhancedPath = claudeDir
+          ? `${claudeDir}:${process.env.PATH || '/usr/bin:/bin'}`
+          : process.env.PATH;
         const r = nodeSpawnSync(claudeCli, bgArgs, {
           cwd: cdPath,
           encoding: 'utf-8',
           timeout: 10000,
-          env: { ...process.env },
+          env: { ...process.env, PATH: enhancedPath },
         });
         if (r.status !== 0) {
-          return new Response(JSON.stringify({ success: false, error: r.stderr || 'claude --bg 실패' }), { status: 500, headers });
+          // 프론트엔드에서 "claude --bg 실패:" 프리픽스를 붙이므로, 여기서는 raw 에러만 반환
+          return new Response(JSON.stringify({ success: false, error: r.stderr || '알 수 없는 오류' }), { status: 500, headers });
         }
         const output = (r.stdout || '').trim();
         return new Response(JSON.stringify({ success: true, message: `agent view에 등록됨: ${label}`, output }), { headers });

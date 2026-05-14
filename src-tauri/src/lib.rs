@@ -2211,7 +2211,21 @@ fn open_claude_bg(folder_path: Option<String>, name: String, bypass: Option<bool
     };
     let prompt = format!("{} 작업 시작", label);
     let use_bypass = bypass.unwrap_or(false);
-    let mut cmd = Command::new(resolve_claude_cli());
+    let claude_cli = resolve_claude_cli();
+    // claude --bg는 내부적으로 다른 claude 프로세스를 PATH에서 찾아 spawn한다.
+    // GUI 앱 환경에서는 PATH가 제한적이므로, claude 바이너리 디렉토리를 PATH에 명시적으로 추가한다.
+    let claude_dir = std::path::Path::new(&claude_cli)
+        .parent()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let current_path = std::env::var("PATH").unwrap_or_else(|_| "/usr/bin:/bin".into());
+    let enhanced_path = if !claude_dir.is_empty() {
+        format!("{}:{}", claude_dir, current_path)
+    } else {
+        current_path
+    };
+    let mut cmd = Command::new(&claude_cli);
+    cmd.env("PATH", &enhanced_path);
     if use_bypass { cmd.arg("--dangerously-skip-permissions"); }
     cmd.arg("--bg").arg(&prompt);
     let out = cmd
@@ -2219,8 +2233,9 @@ fn open_claude_bg(folder_path: Option<String>, name: String, bypass: Option<bool
         .output()
         .map_err(|e| format!("claude --bg 실행 실패: {}", e))?;
     if !out.status.success() {
+        // 프론트엔드에서 "claude --bg 실패:" 프리픽스를 붙이므로, 여기서는 raw 에러만 반환
         let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
-        return Err(format!("claude --bg 실패: {}", stderr));
+        return Err(if stderr.is_empty() { "알 수 없는 오류".into() } else { stderr });
     }
     let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
     Ok(format!("agent view에 등록됨: {}\n{}", label, stdout))
