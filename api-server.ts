@@ -1492,8 +1492,7 @@ end try`);
           return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp('cmux 소켓 준비 대기 시간 초과 (5초)') }), { status: 500, headers });
         }
         const cdPath = homedir() || '/';
-        const claudeCli = CLAUDE_PATH ?? 'claude';
-        const ws = nodeCmuxRun(cliPath, ['new-workspace', '--cwd', cdPath, '--command', `${claudeCli} agents`, '--name', '🤖 Agent View']);
+        const ws = nodeCmuxRun(cliPath, ['new-workspace', '--cwd', cdPath, '--command', 'claude agents', '--name', '🤖 Agent View']);
         if (!ws.ok) {
           return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp(`cmux new-workspace 실패: ${ws.stderr || 'unknown'}`) }), { status: 500, headers });
         }
@@ -1517,10 +1516,9 @@ end try`);
         if (!(await waitCmuxReadyNode(cliPath))) {
           return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp('cmux 소켓 준비 대기 시간 초과 (5초)') }), { status: 500, headers });
         }
-        const claudeCli = CLAUDE_PATH ?? 'claude';
         const baseName = (name && String(name).trim()) || cdPath.split('/').filter(Boolean).pop() || 'project';
         const title = `🤖 ${baseName} agents`;
-        const ws = nodeCmuxRun(cliPath, ['new-workspace', '--cwd', cdPath, '--command', `${claudeCli} agents`, '--name', title]);
+        const ws = nodeCmuxRun(cliPath, ['new-workspace', '--cwd', cdPath, '--command', 'claude agents', '--name', title]);
         if (!ws.ok) {
           return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp(`cmux new-workspace 실패: ${ws.stderr || 'unknown'}`) }), { status: 500, headers });
         }
