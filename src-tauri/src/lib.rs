@@ -1932,6 +1932,20 @@ fn resolve_cmux_cli() -> Option<String> {
     None
 }
 
+fn resolve_claude_cli() -> String {
+    use std::path::Path;
+    if Path::new("/Applications/cmux.app/Contents/Resources/bin/claude").exists() {
+        return "/Applications/cmux.app/Contents/Resources/bin/claude".into();
+    }
+    if Path::new("/opt/homebrew/bin/claude").exists() {
+        return "/opt/homebrew/bin/claude".into();
+    }
+    if Path::new("/usr/local/bin/claude").exists() {
+        return "/usr/local/bin/claude".into();
+    }
+    "claude".into()
+}
+
 fn wait_cmux_ready(cli: &str, total: std::time::Duration) -> bool {
     let deadline = std::time::Instant::now() + total;
     while std::time::Instant::now() < deadline {
@@ -2147,7 +2161,7 @@ fn open_cmux_agent_view() -> Result<String, String> {
     ensure_cmux_window(&cli);
     let home = std::env::var("HOME").unwrap_or_else(|_| "/".into());
     let out = Command::new(&cli)
-        .args(["new-workspace", "--cwd", &home, "--command", "claude agents", "--name", "🤖 Agent View"])
+        .args(["new-workspace", "--cwd", &home, "--command", &format!("{} agents", resolve_claude_cli()), "--name", "🤖 Agent View"])
         .output()
         .map_err(|e| format!("cmux new-workspace 실행 실패: {}", e))?;
     if !out.status.success() {
@@ -2175,7 +2189,7 @@ fn open_cmux_project_agents(folder_path: Option<String>, name: String) -> Result
     };
     let title = format!("🤖 {} agents", base_name);
     let out = Command::new(&cli)
-        .args(["new-workspace", "--cwd", &cd_path, "--command", "claude agents", "--name", &title])
+        .args(["new-workspace", "--cwd", &cd_path, "--command", &format!("{} agents", resolve_claude_cli()), "--name", &title])
         .output()
         .map_err(|e| format!("cmux new-workspace 실행 실패: {}", e))?;
     if !out.status.success() {
