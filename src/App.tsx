@@ -932,6 +932,7 @@ function App() {
     typeof window !== 'undefined' && window.innerWidth < 768 ? 'portal' : 'ports'
   );
   const [lang, setLang] = useState<Lang>(() => (localStorage.getItem('portmanager-lang') as Lang) ?? 'ko');
+  useEffect(() => { document.title = t(lang, 'appName'); }, [lang]);
   const [openPortalSettings, setOpenPortalSettings] = useState(false);
   const [showSetupWizard, setShowSetupWizard] = useState(false);
   const [guideMode, setGuideMode] = useState<boolean>(() => {
@@ -3805,10 +3806,10 @@ function App() {
           {/* 섹션 필터 칩 */}
           <div style={{padding:'8px 10px 0',display:'flex',gap:3,flexWrap:'wrap' as const,borderBottom:'1px solid rgba(255,240,220,0.05)'}}>
             {([
-              ['all','All',v3Ports.length],
-              ['running','Running',v3Running.length],
-              ['starred','Starred',v3Ports.filter(p=>p.favorite).length],
-              ['wt','Worktrees',v3Ports.filter(p=>p.worktreePath).length],
+              ['all',    t(lang,'filterAll'),       v3Ports.length],
+              ['running',t(lang,'filterRunning'),   v3Running.length],
+              ['starred',t(lang,'filterStarred'),   v3Ports.filter(p=>p.favorite).length],
+              ['wt',     t(lang,'filterWorktrees'), v3Ports.filter(p=>p.worktreePath).length],
             ] as [string,string,number][]).map(([id,label,count])=>(
               <button key={id} onClick={()=>setSidebarSection(id)} style={{
                 padding:'2px 7px',borderRadius:4,fontSize:10.5,cursor:'pointer',
@@ -3826,7 +3827,7 @@ function App() {
           <div style={{padding:'8px 12px 10px',borderBottom:'1px solid rgba(255,240,220,0.07)'}}>
             <div style={{position:'relative'}}>
               <Search style={{position:'absolute',left:8,top:'50%',transform:'translateY(-50%)',width:12,height:12,color:'#6b6459'}} />
-              <input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="Jump to project…" style={{
+              <input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder={t(lang,'jumpToProject')} style={{
                 width:'100%',padding:'6px 8px 6px 28px',background:'#0a0a0b',
                 border:'1px solid rgba(255,240,220,0.07)',borderRadius:5,
                 color:'#ede7dd',fontSize:12,fontFamily:monoFont,outline:'none',boxSizing:'border-box' as const,
@@ -3837,19 +3838,19 @@ function App() {
             {v3Running.length > 0 && <>
               <div style={{padding:'8px 14px 4px',fontSize:10,fontFamily:monoFont,color:'#6b6459',textTransform:'uppercase' as const,letterSpacing:0.5,display:'flex',alignItems:'center',gap:5}}>
                 <span style={{width:5,height:5,borderRadius:3,background:'#8fb96e',display:'inline-block'}}/>
-                Running · {v3Running.length}
+                {t(lang,'labelRunning')} · {v3Running.length}
               </div>
               {v3Running.map(renderRow)}
             </>}
             {v3Idle.length > 0 && <>
               <div style={{padding:'8px 14px 4px',fontSize:10,fontFamily:monoFont,color:'#6b6459',textTransform:'uppercase' as const,letterSpacing:0.5,display:'flex',alignItems:'center',gap:5}}>
                 <span style={{width:5,height:5,borderRadius:3,background:'#4b4540',display:'inline-block'}}/>
-                Idle · {v3Idle.length}
+                {t(lang,'labelIdle')} · {v3Idle.length}
               </div>
               {v3Idle.map(renderRow)}
             </>}
             {v3Ports.length === 0 && (
-              <div style={{padding:'40px 0',textAlign:'center',color:'#4b4540',fontSize:12,fontFamily:monoFont}}>no projects</div>
+              <div style={{padding:'40px 0',textAlign:'center',color:'#4b4540',fontSize:12,fontFamily:monoFont}}>{t(lang,'noProjects')}</div>
             )}
           </div>
 
