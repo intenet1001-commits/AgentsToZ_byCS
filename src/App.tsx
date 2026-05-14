@@ -3604,28 +3604,6 @@ function App() {
               폴더 열기
             </button>
           )}
-          {!isWindows() && (<>
-          <button data-help-key="card-cmux" onClick={e=>{e.stopPropagation(); openCmuxClaude(item);}}
-            style={{...btnBase, gap:3, fontFamily:'inherit', color:'#c8a8f0', borderColor:'rgba(200,168,240,0.25)'}}
-            title={`cmux Claude${bypassPermissions?' (bypass)':''}`}
-          ><Zap style={{width:9,height:9}}/>{bypassPermissions?'cmux ⚡':'cmux'}</button>
-          <button data-help-key="card-cmux-new" onClick={e=>{e.stopPropagation(); openCmuxClaudeNew(item);}}
-            style={{...btnBase, gap:3, fontFamily:'inherit', color:'#c8a8f0', borderColor:'rgba(200,168,240,0.25)'}}
-            title={`cmux 새창${bypassPermissions?' (bypass)':''} — 기존 워크스페이스 닫고 새로 시작`}
-          ><Zap style={{width:9,height:9}}/>{bypassPermissions?'cmux ⚡↺':'cmux ↺'}</button>
-          {item.port && (
-            <button data-help-key="card-cmux-localhost" onClick={e=>{e.stopPropagation(); openCmuxLocalhost(item);}}
-              style={{...btnBase, gap:3, fontFamily:'inherit', color:'#c8a8f0', borderColor:'rgba(200,168,240,0.25)'}}
-              title={`cmux 내장 브라우저로 localhost:${item.port} 열기`}
-            ><Laptop style={{width:9,height:9}}/>cmux localhost</button>
-          )}
-          {item.folderPath && (
-            <button data-help-key="card-claude-bg" onClick={e=>{e.stopPropagation(); openClaudeBg(item);}}
-              style={{...btnBase, gap:3, fontFamily:'inherit', color:'#c8a8f0', borderColor:'rgba(200,168,240,0.25)'}}
-              title="agent view에 등록 — claude --bg로 백그라운드 세션 시작"
-            ><Sparkles style={{width:9,height:9}}/>bg</button>
-          )}
-          </>)}
           <button data-help-key="card-worktree" onClick={e=>{e.stopPropagation(); toggleWorktreePanel(item.id, item.folderPath);}} style={{...btnBase, color:expandedWorktreeIds.has(item.id)?'#e8a557':'#ede7dd', borderColor:expandedWorktreeIds.has(item.id)?'rgba(232,165,87,0.3)':'rgba(255,240,220,0.07)'}} title="워크트리 관리">
             <GitBranch style={{width:11,height:11}}/>
           </button>
