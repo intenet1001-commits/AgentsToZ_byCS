@@ -958,8 +958,13 @@ function App() {
   const [bypassPermissions, setBypassPermissions] = useState(
     () => localStorage.getItem('portmanager-bypassPermissions') !== 'false'
   );
-  const [terminalApp, setTerminalApp] = useState<'cmux' | 'iterm' | 'terminal'>(
-    () => (localStorage.getItem('portmanager-terminalApp') as 'cmux' | 'iterm' | 'terminal') ?? 'cmux'
+  type TerminalApp = 'cmux' | 'iterm' | 'terminal' | 'powershell' | 'wsl';
+  const [terminalApp, setTerminalApp] = useState<TerminalApp>(
+    () => {
+      const saved = localStorage.getItem('portmanager-terminalApp') as TerminalApp | null;
+      if (saved) return saved;
+      return isWindows() ? 'wsl' : 'cmux';
+    }
   );
   const [bgMode, setBgMode] = useState(
     () => localStorage.getItem('portmanager-bgMode') !== 'false'
@@ -1647,11 +1652,13 @@ function App() {
     if (terminalApp === 'cmux') {
       if (isNew) await openCmuxClaudeNew(item);
       else await openCmuxClaude(item);
-    } else if (terminalApp === 'iterm') {
+    } else if (terminalApp === 'iterm' || terminalApp === 'wsl') {
       if (isNew) await openTmuxClaudeNew(item);
       else await openTmuxClaude(item);
+    } else if (terminalApp === 'powershell') {
+      await openTerminalClaude(item);
     } else {
-      // Terminal.app fallback
+      // terminal — Terminal.app fallback
       if (isNew) await openTmuxClaudeNew(item);
       else await openTmuxClaude(item);
     }
@@ -4801,12 +4808,15 @@ function App() {
               </button>
             )}
 
-            {/* 터미널 앱 선택기 + 모드 토글 — macOS + 포털 탭 제외 */}
-            {!isWindows() && activeTab !== 'portal' && (
+            {/* 터미널 앱 선택기 + 모드 토글 — 포털 탭 제외 */}
+            {activeTab !== 'portal' && (
               <div style={{display:'flex', alignItems:'center', gap:4}}>
-                {/* 터미널 앱 선택 */}
+                {/* 터미널 앱 선택 — 플랫폼별 옵션 */}
                 <div style={{display:'flex', background:'#1a1a1c', border:'1px solid #3f3f46', borderRadius:8, overflow:'hidden'}}>
-                  {(['cmux','iterm','terminal'] as const).map(app => (
+                  {(isWindows()
+                    ? (['powershell','wsl'] as const)
+                    : (['cmux','iterm','terminal'] as const)
+                  ).map(app => (
                     <button key={app} onClick={() => { setTerminalApp(app); localStorage.setItem('portmanager-terminalApp', app); }}
                       style={{ padding:'3px 8px', fontSize:11, background: terminalApp===app ? '#3f3f46' : 'transparent',
                         color: terminalApp===app ? '#e4e4e7' : '#71717a', border:'none', cursor:'pointer', fontFamily:'inherit' }}>
@@ -4814,24 +4824,25 @@ function App() {
                     </button>
                   ))}
                 </div>
-                {/* --bg 토글 */}
-                <button onClick={() => { const v=!bgMode; setBgMode(v); localStorage.setItem('portmanager-bgMode', String(v)); }}
-                  title="--bg 모드: claude --bg 로 백그라운드 실행"
-                  style={{ padding:'3px 8px', fontSize:11, borderRadius:6, border:'1px solid', cursor:'pointer', fontFamily:'inherit',
-                    background: bgMode ? '#2d1f42' : '#18181b',
-                    borderColor: bgMode ? '#7c3aed' : '#3f3f46',
-                    color: bgMode ? '#c4b5fd' : '#71717a' }}>
-                  --bg
-                </button>
-                {/* tmux 토글 */}
-                <button onClick={() => { const v=!tmuxMode; setTmuxMode(v); localStorage.setItem('portmanager-tmuxMode', String(v)); }}
-                  title="tmux 모드: iTerm 선택 시 tmux 세션으로 실행"
-                  style={{ padding:'3px 8px', fontSize:11, borderRadius:6, border:'1px solid', cursor:'pointer', fontFamily:'inherit',
-                    background: tmuxMode ? '#1f2d20' : '#18181b',
-                    borderColor: tmuxMode ? '#22c55e' : '#3f3f46',
-                    color: tmuxMode ? '#86efac' : '#71717a' }}>
-                  tmux
-                </button>
+                {/* --bg / tmux 토글 — macOS 전용 (cmux 의존) */}
+                {!isWindows() && (<>
+                  <button onClick={() => { const v=!bgMode; setBgMode(v); localStorage.setItem('portmanager-bgMode', String(v)); }}
+                    title="--bg 모드: claude --bg 로 백그라운드 실행"
+                    style={{ padding:'3px 8px', fontSize:11, borderRadius:6, border:'1px solid', cursor:'pointer', fontFamily:'inherit',
+                      background: bgMode ? '#2d1f42' : '#18181b',
+                      borderColor: bgMode ? '#7c3aed' : '#3f3f46',
+                      color: bgMode ? '#c4b5fd' : '#71717a' }}>
+                    --bg
+                  </button>
+                  <button onClick={() => { const v=!tmuxMode; setTmuxMode(v); localStorage.setItem('portmanager-tmuxMode', String(v)); }}
+                    title="tmux 모드: iTerm 선택 시 tmux 세션으로 실행"
+                    style={{ padding:'3px 8px', fontSize:11, borderRadius:6, border:'1px solid', cursor:'pointer', fontFamily:'inherit',
+                      background: tmuxMode ? '#1f2d20' : '#18181b',
+                      borderColor: tmuxMode ? '#22c55e' : '#3f3f46',
+                      color: tmuxMode ? '#86efac' : '#71717a' }}>
+                    tmux
+                  </button>
+                </>)}
               </div>
             )}
 
