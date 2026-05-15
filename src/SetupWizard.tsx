@@ -1940,42 +1940,28 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
                 </span>
               </div>
 
-              {/* ⚡ 새 기기 퀵 설치 프롬프트 — 카드 위에 배치 */}
-              <div className="w-full max-w-4xl bg-zinc-900 border border-yellow-500/20 rounded-2xl p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-white flex items-center gap-2">
-                      <Zap className="w-4 h-4 text-yellow-400" />
-                      새 기기 빠른 설치
-                      <span className="text-[10px] font-normal text-yellow-400/70 bg-yellow-400/10 border border-yellow-400/20 px-2 py-0.5 rounded-full">Claude Code 자동 실행</span>
-                    </p>
-                    <p className="text-xs text-zinc-500 mt-0.5">프롬프트 복사 → Claude Code 붙여넣기 → Rust · cmux · 소켓 설정 자동 완료</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(QUICK_INSTALL_PROMPT);
-                      setQuickInstallCopied(true);
-                      setTimeout(() => setQuickInstallCopied(false), 2000);
-                    }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition-all shrink-0 ${
-                      quickInstallCopied
-                        ? 'bg-green-500/10 border-green-500/30 text-green-400'
-                        : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-600 text-zinc-300 hover:text-white'
-                    }`}
-                  >
-                    {quickInstallCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    {quickInstallCopied ? '복사됨!' : '프롬프트 복사'}
-                  </button>
+              {/* ⚡ 새 기기 퀵 설치 프롬프트 — 축소형 */}
+              <div className="w-full max-w-4xl bg-zinc-900/60 border border-zinc-700 rounded-xl px-4 py-2.5 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Zap className="w-3.5 h-3.5 text-yellow-400 shrink-0" />
+                  <span className="text-xs text-zinc-300 font-medium truncate">새 기기 빠른 설치</span>
+                  <span className="text-[10px] text-zinc-500 hidden sm:inline">— Claude Code 프롬프트로 Rust·cmux 자동 설치</span>
                 </div>
-                <div className="bg-zinc-950 rounded-lg p-3 text-[11px] text-zinc-400 font-mono leading-relaxed max-h-20 overflow-hidden relative">
-                  <span className="text-zinc-500">1. Rust/Cargo 설치 확인 · 미설치 시 rustup 자동 설치</span>{'\n'}
-                  <span className="text-zinc-500">2. cmux 설치 확인 · 미설치 시 brew cask 자동 설치</span>{'\n'}
-                  <span className="text-zinc-500">3. cmux Socket Control → allowAll 설정 후 재시작</span>{'\n'}
-                  <span className="text-zinc-500">4. claude 경로 확인 (which claude · /usr/local/bin)</span>{'\n'}
-                  <span className="text-zinc-500">5. cargo + cmux ping + claude --bg bypass 확인</span>
-                  <div className="absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-zinc-950 to-transparent" />
-                </div>
-                <p className="text-[11px] text-zinc-600">단계별 수동 설치는 아래 <span className="text-purple-400">터미널 도구 가이드</span> 카드를 이용하세요.</p>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(QUICK_INSTALL_PROMPT);
+                    setQuickInstallCopied(true);
+                    setTimeout(() => setQuickInstallCopied(false), 2000);
+                  }}
+                  className={`flex items-center gap-1 px-2.5 py-1 text-[11px] rounded-md border transition-all shrink-0 ${
+                    quickInstallCopied
+                      ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                      : 'bg-zinc-800 hover:bg-zinc-700 border-zinc-700 text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  {quickInstallCopied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  {quickInstallCopied ? '복사됨' : '복사'}
+                </button>
               </div>
 
               {/* 클립보드에 portmanager-setup JSON 감지 시 추가 기기 모드로 원클릭 진입 */}
@@ -2049,14 +2035,26 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
                   </div>
                 </button>
               </div>
-              <div className="w-full max-w-4xl space-y-1 mt-1">
-                <p className="text-[11px] text-zinc-600 text-center">
-                  💡 다른 기기 연결을 위한 <span className="text-violet-400">북마크 포털 배포</span>는 1st 기기 완료 후 안내됩니다
-                </p>
-                <p className="text-[11px] text-zinc-700 text-center">
-                  모르겠으면 <strong className="text-zinc-500">건너뛰기</strong> → 앱 사용 중 언제든 ⚙ 설정에서 다시 열 수 있습니다
-                </p>
-              </div>
+              {/* 포털 배포 & Google 로그인 — 별도 카드로 노출 */}
+              <button
+                onClick={() => setMode('portal')}
+                className="group w-full max-w-4xl bg-zinc-900 hover:bg-zinc-800 border border-violet-500/30 hover:border-violet-500/60 rounded-2xl px-5 py-4 text-left transition-all flex items-center gap-4"
+              >
+                <div className="w-9 h-9 bg-violet-500/10 border border-violet-500/20 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-violet-500/20 transition-all">
+                  <Globe className="w-4 h-4 text-violet-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white flex items-center gap-2">
+                    🌐 포털 배포 &amp; Google 로그인
+                    <span className="text-[10px] font-normal text-violet-400/70 bg-violet-400/10 border border-violet-400/20 px-2 py-0.5 rounded-full">Vercel + OAuth</span>
+                  </p>
+                  <p className="text-xs text-zinc-500 mt-0.5">북마크 포털을 웹에 배포 · Google 계정으로 접근 제한 설정</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-violet-400 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+              </button>
+              <p className="text-[11px] text-zinc-700 text-center">
+                모르겠으면 <strong className="text-zinc-500">건너뛰기</strong> → 앱 사용 중 언제든 ⚙ 설정에서 다시 열 수 있습니다
+              </p>
             </div>
           )}
           {mode === 'first' && <FirstSetupWizard onComplete={onComplete} onBack={() => setMode('choose')} />}
