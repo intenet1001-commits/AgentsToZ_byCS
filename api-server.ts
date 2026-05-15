@@ -1588,6 +1588,20 @@ end try`);
           const stderr = (r.stderr ?? '').trim();
           const stdout = (r.stdout ?? '').trim();
           const detail = spawnErr || stderr || stdout || '알 수 없는 오류';
+          // bypass + disclaimer 미동의 → bypass 없이 자동 재시도
+          if (bypass && detail.includes('disclaimer')) {
+            const r2 = nodeSpawnSync(claudeCli, ['--bg', `${label} 작업 시작`], {
+              cwd: cdPath, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'],
+              timeout: 15000, env: { ...process.env, PATH: enhancedPath },
+            });
+            if (!r2.error && r2.status === 0) {
+              return new Response(JSON.stringify({
+                success: true,
+                message: `agent view에 등록됨: ${label} (bypass 미동의 — 일반 모드로 실행됨)`,
+                output: (r2.stdout || '').trim(),
+              }), { headers });
+            }
+          }
           return new Response(JSON.stringify({ success: false, error: detail }), { status: 500, headers });
         }
         const output = (r.stdout || '').trim();
