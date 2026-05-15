@@ -1875,19 +1875,22 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
     if (p.includes('win') || ua.includes('windows')) setDetectedOs('windows');
     else if (p.includes('mac') || ua.includes('mac')) setDetectedOs('mac');
 
-    // 클립보드에 portmanager-setup JSON 이 있으면 추가 기기 모드 추천
-    (async () => {
-      try {
-        const raw = await navigator.clipboard.readText();
-        if (!raw?.trim()) return;
-        const j = JSON.parse(raw);
-        if (j?.v === 1 && j?.type === 'portmanager-setup' && j?.url && j?.key) {
-          setClipboardHasSetup(true);
-          if (typeof j.deviceName === 'string') setClipboardDeviceName(j.deviceName);
-        }
-      } catch { /* clipboard 권한 없거나 JSON 아님 → 무시 */ }
-    })();
+    // 자동 클립보드 읽기 제거 — 브라우저 Paste 팝업 방지
+    // 클립보드 감지는 "추가 기기 연결" 카드의 수동 버튼으로 이동
   }, []);
+
+  const checkClipboardForSetup = async () => {
+    try {
+      const raw = await navigator.clipboard.readText();
+      if (!raw?.trim()) return;
+      const j = JSON.parse(raw);
+      if (j?.v === 1 && j?.type === 'portmanager-setup' && j?.url && j?.key) {
+        setClipboardHasSetup(true);
+        if (typeof j.deviceName === 'string') setClipboardDeviceName(j.deviceName);
+        setMode('additional');
+      }
+    } catch { /* clipboard 권한 없거나 JSON 아님 → 무시 */ }
+  };
 
   return (
     /* Backdrop */
@@ -1964,26 +1967,7 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
                 </button>
               </div>
 
-              {/* 클립보드에 portmanager-setup JSON 감지 시 추가 기기 모드로 원클릭 진입 */}
-              {clipboardHasSetup && (
-                <button
-                  onClick={() => setMode('additional')}
-                  className="w-full max-w-4xl bg-emerald-500/10 hover:bg-emerald-500/15 border-2 border-emerald-500/40 hover:border-emerald-500/70 rounded-2xl p-4 text-left transition-all flex items-center gap-3"
-                >
-                  <div className="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center shrink-0">
-                    <Link2 className="w-5 h-5 text-emerald-300" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-emerald-200">
-                      🎯 클립보드에 단말 정보 감지{clipboardDeviceName ? ` — '${clipboardDeviceName}'` : ''}
-                    </p>
-                    <p className="text-xs text-emerald-300/80 mt-0.5">
-                      클릭하면 추가 기기 연결 마법사로 즉시 이동, 자동 입력됩니다.
-                    </p>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-emerald-300 shrink-0" />
-                </button>
-              )}
+              {/* 추가 기기: 클립보드 감지는 수동 버튼으로 (자동 readText → Paste 팝업 방지) */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full max-w-4xl">
                 <button onClick={() => setMode('first')}
                   className="group bg-zinc-900 hover:bg-zinc-800 border-2 border-blue-500/40 hover:border-blue-500/70 rounded-2xl p-5 sm:p-7 text-left transition-all duration-200 relative">
@@ -2005,8 +1989,17 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
                   </div>
                   <h3 className="text-base font-semibold text-white mb-1">🔗 추가 기기 연결</h3>
                   <p className="text-sm text-zinc-500 leading-relaxed">이미 1st 기기 설정 완료<br />포털 웹 → "새 기기" 복사 → 붙여넣기</p>
-                  <div className="flex items-center gap-1 text-emerald-400 text-xs mt-3 sm:mt-4 group-hover:gap-2 transition-all">
-                    시작하기 <ChevronRight className="w-3.5 h-3.5" />
+                  <div className="flex items-center justify-between mt-3 sm:mt-4">
+                    <div className="flex items-center gap-1 text-emerald-400 text-xs group-hover:gap-2 transition-all">
+                      시작하기 <ChevronRight className="w-3.5 h-3.5" />
+                    </div>
+                    <button
+                      onClick={e => { e.stopPropagation(); checkClipboardForSetup(); }}
+                      className="text-[10px] text-emerald-600 hover:text-emerald-300 border border-emerald-800 hover:border-emerald-600 rounded px-1.5 py-0.5 transition-all flex items-center gap-1"
+                      title="클립보드에서 단말 정보 자동 감지"
+                    >
+                      <ClipboardPaste className="w-2.5 h-2.5" /> 클립보드
+                    </button>
                   </div>
                 </button>
                 <button onClick={() => setMode('dev_env')}
