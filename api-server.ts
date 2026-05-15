@@ -1562,7 +1562,9 @@ end try`);
       if (IS_WIN) return new Response(JSON.stringify({ error: 'claude --bg는 맥에서만 가능합니다' }), { status: 400, headers });
       try {
         const { folderPath, name = '', bypass = false } = await req.json();
-        const cdPath = (folderPath && String(folderPath).trim()) || homedir();
+        const rawPath = folderPath && String(folderPath).trim();
+        // cwd가 없으면 posix_spawn이 binary ENOENT로 오해하는 Node.js quirk 방지
+        const cdPath = (rawPath && existsSync(rawPath)) ? rawPath : homedir();
         const claudeCli = CLAUDE_PATH ?? 'claude';
         const label = (name && String(name).trim()) || cdPath.split('/').filter(Boolean).pop() || 'project';
         const bgArgs = bypass
