@@ -595,6 +595,17 @@ function App() {
   async function registerThisDevice() {
     if (!creds || !registerName.trim()) return;
     const trimmed = registerName.trim();
+
+    // UUID 중복 체크 — localStorage에 저장된 기기 ID가 이미 목록에 있으면 선택만
+    const storedId = (() => { try { return JSON.parse(localStorage.getItem(PORTAL_WEB_KEY) ?? '{}').deviceId; } catch { return null; } })();
+    const alreadyRegistered = storedId && devices.find(d => d.id === storedId);
+    if (alreadyRegistered) {
+      showToast(`이미 등록된 기기입니다: ${alreadyRegistered.name}`, 'error');
+      selectDevice(alreadyRegistered.id, alreadyRegistered.name ?? undefined);
+      return;
+    }
+
+    // 이름 중복 체크
     if (devices.some(d => d.name === trimmed)) {
       showToast('같은 이름의 기기가 이미 있습니다', 'error');
       return;
@@ -602,7 +613,7 @@ function App() {
     setRegistering(true);
     try {
       const newId = crypto.randomUUID();
-      const sb = createClient(creds.url, creds.key);
+      const sb = createClient(creds.url, creds.key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
       const { error } = await sb.from('portmgr_devices').insert({ id: newId, name: registerName.trim() });
       if (error) throw error;
       const newDev: DeviceRow = { id: newId, name: registerName.trim(), last_push_at: new Date().toISOString() };
@@ -731,12 +742,21 @@ function App() {
                 </button>
               </div>
             </div>
-          ) : (
-            <button onClick={() => setShowRegisterForm(true)}
-              className="w-full text-left px-3 py-2 text-[11px] text-blue-400 hover:bg-zinc-800 border-t border-zinc-800 transition-colors">
-              + 이 기기를 새 단말로 등록
-            </button>
-          )}
+          ) : (() => {
+            const myStoredId = (() => { try { return JSON.parse(localStorage.getItem(PORTAL_WEB_KEY) ?? '{}').deviceId; } catch { return null; } })();
+            const alreadyReg = myStoredId ? devices.find(d => d.id === myStoredId) : null;
+            return alreadyReg ? (
+              <button onClick={() => selectDevice(alreadyReg.id, alreadyReg.name ?? undefined)}
+                className="w-full text-left px-3 py-2 text-[11px] text-emerald-400 hover:bg-zinc-800 border-t border-zinc-800 transition-colors">
+                ✓ 이 기기 ({alreadyReg.name}) — 선택하기
+              </button>
+            ) : (
+              <button onClick={() => setShowRegisterForm(true)}
+                className="w-full text-left px-3 py-2 text-[11px] text-blue-400 hover:bg-zinc-800 border-t border-zinc-800 transition-colors">
+                + 이 기기를 새 단말로 등록
+              </button>
+            );
+          })()}
         </div>
       )}
     </div>
