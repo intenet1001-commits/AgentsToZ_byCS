@@ -2209,7 +2209,19 @@ function StepRow({ step, onAction, onPoll }: { step: InstallStep; onAction: () =
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-zinc-200">{step.label}</p>
         <p className="text-xs text-zinc-500">{step.desc}</p>
-        {step.detail && <p className={`text-xs mt-0.5 ${step.status === 'error' ? 'text-red-400' : 'text-zinc-400'}`}>{step.detail}</p>}
+        {step.detail && (
+        <div className="flex items-start gap-1.5 mt-0.5">
+          <p className={`text-xs flex-1 ${step.status === 'error' ? 'text-amber-300' : 'text-zinc-400'}`}>{step.detail}</p>
+          {step.status === 'error' && step.detail?.includes(':') && (
+            <button
+              onClick={() => navigator.clipboard.writeText(step.detail?.split(':').slice(1).join(':').trim() ?? '')}
+              className="shrink-0 text-[10px] text-zinc-500 hover:text-zinc-300 border border-zinc-700 rounded px-1.5 py-0.5 transition-colors"
+              title="명령어 복사">
+              복사
+            </button>
+          )}
+        </div>
+      )}
       </div>
       <div className="shrink-0 flex gap-2">
         {(step.status === 'pending' || step.status === 'error') && step.browserAction && (
@@ -2230,20 +2242,33 @@ function StepRow({ step, onAction, onPoll }: { step: InstallStep; onAction: () =
 }
 
 function OneClickWizard({ onBack, onComplete }: { onBack: () => void; onComplete: SetupWizardProps['onComplete'] }) {
-  const isWin = /Win/.test(navigator.platform ?? '');
-  const os: OS = isWin ? 'windows' : 'mac';
+  const autoOs: OS = /Win/.test(navigator.platform ?? '') ? 'windows' : 'mac';
+  const [os, setOs] = React.useState<OS>(autoOs);
+  const isWin = os === 'windows';
+
+  // OS별 설치 명령 헬퍼
+  const cmd = {
+    supabaseCli: isWin
+      ? 'scoop bucket add supabase https://github.com/supabase/scoop-bucket.git && scoop install supabase'
+      : 'brew install supabase/tap/supabase',
+    githubCli: isWin ? 'winget install GitHub.cli' : 'brew install gh',
+    vercelCli: 'npm install -g vercel',
+    supabaseLogin: isWin ? 'supabase login' : 'supabase login',
+    githubLogin: 'gh auth login --web',
+    vercelLogin: 'vercel login',
+  };
 
   const [steps, setSteps] = React.useState<InstallStep[]>([
     {
       id: 'supabase_project',
-      label: 'Supabase 프로젝트',
-      desc: 'Supabase.com 가입 → 프로젝트 생성 → API Key 확인',
+      label: '① Supabase 프로젝트',
+      desc: 'Supabase.com 가입 → 프로젝트 생성 → URL / Anon Key 입력',
       status: 'pending',
       needsBrowser: true,
     },
     {
       id: 'supabase_cli',
-      label: 'Supabase CLI 인증',
+      label: '② Supabase CLI 인증',
       desc: 'CLI 설치 후 브라우저로 로그인',
       status: 'pending',
       pollEndpoint: '/api/supabase-cli/status',
@@ -2251,7 +2276,7 @@ function OneClickWizard({ onBack, onComplete }: { onBack: () => void; onComplete
     },
     {
       id: 'github_cli',
-      label: 'GitHub 계정 연결',
+      label: '③ GitHub 계정 연결',
       desc: 'GitHub CLI 설치 후 브라우저로 로그인',
       status: 'pending',
       pollEndpoint: '/api/github-cli/status',
@@ -2259,7 +2284,7 @@ function OneClickWizard({ onBack, onComplete }: { onBack: () => void; onComplete
     },
     {
       id: 'vercel_cli',
-      label: 'Vercel 계정 연결',
+      label: '④ Vercel 계정 연결',
       desc: 'Vercel CLI 설치 후 브라우저로 로그인',
       status: 'pending',
       pollEndpoint: '/api/vercel-cli/status',
@@ -2267,14 +2292,14 @@ function OneClickWizard({ onBack, onComplete }: { onBack: () => void; onComplete
     },
     {
       id: 'init_tables',
-      label: 'Supabase 테이블 자동 생성',
+      label: '⑤ Supabase 테이블 생성',
       desc: '필요한 테이블을 Supabase에 자동으로 만듭니다',
       status: 'pending',
-      pollEndpoint: '_init_tables_check', // 특수 처리
+      pollEndpoint: '_init_tables_check',
     },
     {
       id: 'push_credentials',
-      label: '자격증명 암호화 저장',
+      label: '⑥ 자격증명 암호화 저장',
       desc: 'CLI 토큰을 Supabase에 AES-256 암호화 저장',
       status: 'pending',
     },
@@ -2303,15 +2328,19 @@ function OneClickWizard({ onBack, onComplete }: { onBack: () => void; onComplete
       }
 
       if (id === 'supabase_cli') {
-        // 먼저 상태 확인
         const statusRes = await fetch('/api/supabase-cli/status');
         const statusData = await statusRes.json();
         if (statusData.installed && statusData.loggedIn) {
           updateStep(id, { status: 'done', detail: '이미 로그인됨' }); return;
         }
-        // CLI 로그인 브라우저 열기
+        if (!statusData.installed) {
+          updateStep(id, {
+            status: 'error',
+            detail: `먼저 터미널에서 설치: ${cmd.supabaseCli}`,
+          }); return;
+        }
         await fetch('/api/supabase-login', { method: 'POST' });
-        updateStep(id, { status: 'running', detail: '터미널에서 로그인 완료 후 "완료 확인" 클릭' });
+        updateStep(id, { status: 'running', detail: `터미널에서 "${cmd.supabaseLogin}" 완료 후 "완료 확인" 클릭` });
         return;
       }
 
@@ -2321,8 +2350,14 @@ function OneClickWizard({ onBack, onComplete }: { onBack: () => void; onComplete
         if (statusData.installed && statusData.loggedIn) {
           updateStep(id, { status: 'done', detail: `로그인됨 (${statusData.user})` }); return;
         }
+        if (!statusData.installed) {
+          updateStep(id, {
+            status: 'error',
+            detail: `${isWin ? 'PowerShell 관리자 권한으로' : '터미널에서'} 설치: ${cmd.githubCli}`,
+          }); return;
+        }
         await fetch('/api/github-cli/login', { method: 'POST' });
-        updateStep(id, { status: 'running', detail: '브라우저에서 로그인 완료 후 "완료 확인" 클릭' });
+        updateStep(id, { status: 'running', detail: `브라우저에서 GitHub 로그인 완료 후 "완료 확인" 클릭` });
         return;
       }
 
@@ -2332,8 +2367,11 @@ function OneClickWizard({ onBack, onComplete }: { onBack: () => void; onComplete
         if (statusData.installed && statusData.loggedIn) {
           updateStep(id, { status: 'done', detail: `로그인됨 (${statusData.user})` }); return;
         }
+        if (!statusData.installed) {
+          updateStep(id, { status: 'error', detail: `터미널에서 설치: ${cmd.vercelCli}` }); return;
+        }
         await fetch('/api/vercel-cli/login', { method: 'POST' });
-        updateStep(id, { status: 'running', detail: '브라우저에서 로그인 완료 후 "완료 확인" 클릭' });
+        updateStep(id, { status: 'running', detail: '브라우저에서 Vercel 로그인 완료 후 "완료 확인" 클릭' });
         return;
       }
 
@@ -2433,11 +2471,27 @@ function OneClickWizard({ onBack, onComplete }: { onBack: () => void; onComplete
 
       <div className="max-w-xl w-full mx-auto space-y-5">
         <div>
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <Zap className="w-5 h-5 text-amber-400" />
-            원클릭 설치 마법사
-          </h2>
-          <p className="text-zinc-500 text-sm mt-1">각 단계의 버튼을 순서대로 클릭하세요. 브라우저 인증은 자동으로 열립니다.</p>
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <Zap className="w-5 h-5 text-amber-400" />
+              원클릭 설치 마법사
+            </h2>
+            {/* OS 선택 토글 */}
+            <div className="flex items-center gap-1 bg-zinc-800 border border-zinc-700 rounded-lg p-1">
+              <button onClick={() => setOs('mac')}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${os === 'mac' ? 'bg-zinc-600 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}>
+                🍎 Mac
+              </button>
+              <button onClick={() => setOs('windows')}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${os === 'windows' ? 'bg-zinc-600 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}>
+                🪟 Windows
+              </button>
+            </div>
+          </div>
+          <p className="text-zinc-500 text-sm mt-1">
+            각 단계의 버튼을 순서대로 클릭하세요.
+            <span className="text-amber-400 ml-1">{os === 'mac' ? '🍎 macOS' : '🪟 Windows'} 가이드</span>가 적용됩니다.
+          </p>
           <div className="flex items-center gap-2 mt-2">
             <div className="flex-1 bg-zinc-800 rounded-full h-1.5">
               <div className="bg-emerald-500 h-1.5 rounded-full transition-all" style={{ width: `${(doneCount / steps.length) * 100}%` }} />
