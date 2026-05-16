@@ -622,6 +622,24 @@ function App() {
       setShowRegisterForm(false);
       setRegisterName('');
       showToast('이 기기가 등록되었습니다', 'success');
+
+      // 새 단말 로컬 앱 설정 딥링크 — 클립보드에 자동 복사
+      // 형식: portmgr://onboard?deviceId=xxx&url=xxx&key=xxx
+      // 또는 로컬호스트 URL: http://localhost:3001/api/setup/onboard?...
+      if (creds.url && creds.key) {
+        const params = new URLSearchParams({
+          deviceId: newId,
+          deviceName: trimmed,
+          supabaseUrl: creds.url,
+          supabaseAnonKey: creds.key,
+        });
+        const onboardUrl = `http://localhost:3001/api/setup/pull-credentials?${params}`;
+        const payload = JSON.stringify({ v: 2, type: 'portmgr-onboard', deviceId: newId, deviceName: trimmed, url: creds.url, key: creds.key });
+        try {
+          await navigator.clipboard.writeText(payload);
+          showToast('📋 온보딩 정보가 클립보드에 복사됨 — 로컬 앱 마법사의 "새 단말 온보딩"에 붙여넣기', 'success');
+        } catch { /* clipboard permission denied */ }
+      }
     } catch (e) {
       showToast('등록 실패: ' + String(e), 'error');
     } finally {

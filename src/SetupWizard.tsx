@@ -2761,6 +2761,24 @@ function NewDeviceWizard({ onBack }: { onBack: () => void }) {
   const [sbKey, setSbKey] = React.useState('');
   const [pulling, setPulling] = React.useState(false);
   const [result, setResult] = React.useState<{ success?: boolean; applied?: Record<string, boolean>; error?: string } | null>(null);
+  const [pasteStatus, setPasteStatus] = React.useState<'idle'|'ok'|'fail'>('idle');
+
+  // 클립보드에서 포털 온보딩 정보 자동 감지 (portmgr-onboard v2 형식)
+  async function pasteFromClipboard() {
+    try {
+      const raw = await navigator.clipboard.readText();
+      const j = JSON.parse(raw);
+      if (j?.v === 2 && j?.type === 'portmgr-onboard' && j?.deviceId && j?.url && j?.key) {
+        setDeviceId(j.deviceId);
+        setSbUrl(j.url);
+        setSbKey(j.key);
+        setPasteStatus('ok');
+        return;
+      }
+      setPasteStatus('fail');
+    } catch { setPasteStatus('fail'); }
+    setTimeout(() => setPasteStatus('idle'), 2000);
+  }
 
   async function doPull() {
     if (!deviceId || !sbUrl || !sbKey) return;
@@ -2787,6 +2805,22 @@ function NewDeviceWizard({ onBack }: { onBack: () => void }) {
             새 단말 온보딩
           </h2>
           <p className="text-zinc-500 text-sm mt-1">주 기기에서 저장한 자격증명을 이 기기로 불러옵니다.</p>
+        </div>
+
+        {/* 클립보드 자동 붙여넣기 — 포털 등록 완료 후 클립보드에 온보딩 정보가 있음 */}
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-emerald-300">📋 포털에서 바로 붙여넣기</p>
+            <p className="text-xs text-zinc-400 mt-0.5">포털 "이 기기를 새 단말로 등록" 완료 후 클립보드에 정보가 자동 복사됩니다.</p>
+          </div>
+          <button onClick={pasteFromClipboard}
+            className={`shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              pasteStatus === 'ok' ? 'bg-emerald-600 text-white' :
+              pasteStatus === 'fail' ? 'bg-red-600/80 text-white' :
+              'bg-emerald-700 hover:bg-emerald-600 text-white'
+            }`}>
+            {pasteStatus === 'ok' ? '✓ 자동 완성됨' : pasteStatus === 'fail' ? '❌ 형식 불일치' : '클립보드에서 불러오기'}
+          </button>
         </div>
 
         <InfoBox color="amber">
