@@ -1009,7 +1009,7 @@ function App() {
   const [shortcutInput, setShortcutInput] = useState('');
   const [isRecordingShortcut, setIsRecordingShortcut] = useState(false);
   const [portViewMode, setPortViewMode] = useState<'card'|'terminal'>(
-    () => (localStorage.getItem('portmanager-viewMode') as 'card'|'terminal') || 'card'
+    () => 'terminal'
   );
   const [v4SelectedId, setV4SelectedId] = useState<string|null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -5228,7 +5228,7 @@ function App() {
         {activeTab === 'ports' && (
           <div style={{flex:1,display:'flex',minHeight:0,overflow:'hidden'}}>
             {/* LEFT SIDEBAR — 터미널 뷰에서 숨김 */}
-            {portViewMode !== 'terminal' && <div style={{
+            {false && <div style={{
               width:240,flexShrink:0,display:'flex',flexDirection:'column',
               background:'#1c1916',borderRight:'1px solid rgba(255,240,220,0.07)',
               overflowY:'auto' as const,
@@ -5465,21 +5465,6 @@ function App() {
                     </>
                   )
                 )}
-                {/* 뷰 토글 — 카드 / 터미널 세그먼트 */}
-                <div data-help-key="view-mode-toggle" style={{display:'flex',background:'#1c1916',borderRadius:5,padding:2,border:'1px solid rgba(255,240,220,0.07)'}}>
-                  {([['card','카드',LayoutGrid],['terminal','터미널',LayoutList]] as const).map(([mode,label,Icon])=>(
-                    <button key={mode} onClick={()=>{setPortViewMode(mode);localStorage.setItem('portmanager-viewMode',mode);}} title={mode==='card'?'카드 그리드 뷰':'터미널 스플릿 뷰'} style={{
-                      padding:'3px 8px',fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif',
-                      background:portViewMode===mode?'#2a2520':'transparent',
-                      color:portViewMode===mode?'#ede7dd':'#a39a8c',
-                      border:'none',borderRadius:3,cursor:'pointer',
-                      display:'flex',alignItems:'center',gap:4,
-                      fontWeight:portViewMode===mode?500:400,
-                    }}>
-                      <Icon style={{width:12,height:12}}/>{label}
-                    </button>
-                  ))}
-                </div>
                 {!isDeployedWeb() && (
                   <button
                     data-help-key="header-new-project"
@@ -5500,11 +5485,11 @@ function App() {
               {/* V4 터미널 뷰 */}
               {portViewMode === 'terminal' && renderV4View()}
 
-              {/* Card grid */}
-              {portViewMode === 'card' && <div style={{flex:1,overflowY:'auto',padding:'16px 28px 28px'}}>
+              {/* Card grid removed — terminal view only */}
+              {false && <div style={{flex:1,overflowY:'auto',padding:'16px 28px 28px'}}>
                 {v3Running.length > 0 && (
                   <div style={{marginBottom:24}}>
-                    <div data-help-key="section-header-running" style={{
+                    <div style={{
                       display:'flex',alignItems:'center',gap:6,marginBottom:10,
                       fontSize:11,fontFamily:'JetBrains Mono, monospace',
                       color:'#a39a8c',textTransform:'uppercase' as const,letterSpacing:0.5,
