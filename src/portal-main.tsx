@@ -69,8 +69,8 @@ interface DeviceRow {
 }
 
 function isGoogleVerified(): boolean {
-  if (!ALLOWED_EMAIL) return true;
-  return localStorage.getItem(GOOGLE_VERIFIED_KEY) === ALLOWED_EMAIL;
+  if (!ALLOWED_EMAIL.trim()) return true;
+  return (localStorage.getItem(GOOGLE_VERIFIED_KEY) ?? '').trim() === ALLOWED_EMAIL.trim();
 }
 
 function getSupabaseCreds(): { url: string; key: string } | null {
