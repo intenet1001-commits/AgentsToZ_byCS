@@ -1163,7 +1163,7 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
     }
   }
 
-  async function pullFromSupabase(opts?: { skipConfirm?: boolean }) {
+  async function pullFromSupabase(opts?: { skipConfirm?: boolean; targetDeviceId?: string }) {
     if (!sbUrl || !sbKey) {
       showToast('Supabase URL과 키를 먼저 설정하세요', 'error');
       setShowSettings(true);
@@ -1177,7 +1177,7 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
     try {
       const supabase = getSupabaseClient(sbUrl, sbKey);
       const ownDeviceId = data.deviceId ?? getOrCreateDeviceId();
-      const targetDeviceId = viewingDeviceId || ownDeviceId;
+      const targetDeviceId = opts?.targetDeviceId ?? viewingDeviceId ?? ownDeviceId;
       const [itemsRes, catsRes] = await Promise.all([
         supabase.from('portmgr_portal_items').select('*').or(`device_id.eq.${targetDeviceId},device_id.eq.__shared__`),
         supabase.from('portmgr_portal_categories').select('*').eq('device_id', '__shared__'),
@@ -1777,7 +1777,14 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
             knownDevices={knownDevices}
             isFetchingDevices={isFetchingDevices}
             onFetchDevices={fetchKnownDevices}
-            onSelectDevice={id => setViewingDeviceId(id === data.deviceId ? '' : id)}
+            onSelectDevice={async (id) => {
+              const newViewingId = id === data.deviceId ? '' : id;
+              setViewingDeviceId(newViewingId);
+              if (newViewingId && sbUrl && sbKey) {
+                setShowSettings(false);
+                await pullFromSupabase({ skipConfirm: true, targetDeviceId: newViewingId });
+              }
+            }}
             onResetDevice={() => setViewingDeviceId('')}
             onCopyDeviceId={() => { if (data.deviceId) { navigator.clipboard.writeText(data.deviceId); showToast('Device ID 복사됨', 'success'); } }}
             onChangeDeviceId={async (newId) => {
