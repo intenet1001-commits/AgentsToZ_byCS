@@ -1644,7 +1644,7 @@ function App() {
   };
 
   const openCmuxAgentView = async () => {
-    if (isWindows()) { cmuxMacOnlyToast(); return; }
+    if (isWindows() && terminalApp !== 'wsl') { cmuxMacOnlyToast(); return; }
     try {
       const msg = await callCmux('open_cmux_agent_view', '/api/open-cmux-agent-view', {
         bypass: bypassPermissions,
@@ -1667,7 +1667,7 @@ function App() {
   };
 
   const openCmuxProjectAgents = async (item: PortInfo) => {
-    if (isWindows()) { cmuxMacOnlyToast(); return; }
+    if (isWindows() && terminalApp !== 'wsl') { cmuxMacOnlyToast(); return; }
     recordVisit(item.id);
     try {
       const msg = await callCmux('open_cmux_project_agents', '/api/open-cmux-project-agents', {
@@ -1684,7 +1684,7 @@ function App() {
 
 
   const openClaudeBg = async (item: PortInfo) => {
-    if (isWindows()) { cmuxMacOnlyToast(); return; }
+    if (isWindows() && terminalApp !== 'wsl') { cmuxMacOnlyToast(); return; }
     recordVisit(item.id);
     try {
       const msg = await callCmux('open_claude_bg', '/api/open-claude-bg', {
@@ -4896,24 +4896,24 @@ function App() {
                   </button>
                 ))}
               </div>
-              {/* Mode toggles - compact pills */}
-              {!isWindows() && (<>
+              {/* Mode toggles — macOS 전용 또는 Windows WSL 모드에서 표시 */}
+              {(!isWindows() || terminalApp === 'wsl') && (<>
                 <button onClick={() => { const v=!bgMode; setBgMode(v); localStorage.setItem('portmanager-bgMode', String(v)); }}
-                  title="--bg 모드"
+                  title={isWindows() ? '--bg 모드 (WSL에서 claude --bg 실행)' : '--bg 모드'}
                   style={{ padding:'2px 6px', fontSize:10, borderRadius:4, border:'1px solid', cursor:'pointer', fontFamily:'inherit',
                     background: bgMode ? '#2d1f42' : 'transparent',
                     borderColor: bgMode ? '#7c3aed' : '#3f3f46',
                     color: bgMode ? '#c4b5fd' : '#52525b' }}>
                   bg
                 </button>
-                <button onClick={() => { const v=!tmuxMode; setTmuxMode(v); localStorage.setItem('portmanager-tmuxMode', String(v)); }}
+                {!isWindows() && <button onClick={() => { const v=!tmuxMode; setTmuxMode(v); localStorage.setItem('portmanager-tmuxMode', String(v)); }}
                   title="tmux 모드"
                   style={{ padding:'2px 6px', fontSize:10, borderRadius:4, border:'1px solid', cursor:'pointer', fontFamily:'inherit',
                     background: tmuxMode ? '#1f2d20' : 'transparent',
                     borderColor: tmuxMode ? '#22c55e' : '#3f3f46',
                     color: tmuxMode ? '#86efac' : '#52525b' }}>
                   tmux
-                </button>
+                </button>}
               </>)}
               {/* bypass toggle - compact */}
               <button
@@ -5483,8 +5483,10 @@ function App() {
                   cmux
                 </button>
                 )}
-                {!isWindows() && (
-                <button data-help-key="header-cmux-agent-view" onClick={openCmuxAgentView} title="전체 Agent View — claude agents (HOME 기준, macOS 전용)" style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(200,168,240,0.15)',borderRadius:5,color:'#c8a8f0',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
+                {(!isWindows() || terminalApp === 'wsl') && (
+                <button data-help-key="header-cmux-agent-view" onClick={openCmuxAgentView}
+                  title={isWindows() ? 'claude agents (WSL에서 실행)' : '전체 Agent View — claude agents (HOME 기준)'}
+                  style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(200,168,240,0.15)',borderRadius:5,color:'#c8a8f0',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
                   <Sparkles style={{width:13,height:13}} />
                   agents
                 </button>
