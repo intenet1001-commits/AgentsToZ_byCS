@@ -609,7 +609,7 @@ function App() {
     if (pwOk && !creds) setOpenSettings(true);
   }, [pwOk]);
 
-  function selectDevice(id: string, name?: string) {
+  function selectDevice(id: string, name?: string, autoSwitch = true) {
     setSelectedDeviceId(id);
     localStorage.setItem(SELECTED_DEVICE_KEY, id);
     try {
@@ -619,6 +619,7 @@ function App() {
       localStorage.setItem(PORTAL_WEB_KEY, JSON.stringify(existing));
     } catch {}
     setShowDevicePicker(false);
+    if (autoSwitch) setActiveTab('ports');
   }
 
   async function openPortsHistory() {
