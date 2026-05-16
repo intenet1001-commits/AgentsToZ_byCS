@@ -2312,6 +2312,22 @@ function OneClickWizard({ onBack, onComplete }: { onBack: () => void; onComplete
   const [showSbForm, setShowSbForm] = React.useState(false);
   const [allDone, setAllDone] = React.useState(false);
 
+  // 기존 portal.json에서 Supabase URL/Key/기기명 자동 로드
+  React.useEffect(() => {
+    fetch('/api/portal').then(r => r.json()).then((d: any) => {
+      if (d.supabaseUrl) setSbUrl(d.supabaseUrl);
+      if (d.supabaseAnonKey) setSbKey(d.supabaseAnonKey);
+      if (d.deviceName) setDeviceName(d.deviceName);
+      // 이미 Supabase 설정됨 → ① 자동 완료
+      if (d.supabaseUrl && d.supabaseAnonKey) {
+        setSteps(prev => prev.map(s => s.id === 'supabase_project'
+          ? { ...s, status: 'done' as const, detail: `${d.supabaseUrl.replace('https://', '').slice(0, 30)}… (기존 설정)` }
+          : s
+        ));
+      }
+    }).catch(() => {});
+  }, []);
+
   function updateStep(id: string, patch: Partial<InstallStep>) {
     setSteps(prev => prev.map(s => s.id === id ? { ...s, ...patch } : s));
   }
@@ -2509,9 +2525,11 @@ function OneClickWizard({ onBack, onComplete }: { onBack: () => void; onComplete
                 className="underline text-blue-400">supabase.com/dashboard</a> → 프로젝트 → Settings → API → Project URL + anon key 복사
             </InfoBox>
             <input value={sbUrl} onChange={e => setSbUrl(e.target.value)}
+              autoComplete="off" spellCheck={false}
               className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-blue-500"
               placeholder="https://xxx.supabase.co" />
             <input value={sbKey} onChange={e => setSbKey(e.target.value)} type="password"
+              autoComplete="new-password"
               className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm font-mono text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-blue-500"
               placeholder="eyJ… (anon public key)" />
             <input value={deviceName} onChange={e => setDeviceName(e.target.value)}
