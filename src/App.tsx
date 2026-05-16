@@ -962,6 +962,17 @@ function App() {
   const [activeTab, setActiveTab] = useState<'ports' | 'portal'>('ports');
   const [lang, setLang] = useState<Lang>(() => (localStorage.getItem('portmanager-lang') as Lang) ?? 'ko');
   useEffect(() => { document.title = t(lang, 'appName'); }, [lang]);
+
+  // Windows에서 macOS 전용 terminalApp이 저장된 경우 자동 수정 (HMR 후에도 동작)
+  useEffect(() => {
+    if (!isWindows()) return;
+    const macOnly: TerminalApp[] = ['cmux', 'iterm', 'terminal'];
+    if (macOnly.includes(terminalApp)) {
+      setTerminalApp('wsl');
+      localStorage.setItem('portmanager-terminalApp', 'wsl');
+    }
+  }, []);
+
   const [openPortalSettings, setOpenPortalSettings] = useState(false);
   const [showSetupWizard, setShowSetupWizard] = useState(false);
   const [guideMode, setGuideMode] = useState<boolean>(() => {
@@ -3672,7 +3683,7 @@ function App() {
               {item.isRunning ? 'Stop' : 'Run'}
             </button>
           ) : (
-            <button data-help-key="menu-open-folder" onClick={e=>{e.stopPropagation(); item.folderPath && API.openFolder(item.folderPath).catch(()=>{});}} style={{
+            <button data-help-key="menu-open-folder" onClick={e=>{e.stopPropagation(); item.folderPath ? API.openFolder(item.folderPath).catch(e=>showToast(`폴더 열기 실패: ${e.message}`, 'error')) : showToast('폴더 경로가 없습니다', 'error');}} style={{
               padding:'4px 10px',borderRadius:4,
               background:'rgba(232,165,87,0.14)', color:'#e8a557',
               border:'none',fontSize:10,fontWeight:600,cursor:'pointer',
@@ -3831,7 +3842,7 @@ function App() {
                 </button>
                 <button onClick={e=>{e.stopPropagation(); portItem.port && API.openInChrome(`http://localhost:${portItem.port}`).catch(()=>{});}} style={miniBtn} title="브라우저에서 열기"><Globe style={{width:9,height:9}}/></button>
                 {!isWindows() && <button onClick={e=>{e.stopPropagation(); openCmuxLocalhost(portItem);}} style={{...miniBtn,color:'#2dd4bf',borderColor:'rgba(45,212,191,0.2)'}} title={`cmux localhost:${portItem.port}`}><Terminal style={{width:9,height:9}}/></button>}
-                <button onClick={e=>{e.stopPropagation(); wt.path && API.openFolder(wt.path).catch(()=>{});}} style={miniBtn} title="Finder에서 열기"><FolderOpen style={{width:9,height:9}}/></button>
+                <button onClick={e=>{e.stopPropagation(); wt.path && API.openFolder(wt.path).catch(e=>showToast(`폴더 열기 실패: ${e.message}`, 'error'));}} style={miniBtn} title="Finder에서 열기"><FolderOpen style={{width:9,height:9}}/></button>
                 <button onClick={e=>{e.stopPropagation(); forceRestartCommand(portItem);}} style={{...miniBtn,color:'#e8a557',borderColor:'rgba(232,165,87,0.2)'}} title="강제 재실행"><RotateCw style={{width:9,height:9}}/></button>
                 <button onClick={e=>{e.stopPropagation(); wtClaudeBypass();}} style={{...miniBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}}><Zap style={{width:8,height:8,display:'inline',verticalAlign:'middle'}}/>{bypassPermissions?'Claude ⚡':'Claude'}</button>
                 <button onClick={e=>{e.stopPropagation(); setCommitModal({item:portItem,wt,msg:''});}} style={miniBtn}>커밋</button>
@@ -4060,7 +4071,7 @@ function App() {
 
             {/* 열기 */}
             <div style={{display:'flex',gap:6,flexWrap:'wrap' as const,marginBottom:8}}>
-              {sel.folderPath && <button onClick={() => API.openFolder(sel.folderPath!).catch(()=>{})} style={rowBtn}><FolderOpen style={{width:11,height:11}}/>폴더 열기</button>}
+              {sel.folderPath && <button onClick={() => API.openFolder(sel.folderPath!).catch(e=>showToast(`폴더 열기 실패: ${e.message}`, 'error'))} style={rowBtn}><FolderOpen style={{width:11,height:11}}/>폴더 열기</button>}
               <button onClick={() => handleViewPortLog(sel.id, sel.name)} style={rowBtn}><FileText style={{width:11,height:11}}/>로그 보기</button>
               {sel.port && <button onClick={() => API.openInChrome(`http://localhost:${sel.port}`).catch(()=>{})} style={rowBtn}><Laptop style={{width:11,height:11}}/>localhost</button>}
               {sel.port && !isWindows() && <button onClick={() => openCmuxLocalhost(sel)} style={{...rowBtn,color:'#2dd4bf',borderColor:'rgba(45,212,191,0.2)'}} title={`cmux로 localhost:${sel.port} 열기 (macOS 전용)`}><Terminal style={{width:11,height:11}}/>cmux localhost</button>}
@@ -5489,7 +5500,7 @@ function App() {
                         <Monitor style={{width:13,height:13}} className={isBuilding && buildType==='windows' ? 'animate-spin' : ''} />
                         {t(lang, 'buildWin')}
                       </button>
-                      <button onClick={() => API.openBuildFolder().catch(()=>{})} title="빌드 폴더 열기" style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(255,240,220,0.07)',borderRadius:5,color:'#a39a8c',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
+                      <button onClick={() => API.openBuildFolder().catch(e=>showToast(`폴더 열기 실패: ${e.message}`, 'error'))} title="빌드 폴더 열기" style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(255,240,220,0.07)',borderRadius:5,color:'#a39a8c',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
                         <FolderOpen style={{width:13,height:13}} />
                         {t(lang, 'openBuildFolder')}
                       </button>
@@ -5504,7 +5515,7 @@ function App() {
                         <Package style={{width:13,height:13}} className={isBuilding && buildType==='dmg' ? 'animate-spin' : ''} />
                         DMG
                       </button>
-                      <button onClick={() => API.openBuildFolder().catch(()=>{})} title="빌드 폴더 열기" style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(255,240,220,0.07)',borderRadius:5,color:'#a39a8c',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
+                      <button onClick={() => API.openBuildFolder().catch(e=>showToast(`폴더 열기 실패: ${e.message}`, 'error'))} title="빌드 폴더 열기" style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(255,240,220,0.07)',borderRadius:5,color:'#a39a8c',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
                         <FolderOpen style={{width:13,height:13}} />
                         폴더 열기
                       </button>
