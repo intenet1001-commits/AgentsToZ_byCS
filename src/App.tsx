@@ -797,6 +797,14 @@ const getPortalCredentials = async (): Promise<{ supabaseUrl?: string; supabaseA
     const cached = localStorage.getItem('portalCreds');
     if (cached) return JSON.parse(cached);
   } catch {}
+  // Fallback 3: Vite env vars — portal-main.tsx / PortalManager.tsx와 동일한 URL 사용 보장
+  // 배포 웹에서 Google OAuth 세션은 env var URL 기준으로 수립되므로 App.tsx도 같은 URL을 써야
+  // RLS가 활성화된 경우 동일 프로젝트+세션으로만 읽기 가능
+  {
+    const envUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? '';
+    const envKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? '';
+    if (envUrl && envKey) return { supabaseUrl: envUrl, supabaseAnonKey: envKey };
+  }
   return {};
 };
 
@@ -2439,11 +2447,13 @@ function App() {
           );
           if (anyRows && anyRows.length > 0) {
             const ids = [...new Set(anyRows.map((r: any) => r.device_id).filter(Boolean))];
-            showToast(`이 기기 ID(${(pullDeviceId as string).slice(0, 8)}…)로 저장된 포트가 없습니다. Supabase에는 다른 기기(${ids.map((id: string) => id.slice(0, 8)).join(', ')}…)의 데이터가 있습니다. 포털 탭에서 기기를 선택 후 재시도하세요.`, 'error');
+            const urlHint = supabaseUrl?.replace('https://', '').slice(0, 22) ?? '?';
+            showToast(`[${urlHint}] 기기 ID(${(pullDeviceId as string).slice(0, 8)}…)로 저장된 포트가 없습니다. 다른 기기(${ids.map((id: string) => id.slice(0, 8)).join(', ')}…) 데이터가 있습니다. 포털 탭에서 기기를 선택 후 재시도하세요.`, 'error');
             return;
           }
         }
-        showToast('Supabase에 저장된 포트가 없습니다. 데스크탑 앱에서 Push 먼저 실행하세요.', 'error');
+        const urlHint2 = supabaseUrl?.replace('https://', '').slice(0, 22) ?? '?';
+        showToast(`[${urlHint2}] Supabase에 저장된 포트가 없습니다. 데스크탑 앱에서 Push 먼저 실행하세요.`, 'error');
         return;
       }
 
