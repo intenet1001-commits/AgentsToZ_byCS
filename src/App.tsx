@@ -2495,7 +2495,19 @@ function App() {
 
       if (error) throw new Error(error.message);
       if (!data || data.length === 0) {
-        showToast('Supabase에 저장된 포트가 없습니다', 'error');
+        // Diagnose: check if any rows exist (device ID mismatch vs truly empty)
+        if (pullDeviceId) {
+          const { data: anyRows } = await withTimeout(
+            supabase.from('portmgr_ports').select('device_id').limit(5),
+            10_000
+          );
+          if (anyRows && anyRows.length > 0) {
+            const ids = [...new Set(anyRows.map((r: any) => r.device_id).filter(Boolean))];
+            showToast(`이 기기 ID(${(pullDeviceId as string).slice(0, 8)}…)로 저장된 포트가 없습니다. Supabase에는 다른 기기(${ids.map((id: string) => id.slice(0, 8)).join(', ')}…)의 데이터가 있습니다. 포털 탭에서 기기를 선택 후 재시도하세요.`, 'error');
+            return;
+          }
+        }
+        showToast('Supabase에 저장된 포트가 없습니다. 데스크탑 앱에서 Push 먼저 실행하세요.', 'error');
         return;
       }
 

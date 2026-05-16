@@ -119,6 +119,16 @@ const PortalAPI = {
       if (full) {
         try { return JSON.parse(full); } catch { /* fall through */ }
       }
+      // portalData_v1: written by deployed-web save path; check as secondary fallback
+      const webData = localStorage.getItem(PORTAL_WEB_KEY);
+      if (webData) {
+        try {
+          const d: PortalData = JSON.parse(webData);
+          if (!d.items) d.items = [];
+          if (!d.categories?.length) d.categories = DEFAULT_CATEGORIES;
+          return d;
+        } catch { /* ignore */ }
+      }
       const cached = localStorage.getItem('portalCreds');
       if (cached) {
         try {
@@ -1199,7 +1209,14 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
       }));
 
       if (items.length === 0 && categories.length === 0) {
-        showToast('Supabase에 저장된 포털 데이터가 없습니다', 'error');
+        // Diagnose: check if any rows exist (device ID mismatch vs truly empty table)
+        const { data: anyItems } = await supabase.from('portmgr_portal_items').select('device_id').limit(5);
+        if (anyItems && anyItems.length > 0) {
+          const ids = [...new Set(anyItems.map((r: any) => r.device_id).filter(Boolean))];
+          showToast(`기기 ID(${targetDeviceId.slice(0, 8)}…)로 저장된 포털 데이터가 없습니다. 다른 기기(${ids.map((id: string) => id.slice(0, 8)).join(', ')}…) 데이터가 있습니다. 설정에서 기기를 선택 후 재시도하세요.`, 'error');
+        } else {
+          showToast('Supabase에 저장된 포털 데이터가 없습니다', 'error');
+        }
         return;
       }
 
