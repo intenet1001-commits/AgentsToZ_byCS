@@ -785,7 +785,15 @@ const getPortalCredentials = async (): Promise<{ supabaseUrl?: string; supabaseA
       return data;
     }
   } catch {}
-  // Fallback to localStorage cache
+  // Fallback 1: portalData_v1 (portal-main.tsx 및 배포 웹 설정 UI가 저장하는 키)
+  try {
+    const raw = localStorage.getItem('portalData_v1');
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (d.supabaseUrl && d.supabaseAnonKey) return d;
+    }
+  } catch {}
+  // Fallback 2: portalCreds (기존 /api/portal 응답 캐시)
   try {
     const cached = localStorage.getItem('portalCreds');
     if (cached) return JSON.parse(cached);
