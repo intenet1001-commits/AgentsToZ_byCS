@@ -74,6 +74,8 @@ function isGoogleVerified(): boolean {
 }
 
 function getSupabaseCreds(): { url: string; key: string } | null {
+  // Vercel env var 우선 — Google OAuth 세션과 동일 프로젝트 보장
+  if (ENV_SUPABASE_URL && ENV_SUPABASE_KEY) return { url: ENV_SUPABASE_URL, key: ENV_SUPABASE_KEY };
   try {
     const raw = localStorage.getItem(PORTAL_WEB_KEY);
     if (raw) {
@@ -86,8 +88,6 @@ function getSupabaseCreds(): { url: string; key: string } | null {
       if (supabaseUrl && supabaseAnonKey) return { url: supabaseUrl, key: supabaseAnonKey };
     }
   } catch {}
-  // 새 단말: env vars에서 자동 제공 (Vercel 환경변수로 배포 시 항상 사용 가능)
-  if (ENV_SUPABASE_URL && ENV_SUPABASE_KEY) return { url: ENV_SUPABASE_URL, key: ENV_SUPABASE_KEY };
   return null;
 }
 
