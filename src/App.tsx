@@ -3602,8 +3602,8 @@ function App() {
           <div style={{flex:1,height:'1px',background:'rgba(255,240,220,0.05)'}}/>
         </div>
 
-        {/* Primary action strip — visible on hover */}
-        <div className="opacity-0 group-hover:opacity-100 transition-opacity" style={{marginTop:2,display:'flex',flexWrap:'wrap',gap:4}}>
+        {/* Primary action strip — always visible */}
+        <div style={{marginTop:2,display:'flex',flexWrap:'wrap',gap:4}}>
           {item.port ? (
             <button data-help-key="card-run-stop" onClick={e=>{e.stopPropagation(); item.isRunning ? stopCommand(item) : executeCommand(item);}} style={{
               flex:1,padding:'5px 0',borderRadius:5,
@@ -3647,7 +3647,7 @@ function App() {
           <button data-help-key="card-favorite" aria-label={item.favorite?'즐겨찾기 해제':'즐겨찾기 추가'} onClick={e=>{e.stopPropagation(); toggleFavorite(item);}} style={{...btnBase, color: item.favorite?'#e8a557':'#ede7dd', borderColor: item.favorite?'rgba(232,165,87,0.3)':'rgba(255,240,220,0.07)'}} title={item.favorite?'즐겨찾기 해제':'즐겨찾기 추가'}>
             <Star style={{width:11,height:11,fill:item.favorite?'#e8a557':'none'}} aria-hidden="true"/>
           </button>
-          <button data-help-key="card-more-menu" aria-label="더보기 메뉴" onClick={e=>{e.stopPropagation(); if(menuOpen){setV3MenuOpenId(null);setV3MenuRect(null);}else{const r=e.currentTarget.getBoundingClientRect();const menuH=340;const spaceBelow=window.innerHeight-r.bottom;const top=spaceBelow<menuH?Math.max(8,r.top-menuH-4):r.bottom+4;setV3MenuOpenId(item.id);setV3MenuRect({top,right:window.innerWidth-r.right});}}} style={{...btnBase, color: menuOpen?'#e8a557':'#ede7dd', borderColor: menuOpen?'rgba(232,165,87,0.3)':'rgba(255,240,220,0.07)'}}>
+          <button data-help-key="card-more-menu" aria-label="더보기 메뉴" onClick={e=>{e.stopPropagation(); if(menuOpen){setV3MenuOpenId(null);setV3MenuRect(null);}else{const r=e.currentTarget.getBoundingClientRect();setV3MenuOpenId(item.id);setV3MenuRect({top:r.bottom+4,right:window.innerWidth-r.right});}}} style={{...btnBase, color: menuOpen?'#e8a557':'#ede7dd', borderColor: menuOpen?'rgba(232,165,87,0.3)':'rgba(255,240,220,0.07)'}}>
             <ChevronDown style={{width:11,height:11}} aria-hidden="true"/>
           </button>
         </div>
@@ -3679,7 +3679,7 @@ function App() {
         {menuOpen && v3MenuRect && (
           <>
           <div style={{position:'fixed',inset:0,zIndex:9998}} onClick={()=>{setV3MenuOpenId(null);setV3MenuRect(null);}}/>
-          <div style={{position:'fixed',top:v3MenuRect.top,right:v3MenuRect.right,zIndex:9999,background:'#221f1b',border:'1px solid rgba(255,240,220,0.12)',borderRadius:8,padding:'4px 0',boxShadow:'0 12px 32px rgba(0,0,0,0.7)',minWidth:165}}>
+          <div style={{position:'fixed',top:v3MenuRect.top,right:v3MenuRect.right,zIndex:9999,background:'#221f1b',border:'1px solid rgba(255,240,220,0.12)',borderRadius:8,padding:'4px 0',boxShadow:'0 12px 32px rgba(0,0,0,0.7)',minWidth:165,maxHeight:`calc(100dvh - ${v3MenuRect.top + 8}px)`,overflowY:'auto'}}>
             {[
               {label:'강제 재실행', icon:<RotateCw style={{width:11,height:11}}/>, action:()=>forceRestartCommand(item), title:'프로세스 강제 종료 후 재실행', helpKey:'menu-force-restart'},
               {label:'폴더 열기', icon:<FolderOpen style={{width:11,height:11}}/>, action:()=>item.folderPath && API.openFolder(item.folderPath), title:'Finder에서 프로젝트 폴더 열기', helpKey:'menu-open-folder'},
