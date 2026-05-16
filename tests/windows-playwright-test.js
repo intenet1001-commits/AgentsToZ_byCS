@@ -60,8 +60,8 @@ function check(label, ok, detail = '') {
       check('프로젝트 목록 조회', true, projectNames);
     }
 
-    // ── B. SetupWizard — 추가 단말 등록 ─────────────────────────
-    console.log('\n[B] SetupWizard — 추가 단말 등록 (CLI 자동 가져오기)');
+    // ── B. SetupWizard — 추가 기기 연결 ─────────────────────────
+    console.log('\n[B] SetupWizard — 추가 기기 연결 (CLI 자동 가져오기)');
 
     const settingsBtn = page.getByTitle('초기 설정 마법사');
     check('세팅 버튼 존재', await settingsBtn.isVisible());
@@ -70,7 +70,8 @@ function check(label, ok, detail = '') {
     await page.waitForTimeout(800);
     await page.screenshot({ path: 'tests/screenshots/win-01-choose.png' });
 
-    await page.getByText('추가 단말 등록').click();
+    // "추가 기기 연결" 카드 (구: "추가 단말 등록") — div role=button
+    await page.locator('text=추가 기기 연결').first().click();
     await page.waitForTimeout(600);
 
     await page.getByText('다음').click();
@@ -144,11 +145,16 @@ function check(label, ok, detail = '') {
     if (await portsTab.isVisible()) await portsTab.click();
     await page.waitForTimeout(500);
 
-    const buildButtons = ['앱 빌드', 'DMG 빌드', 'Windows 빌드', 'DMG 폴더'];
-    for (const btn of buildButtons) {
-      const visible = await page.getByText(btn).isVisible().catch(() => false);
-      check(`빌드 버튼 — "${btn}"`, visible);
-    }
+    // Windows: "Win 빌드" (ko) / "Build Win" (en) — data-help-key로 정확히 찾기
+    const winBuildByKey = page.locator('[data-help-key="header-build-windows"]');
+    const winBuildVisible = await winBuildByKey.isVisible().catch(() => false);
+    check('Windows 빌드 버튼 (Win 빌드)', winBuildVisible);
+
+    // macOS 전용 버튼은 없어야 함
+    const appBuildHidden = !(await page.getByText('앱 빌드').isVisible().catch(() => false));
+    const dmgHidden = !(await page.locator('button', { hasText: /^DMG$/ }).isVisible().catch(() => false));
+    check('앱 빌드 버튼 숨김 (macOS 전용)', appBuildHidden);
+    check('DMG 버튼 숨김 (macOS 전용)', dmgHidden);
 
     await page.screenshot({ path: 'tests/screenshots/win-05-build.png' });
 
