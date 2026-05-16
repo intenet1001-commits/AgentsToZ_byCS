@@ -769,7 +769,7 @@ function App() {
             {/* Tabs — compact mode only */}
             {!isFullLayout && (
               <div className="flex items-center gap-1">
-                {(['bookmarks', 'ports'] as Tab[]).map(tab => (
+                {(['ports', 'bookmarks'] as Tab[]).map(tab => (
                   <button key={tab} onClick={() => setActiveTab(tab)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition-all whitespace-nowrap ${
                       activeTab === tab
@@ -876,8 +876,8 @@ function App() {
                 <p className="text-[10px] text-zinc-600 uppercase tracking-wide mb-1">메뉴</p>
                 <nav className="space-y-0.5">
                   {([
-                    ['bookmarks', '북마크', <BookMarked className="w-3.5 h-3.5" />],
                     ['ports', '프로젝트·폴더', <Server className="w-3.5 h-3.5" />],
+                    ['bookmarks', '북마크', <BookMarked className="w-3.5 h-3.5" />],
                   ] as [Tab, string, React.ReactNode][]).map(([tab, label, icon]) => (
                     <button key={tab} onClick={() => setActiveTab(tab)}
                       className={`w-full flex items-center gap-2 px-2.5 py-2 text-xs rounded-lg transition-all ${
