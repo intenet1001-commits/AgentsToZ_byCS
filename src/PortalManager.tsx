@@ -821,6 +821,15 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
     if (!showSettings && onSettingsClosed) onSettingsClosed();
   }, [showSettings]);
 
+  // 초기 로드 시 Supabase에서 자동 Pull — 로컬 데이터가 비어있으면 Supabase 데이터로 채움
+  useEffect(() => {
+    if (!sbUrl || !sbKey) return;
+    if (data.items.length === 0) {
+      // 로컬 북마크 없으면 즉시 Pull (confirm 없이)
+      pullFromSupabase({ skipConfirm: true });
+    }
+  }, [sbUrl, sbKey]);
+
   // Expose action functions to parent via ref
   useEffect(() => {
     if (actionsRef) {
