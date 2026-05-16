@@ -1665,9 +1665,10 @@ function App() {
   };
 
   const terminalBtnStyle = (color: string): React.CSSProperties => ({
-    flex: 1, padding: '4px 0', fontSize: 11, borderRadius: 6,
+    flex: '1 1 0', minWidth: 0, padding: '5px 6px', fontSize: 10.5, borderRadius: 6,
     background: `${color}20`, border: `1px solid ${color}50`,
     color: '#d4d4d8', cursor: 'pointer', fontFamily: 'inherit',
+    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'center',
   });
 
   // 초기 데이터 로드
@@ -3651,7 +3652,7 @@ function App() {
         </div>
 
         {/* 터미널 액션 버튼 — 항상 노출 */}
-        <div style={{display:'flex', gap:4, marginTop:5, paddingTop:5, borderTop:'1px solid #27272a'}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:'flex', flexWrap:'wrap', gap:4, marginTop:4, paddingTop:4, borderTop:'1px solid #27272a'}} onClick={e=>e.stopPropagation()}>
           <button onClick={()=>openClaudeMain(item, false)} style={terminalBtnStyle('#7c3aed')} title={`Claude 열기 (${terminalApp}${bgMode?' --bg':''})`}>
             Claude 열기
           </button>
@@ -3660,11 +3661,11 @@ function App() {
           </button>
           {item.port && (
             <button onClick={()=>API.openInChrome(`http://localhost:${item.port}`).catch(()=>{})} style={terminalBtnStyle('#0e7490')} title={`localhost:${item.port} 열기`}>
-              🌐 localhost
+              localhost
             </button>
           )}
           {item.port && !isWindows() && (
-            <button onClick={e=>{e.stopPropagation(); openCmuxLocalhost(item);}} style={terminalBtnStyle('#6d28d9')} title={`cmux로 localhost:${item.port} 열기 (macOS 전용)`}>
+            <button onClick={e=>{e.stopPropagation(); openCmuxLocalhost(item);}} style={terminalBtnStyle('#0f766e')} title={`cmux로 localhost:${item.port} 열기 (macOS 전용)`}>
               cmux localhost
             </button>
           )}
@@ -3768,6 +3769,7 @@ function App() {
                   {portItem.isRunning ? '중지' : `실행(${portItem.port})`}
                 </button>
                 <button onClick={e=>{e.stopPropagation(); portItem.port && API.openInChrome(`http://localhost:${portItem.port}`).catch(()=>{});}} style={miniBtn} title="브라우저에서 열기"><Globe style={{width:9,height:9}}/></button>
+                {!isWindows() && <button onClick={e=>{e.stopPropagation(); openCmuxLocalhost(portItem);}} style={{...miniBtn,color:'#2dd4bf',borderColor:'rgba(45,212,191,0.2)'}} title={`cmux localhost:${portItem.port}`}><Terminal style={{width:9,height:9}}/></button>}
                 <button onClick={e=>{e.stopPropagation(); wt.path && API.openFolder(wt.path).catch(()=>{});}} style={miniBtn} title="Finder에서 열기"><FolderOpen style={{width:9,height:9}}/></button>
                 <button onClick={e=>{e.stopPropagation(); forceRestartCommand(portItem);}} style={{...miniBtn,color:'#e8a557',borderColor:'rgba(232,165,87,0.2)'}} title="강제 재실행"><RotateCw style={{width:9,height:9}}/></button>
                 <button onClick={e=>{e.stopPropagation(); wtClaudeBypass();}} style={{...miniBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}}><Zap style={{width:8,height:8,display:'inline',verticalAlign:'middle'}}/>{bypassPermissions?'Claude ⚡':'Claude'}</button>
@@ -3778,6 +3780,7 @@ function App() {
                   {isWtRunning ? '중지' : `실행(${wtPort})`}
                 </button>
                 <button onClick={e=>{e.stopPropagation(); API.openInChrome(`http://localhost:${wtPort}`).catch(()=>{});}} style={miniBtn} title="브라우저에서 열기"><Globe style={{width:9,height:9}}/></button>
+                {!isWindows() && <button onClick={e=>{e.stopPropagation(); openCmuxLocalhost({...portItem,port:wtPort,worktreePath:wt.path});}} style={{...miniBtn,color:'#2dd4bf',borderColor:'rgba(45,212,191,0.2)'}} title={`cmux localhost:${wtPort}`}><Terminal style={{width:9,height:9}}/></button>}
                 <button onClick={e=>{e.stopPropagation(); if(wtPortEntry)forceRestartCommand(wtPortEntry);else forceRestartCommand({...portItem,id:`${portItem.id}_wt_${wtName}`,port:wtPort,worktreePath:wt.path});}} style={{...miniBtn,color:'#e8a557',borderColor:'rgba(232,165,87,0.2)'}} title="강제 재실행"><RotateCw style={{width:9,height:9}}/></button>
                 <button onClick={e=>{e.stopPropagation(); API.openFolder(wt.path).catch(()=>{});}} style={miniBtn} title="Finder에서 열기"><FolderOpen style={{width:9,height:9}}/></button>
                 <button onClick={e=>{e.stopPropagation(); wtClaudeBypass();}} style={{...miniBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}}><Zap style={{width:8,height:8,display:'inline',verticalAlign:'middle'}}/>{bypassPermissions?'Claude ⚡':'Claude'}</button>
@@ -3999,6 +4002,7 @@ function App() {
               {sel.folderPath && <button onClick={() => API.openFolder(sel.folderPath!).catch(()=>{})} style={rowBtn}><FolderOpen style={{width:11,height:11}}/>폴더 열기</button>}
               <button onClick={() => handleViewPortLog(sel.id, sel.name)} style={rowBtn}><FileText style={{width:11,height:11}}/>로그 보기</button>
               {sel.port && <button onClick={() => API.openInChrome(`http://localhost:${sel.port}`).catch(()=>{})} style={rowBtn}><Laptop style={{width:11,height:11}}/>localhost</button>}
+              {sel.port && !isWindows() && <button onClick={() => openCmuxLocalhost(sel)} style={{...rowBtn,color:'#2dd4bf',borderColor:'rgba(45,212,191,0.2)'}} title={`cmux로 localhost:${sel.port} 열기 (macOS 전용)`}><Terminal style={{width:11,height:11}}/>cmux localhost</button>}
               {sel.deployUrl && <button onClick={() => API.openInChrome(sel.deployUrl!).catch(()=>{})} style={rowBtn}><Globe style={{width:11,height:11}}/>배포 주소</button>}
               {sel.githubUrl && <button onClick={() => API.openInChrome(sel.githubUrl!).catch(()=>{})} style={rowBtn}><Github style={{width:11,height:11}}/>GitHub</button>}
               <button onClick={() => toggleFavorite(sel)} style={{...rowBtn,color:sel.favorite?'#e8a557':'#a39a8c',borderColor:sel.favorite?'rgba(232,165,87,0.3)':'rgba(255,240,220,0.1)'}}>
