@@ -3237,6 +3237,292 @@ Analyze this project and reply with JSON only (no markdown, no explanation):
       }
     }
 
+    // ─── GitHub CLI ──────────────────────────────────────────────────────────
+
+    if (url.pathname === "/api/github-cli/status" && req.method === "GET") {
+      try {
+        const whichCmd = IS_WIN ? ["where", "gh"] : ["which", "gh"];
+        let installed = false;
+        let ghPath = "";
+        try {
+          const w = Bun.spawn(whichCmd, { stdout: "pipe", stderr: "pipe" });
+          await w.exited;
+          if (w.exitCode === 0) {
+            ghPath = (await new Response(w.stdout).text()).trim().split(/\r?\n/)[0];
+            installed = true;
+          }
+        } catch {}
+        if (!installed) return new Response(JSON.stringify({ installed: false }), { headers });
+
+        const p = Bun.spawn([ghPath, "auth", "status"], { stdout: "pipe", stderr: "pipe" });
+        await p.exited;
+        const out = await new Response(p.stdout).text();
+        const err = await new Response(p.stderr).text();
+        const combined = out + err;
+        const loggedIn = /Logged in to|✓ Logged in/.test(combined);
+        const userMatch = combined.match(/account\s+(\S+)\s+\(/) ?? combined.match(/as\s+(\S+)/);
+        return new Response(JSON.stringify({ installed: true, loggedIn, user: userMatch?.[1] ?? "" }), { headers });
+      } catch (e: any) {
+        return new Response(JSON.stringify({ installed: false, error: e.message }), { headers });
+      }
+    }
+
+    if (url.pathname === "/api/github-cli/login" && req.method === "POST") {
+      try {
+        if (IS_WIN) {
+          nodeSpawnSync("powershell.exe", ["-NoExit", "-Command", "gh auth login --web"], { stdio: "inherit" });
+        } else {
+          const script = `tell application "Terminal"\n  activate\n  do script "gh auth login --web"\nend tell`;
+          Bun.spawn(["osascript", "-e", script], { stdout: "inherit", stderr: "inherit" });
+        }
+        return new Response(JSON.stringify({ success: true }), { headers });
+      } catch (e: any) {
+        return new Response(JSON.stringify({ success: false, error: e.message }), { status: 500, headers });
+      }
+    }
+
+    // ─── Vercel CLI status/login ─────────────────────────────────────────────
+
+    if (url.pathname === "/api/vercel-cli/status" && req.method === "GET") {
+      try {
+        const cmd = IS_WIN ? ["cmd", "/c", "npx vercel whoami"] : ["/bin/bash", "-c", "npx vercel whoami"];
+        const p = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe" });
+        await p.exited;
+        const out = (await new Response(p.stdout).text()).trim();
+        const err = (await new Response(p.stderr).text()).trim();
+        if (p.exitCode !== 0 || /not logged in|error/i.test(err)) {
+          return new Response(JSON.stringify({ installed: true, loggedIn: false }), { headers });
+        }
+        return new Response(JSON.stringify({ installed: true, loggedIn: true, user: out }), { headers });
+      } catch {
+        return new Response(JSON.stringify({ installed: false, loggedIn: false }), { headers });
+      }
+    }
+
+    if (url.pathname === "/api/vercel-cli/login" && req.method === "POST") {
+      try {
+        if (IS_WIN) {
+          nodeSpawnSync("powershell.exe", ["-NoExit", "-Command", "npx vercel login"], { stdio: "inherit" });
+        } else {
+          const script = `tell application "Terminal"\n  activate\n  do script "npx vercel login"\nend tell`;
+          Bun.spawn(["osascript", "-e", script], { stdout: "inherit", stderr: "inherit" });
+        }
+        return new Response(JSON.stringify({ success: true }), { headers });
+      } catch (e: any) {
+        return new Response(JSON.stringify({ success: false, error: e.message }), { status: 500, headers });
+      }
+    }
+
+    // ─── Credential Push/Pull ────────────────────────────────────────────────
+
+    // AES-GCM 암호화 헬퍼 (인라인, 클로저)
+    async function _deriveKey(deviceId: string): Promise<CryptoKey> {
+      const salt = (process.env.CREDENTIAL_ENCRYPT_SALT ?? "portmgr-default-salt-v1");
+      const enc = new TextEncoder();
+      const km = await crypto.subtle.importKey("raw", enc.encode(deviceId + salt), "PBKDF2", false, ["deriveKey"]);
+      return crypto.subtle.deriveKey(
+        { name: "PBKDF2", salt: enc.encode(salt), iterations: 100000, hash: "SHA-256" },
+        km, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
+      );
+    }
+    async function _enc(token: string, key: CryptoKey): Promise<string> {
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const enc = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(token));
+      const combined = new Uint8Array(12 + enc.byteLength);
+      combined.set(iv); combined.set(new Uint8Array(enc), 12);
+      return Buffer.from(combined).toString("base64");
+    }
+    async function _dec(data: string, key: CryptoKey): Promise<string> {
+      const buf = Buffer.from(data, "base64");
+      const dec = await crypto.subtle.decrypt({ name: "AES-GCM", iv: buf.slice(0, 12) }, key, buf.slice(12));
+      return new TextDecoder().decode(dec);
+    }
+
+    if (url.pathname === "/api/setup/push-credentials" && req.method === "POST") {
+      try {
+        // 1. 포털 자격증명 로드
+        const portalRes = await fetch(`http://localhost:${server.port}/api/portal`);
+        const portal = portalRes.ok ? await portalRes.json() as any : {};
+        const sbUrl: string = portal.supabaseUrl ?? "";
+        const sbKey: string = portal.supabaseAnonKey ?? "";
+        const deviceId: string = portal.deviceId ?? "";
+        if (!sbUrl || !sbKey || !deviceId) {
+          return new Response(JSON.stringify({ error: "Supabase URL/Key/DeviceId 미설정 — 설정 마법사에서 먼저 설정하세요" }), { status: 400, headers });
+        }
+
+        const key = await _deriveKey(deviceId);
+
+        // 2. GitHub token
+        let githubTokenEnc: string | null = null;
+        try {
+          const whichGh = IS_WIN ? ["where", "gh"] : ["which", "gh"];
+          const wg = Bun.spawn(whichGh, { stdout: "pipe", stderr: "pipe" });
+          await wg.exited;
+          if (wg.exitCode === 0) {
+            const ghPath = (await new Response(wg.stdout).text()).trim().split(/\r?\n/)[0];
+            const gt = Bun.spawn([ghPath, "auth", "token"], { stdout: "pipe", stderr: "pipe" });
+            await gt.exited;
+            const ghToken = (await new Response(gt.stdout).text()).trim();
+            if (ghToken && !ghToken.includes("not logged in")) githubTokenEnc = await _enc(ghToken, key);
+          }
+        } catch {}
+
+        // 3. Vercel token
+        let vercelTokenEnc: string | null = null;
+        try {
+          const vPaths = IS_WIN
+            ? [`${process.env.APPDATA}\\com.vercel.cli\\auth.json`]
+            : [
+                `${homedir()}/.local/share/com.vercel.cli/auth.json`,
+                `${homedir()}/Library/Application Support/com.vercel.cli/auth.json`,
+                `${homedir()}/.vercel/auth.json`,
+              ];
+          for (const vp of vPaths) {
+            if (!vp) continue;
+            const f = Bun.file(vp);
+            if (await f.exists()) {
+              const vData = await f.json() as any;
+              const vToken = vData.token ?? vData.accessToken ?? "";
+              if (vToken) { vercelTokenEnc = await _enc(vToken, key); break; }
+            }
+          }
+        } catch {}
+
+        // 4. Supabase access token
+        let supabaseTokenEnc: string | null = null;
+        try {
+          const tPaths = IS_WIN
+            ? [`${process.env.APPDATA}\\supabase\\access-token`, `${homedir()}\\.supabase\\access-token`]
+            : [`${homedir()}/.supabase/access-token`];
+          for (const tp of tPaths) {
+            if (!tp) continue;
+            const f = Bun.file(tp);
+            if (await f.exists()) {
+              let token = (await f.text()).trim();
+              if (token.startsWith("go-keyring-base64:"))
+                token = Buffer.from(token.slice("go-keyring-base64:".length), "base64").toString("utf-8").trim();
+              if (token) { supabaseTokenEnc = await _enc(token, key); break; }
+            }
+          }
+          // macOS Keychain fallback
+          if (!supabaseTokenEnc && !IS_WIN) {
+            const kc = Bun.spawn(["security", "find-generic-password", "-s", "Supabase CLI", "-a", "supabase", "-w"], { stdout: "pipe", stderr: "pipe" });
+            await kc.exited;
+            if (kc.exitCode === 0) {
+              const kcToken = (await new Response(kc.stdout).text()).trim();
+              if (kcToken) supabaseTokenEnc = await _enc(kcToken, key);
+            }
+          }
+        } catch {}
+
+        // 5. Supabase upsert
+        const { createClient } = await import("@supabase/supabase-js");
+        const sb = createClient(sbUrl, sbKey, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+        const { error } = await sb.from("portmgr_device_credentials").upsert({
+          id: deviceId,
+          supabase_url: sbUrl,
+          supabase_anon_key: sbKey,
+          github_token_enc: githubTokenEnc,
+          vercel_token_enc: vercelTokenEnc,
+          supabase_access_token_enc: supabaseTokenEnc,
+          portal_url: `https://portmanager-portal.vercel.app`,
+          setup_completed_at: new Date().toISOString(),
+        }, { onConflict: "id" });
+        if (error) throw new Error(error.message);
+
+        return new Response(JSON.stringify({
+          success: true,
+          stored: { github: !!githubTokenEnc, vercel: !!vercelTokenEnc, supabase: !!supabaseTokenEnc },
+        }), { headers });
+      } catch (e: any) {
+        return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
+      }
+    }
+
+    if (url.pathname === "/api/setup/pull-credentials" && req.method === "GET") {
+      try {
+        const deviceId = url.searchParams.get("deviceId") ?? "";
+        const sbUrl = url.searchParams.get("supabaseUrl") ?? "";
+        const sbKey = url.searchParams.get("supabaseAnonKey") ?? "";
+        if (!deviceId || !sbUrl || !sbKey) {
+          return new Response(JSON.stringify({ error: "deviceId, supabaseUrl, supabaseAnonKey 필수" }), { status: 400, headers });
+        }
+
+        const { createClient } = await import("@supabase/supabase-js");
+        const sb = createClient(sbUrl, sbKey, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+        const { data, error } = await sb.from("portmgr_device_credentials").select("*").eq("id", deviceId).maybeSingle();
+        if (error) throw new Error(error.message);
+        if (!data) return new Response(JSON.stringify({ error: "해당 기기의 자격증명이 없습니다" }), { status: 404, headers });
+
+        const key = await _deriveKey(deviceId);
+        const applied: Record<string, boolean> = {};
+
+        // Supabase URL/Key를 portal.json에 저장
+        try {
+          const portalRes = await fetch(`http://localhost:${server.port}/api/portal`);
+          const portalData = portalRes.ok ? await portalRes.json() as any : {};
+          portalData.supabaseUrl = data.supabase_url;
+          portalData.supabaseAnonKey = data.supabase_anon_key;
+          portalData.deviceId = deviceId;
+          await fetch(`http://localhost:${server.port}/api/portal`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(portalData),
+          });
+          applied.supabase_config = true;
+        } catch {}
+
+        // Supabase access token 복원
+        if (data.supabase_access_token_enc) {
+          try {
+            const token = await _dec(data.supabase_access_token_enc, key);
+            const tPath = IS_WIN
+              ? `${process.env.APPDATA}\\supabase\\access-token`
+              : `${homedir()}/.supabase/access-token`;
+            await Bun.write(tPath, token);
+            applied.supabase_token = true;
+          } catch {}
+        }
+
+        // GitHub token 복원 (gh auth login --with-token 사용)
+        if (data.github_token_enc) {
+          try {
+            const token = await _dec(data.github_token_enc, key);
+            const whichGh = IS_WIN ? ["where", "gh"] : ["which", "gh"];
+            const wg = Bun.spawn(whichGh, { stdout: "pipe", stderr: "pipe" });
+            await wg.exited;
+            if (wg.exitCode === 0) {
+              const ghPath = (await new Response(wg.stdout).text()).trim().split(/\r?\n/)[0];
+              const p = Bun.spawn([ghPath, "auth", "login", "--with-token"], {
+                stdin: new TextEncoder().encode(token), stdout: "pipe", stderr: "pipe",
+              });
+              await p.exited;
+              applied.github = p.exitCode === 0;
+            }
+          } catch {}
+        }
+
+        // Vercel token 복원
+        if (data.vercel_token_enc) {
+          try {
+            const token = await _dec(data.vercel_token_enc, key);
+            const vPaths = IS_WIN
+              ? [`${process.env.APPDATA}\\com.vercel.cli\\auth.json`]
+              : [`${homedir()}/.local/share/com.vercel.cli/auth.json`];
+            const vPath = vPaths[0];
+            const dir = vPath.substring(0, vPath.lastIndexOf(IS_WIN ? "\\" : "/"));
+            Bun.spawn(["mkdir", "-p", dir], { stdout: "pipe", stderr: "pipe" });
+            await Bun.write(vPath, JSON.stringify({ token }));
+            applied.vercel = true;
+          } catch {}
+        }
+
+        return new Response(JSON.stringify({ success: true, applied, portalUrl: data.portal_url }), { headers });
+      } catch (e: any) {
+        return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
+      }
+    }
+
     return new Response(JSON.stringify({ error: "Not found" }), {
       status: 404,
       headers,

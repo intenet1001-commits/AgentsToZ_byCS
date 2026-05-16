@@ -18,7 +18,7 @@ const REPO_CLONE_URL = REPO_URL.endsWith('.git') ? REPO_URL : `${REPO_URL}.git`;
 const REPO_FORK_URL = `${REPO_URL}/fork`;
 const REPO_DIR_NAME = REPO_URL.split('/').filter(Boolean).pop()?.replace(/\.git$/, '') ?? 'portmanagement';
 
-type Mode = 'choose' | 'first' | 'additional' | 'portal' | 'windows_env' | 'mac_env' | 'dev_env' | 'terminal_tools';
+type Mode = 'choose' | 'first' | 'additional' | 'portal' | 'windows_env' | 'mac_env' | 'dev_env' | 'terminal_tools' | 'credentials_push' | 'new_device';
 type OS = 'mac' | 'windows';
 
 // ─── CLI Auto-fill Component ──────────────────────────────────────────────────
@@ -2045,6 +2045,31 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
                 </div>
                 <ChevronRight className="w-4 h-4 text-violet-400 shrink-0 group-hover:translate-x-0.5 transition-transform" />
               </button>
+              {/* 자격증명 관리 — 주 기기 Push / 새 단말 Pull */}
+              <div className="w-full max-w-4xl grid sm:grid-cols-2 gap-3">
+                <button onClick={() => setMode('credentials_push')}
+                  className="group bg-zinc-900 hover:bg-zinc-800 border border-emerald-500/30 hover:border-emerald-500/60 rounded-2xl p-5 text-left transition-all">
+                  <div className="w-9 h-9 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-center mb-3 group-hover:bg-emerald-500/20 transition-all">
+                    <Database className="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-white mb-1">🔐 자격증명 저장</h3>
+                  <p className="text-xs text-zinc-500">GitHub · Vercel · Supabase CLI 토큰을<br />Supabase에 암호화 저장 (주 기기)</p>
+                  <div className="flex items-center gap-1 text-emerald-400 text-xs mt-3 group-hover:gap-2 transition-all">
+                    실행하기 <ChevronRight className="w-3.5 h-3.5" />
+                  </div>
+                </button>
+                <button onClick={() => setMode('new_device')}
+                  className="group bg-zinc-900 hover:bg-zinc-800 border border-blue-500/30 hover:border-blue-500/60 rounded-2xl p-5 text-left transition-all">
+                  <div className="w-9 h-9 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center justify-center mb-3 group-hover:bg-blue-500/20 transition-all">
+                    <Laptop className="w-4 h-4 text-blue-400" />
+                  </div>
+                  <h3 className="text-sm font-semibold text-white mb-1">📥 새 단말 온보딩</h3>
+                  <p className="text-xs text-zinc-500">저장된 자격증명을 이 기기로 불러옴<br />(포털 등록 → Device ID 입력)</p>
+                  <div className="flex items-center gap-1 text-blue-400 text-xs mt-3 group-hover:gap-2 transition-all">
+                    실행하기 <ChevronRight className="w-3.5 h-3.5" />
+                  </div>
+                </button>
+              </div>
               <p className="text-[11px] text-zinc-700 text-center">
                 모르겠으면 <strong className="text-zinc-500">건너뛰기</strong> → 앱 사용 중 언제든 ⚙ 설정에서 다시 열 수 있습니다
               </p>
@@ -2060,7 +2085,244 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
           {mode === 'windows_env' && <WindowsEnvWizard onBack={() => setMode('choose')} />}
           {mode === 'mac_env' && <MacEnvWizard onBack={() => setMode('choose')} />}
           {mode === 'terminal_tools' && <TerminalToolsWizard onBack={() => setMode('choose')} />}
+          {mode === 'credentials_push' && <CredentialsPushWizard onBack={() => setMode('choose')} />}
+          {mode === 'new_device' && <NewDeviceWizard onBack={() => setMode('choose')} />}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── CLI Status Auto-detect (GitHub / Vercel) ────────────────────────────────
+
+function CliStatusBadge({ endpoint, label, installMac, installWin, loginEndpoint }: {
+  endpoint: string; label: string; installMac: string; installWin: string; loginEndpoint: string;
+}) {
+  const [status, setStatus] = React.useState<'loading'|'not_installed'|'not_logged_in'|'ready'>('loading');
+  const [user, setUser] = React.useState('');
+  const [logging, setLogging] = React.useState(false);
+  const isWin = /Win/.test(navigator.platform ?? '');
+
+  function check() {
+    setStatus('loading');
+    fetch(endpoint).then(r => r.json()).then(d => {
+      if (!d.installed) { setStatus('not_installed'); return; }
+      if (!d.loggedIn) { setStatus('not_logged_in'); return; }
+      setStatus('ready'); setUser(d.user ?? '');
+    }).catch(() => setStatus('not_installed'));
+  }
+
+  React.useEffect(() => { check(); }, []);
+
+  async function login() {
+    setLogging(true);
+    try {
+      await fetch(loginEndpoint, { method: 'POST' });
+      setTimeout(check, 3000);
+    } finally { setLogging(false); }
+  }
+
+  if (status === 'loading') return <div className="flex items-center gap-2 text-xs text-zinc-500"><RefreshCw className="w-3 h-3 animate-spin" />{label} 확인 중…</div>;
+
+  if (status === 'ready') return (
+    <div className="flex items-center gap-2 text-xs text-emerald-400">
+      <Check className="w-3.5 h-3.5" />{label} 인증됨 {user && <span className="text-zinc-500">({user})</span>}
+    </div>
+  );
+
+  return (
+    <div className="rounded-lg border border-zinc-700 bg-zinc-800/40 p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-zinc-300">{label}</span>
+        {status === 'not_installed' && <span className="text-[10px] text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded">미설치</span>}
+        {status === 'not_logged_in' && <span className="text-[10px] text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded">로그인 필요</span>}
+      </div>
+      {status === 'not_installed' && (
+        <CodeBlock label={isWin ? 'Windows' : 'macOS'} code={isWin ? installWin : installMac} />
+      )}
+      {(status === 'not_installed' || status === 'not_logged_in') && (
+        <div className="flex gap-2">
+          <button onClick={login} disabled={logging}
+            className="flex-1 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-xs text-white font-medium transition-colors">
+            {logging ? '브라우저 열림…' : `${label} 로그인 (브라우저)`}
+          </button>
+          <button onClick={check} className="px-3 py-1.5 rounded-md border border-zinc-600 hover:bg-zinc-700 text-xs text-zinc-400 transition-colors">
+            재확인
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Credentials Push Wizard ─────────────────────────────────────────────────
+
+function CredentialsPushWizard({ onBack }: { onBack: () => void }) {
+  const [pushing, setPushing] = React.useState(false);
+  const [result, setResult] = React.useState<{ success?: boolean; stored?: Record<string, boolean>; error?: string } | null>(null);
+
+  async function doPush() {
+    setPushing(true); setResult(null);
+    try {
+      const res = await fetch('/api/setup/push-credentials', { method: 'POST' });
+      const data = await res.json();
+      setResult(data);
+    } catch (e: any) {
+      setResult({ error: e.message });
+    } finally { setPushing(false); }
+  }
+
+  return (
+    <div className="h-full flex flex-col p-4 sm:p-8 overflow-y-auto">
+      <button onClick={onBack} className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 text-sm mb-6 transition-colors w-fit">
+        ← 돌아가기
+      </button>
+      <div className="max-w-2xl w-full mx-auto space-y-6">
+        <div>
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <Database className="w-5 h-5 text-emerald-400" />
+            자격증명 Supabase 저장
+          </h2>
+          <p className="text-zinc-500 text-sm mt-1">로컬 CLI 인증 정보를 암호화해서 Supabase에 저장합니다. 새 단말에서 자동 복원에 사용됩니다.</p>
+        </div>
+
+        <InfoBox color="blue">
+          <strong>저장 항목</strong>: GitHub token, Vercel token, Supabase access token (AES-256-GCM 암호화)
+          <br />Supabase URL/Key는 평문 저장 (공개 정보).
+        </InfoBox>
+
+        <div className="space-y-3">
+          <p className="text-sm font-medium text-zinc-300">사전 확인 — 아래 CLI가 인증되어 있어야 합니다</p>
+          <CliStatusBadge
+            endpoint="/api/supabase-cli/status"
+            label="Supabase CLI"
+            installMac="brew install supabase/tap/supabase"
+            installWin="scoop install supabase"
+            loginEndpoint="/api/supabase-login"
+          />
+          <CliStatusBadge
+            endpoint="/api/github-cli/status"
+            label="GitHub CLI"
+            installMac="brew install gh"
+            installWin="winget install GitHub.cli"
+            loginEndpoint="/api/github-cli/login"
+          />
+          <CliStatusBadge
+            endpoint="/api/vercel-cli/status"
+            label="Vercel CLI"
+            installMac="npm install -g vercel"
+            installWin="npm install -g vercel"
+            loginEndpoint="/api/vercel-cli/login"
+          />
+        </div>
+
+        {result?.success && (
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-2">
+            <p className="text-sm font-semibold text-emerald-400">✅ Supabase 저장 완료</p>
+            {Object.entries(result.stored ?? {}).map(([k, v]) => (
+              <p key={k} className="text-xs text-zinc-400">{v ? '✓' : '✗'} {k}</p>
+            ))}
+            <p className="text-xs text-zinc-500 mt-2">이제 새 단말에서 "새 단말 온보딩"을 실행하면 자동으로 설정됩니다.</p>
+          </div>
+        )}
+
+        {result?.error && (
+          <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4">
+            <p className="text-sm text-red-400">❌ {result.error}</p>
+          </div>
+        )}
+
+        <button onClick={doPush} disabled={pushing}
+          className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-sm font-semibold text-white transition-colors">
+          {pushing ? '저장 중…' : '자격증명 Supabase에 저장하기'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── New Device Onboarding Wizard ────────────────────────────────────────────
+
+function NewDeviceWizard({ onBack }: { onBack: () => void }) {
+  const [deviceId, setDeviceId] = React.useState('');
+  const [sbUrl, setSbUrl] = React.useState('');
+  const [sbKey, setSbKey] = React.useState('');
+  const [pulling, setPulling] = React.useState(false);
+  const [result, setResult] = React.useState<{ success?: boolean; applied?: Record<string, boolean>; error?: string } | null>(null);
+
+  async function doPull() {
+    if (!deviceId || !sbUrl || !sbKey) return;
+    setPulling(true); setResult(null);
+    try {
+      const params = new URLSearchParams({ deviceId, supabaseUrl: sbUrl, supabaseAnonKey: sbKey });
+      const res = await fetch(`/api/setup/pull-credentials?${params}`);
+      const data = await res.json();
+      setResult(data);
+    } catch (e: any) {
+      setResult({ error: e.message });
+    } finally { setPulling(false); }
+  }
+
+  return (
+    <div className="h-full flex flex-col p-4 sm:p-8 overflow-y-auto">
+      <button onClick={onBack} className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 text-sm mb-6 transition-colors w-fit">
+        ← 돌아가기
+      </button>
+      <div className="max-w-2xl w-full mx-auto space-y-6">
+        <div>
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <Laptop className="w-5 h-5 text-blue-400" />
+            새 단말 온보딩
+          </h2>
+          <p className="text-zinc-500 text-sm mt-1">주 기기에서 저장한 자격증명을 이 기기로 불러옵니다.</p>
+        </div>
+
+        <InfoBox color="amber">
+          <strong>사전 조건</strong>: 주 기기에서 "자격증명 Supabase 저장"이 완료되어 있어야 합니다.
+          <br />배포 포털(portmanager-portal.vercel.app) → Google 로그인 → "이 기기를 새 단말로 등록"으로 Device ID를 받으세요.
+        </InfoBox>
+
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">Device ID (새 단말 등록 시 발급됨)</label>
+            <input value={deviceId} onChange={e => setDeviceId(e.target.value)}
+              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-100 font-mono placeholder-zinc-600 focus:outline-none focus:border-blue-500"
+              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+          </div>
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">Supabase URL</label>
+            <input value={sbUrl} onChange={e => setSbUrl(e.target.value)}
+              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-blue-500"
+              placeholder="https://xxx.supabase.co" />
+          </div>
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">Supabase Anon Key</label>
+            <input type="password" value={sbKey} onChange={e => setSbKey(e.target.value)}
+              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-100 font-mono placeholder-zinc-600 focus:outline-none focus:border-blue-500"
+              placeholder="eyJ..." />
+          </div>
+        </div>
+
+        {result?.success && (
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-2">
+            <p className="text-sm font-semibold text-emerald-400">✅ 자격증명 복원 완료</p>
+            {Object.entries(result.applied ?? {}).map(([k, v]) => (
+              <p key={k} className="text-xs text-zinc-400">{v ? '✓' : '✗'} {k}</p>
+            ))}
+            <p className="text-xs text-zinc-500 mt-2">앱을 재시작하면 설정이 적용됩니다.</p>
+          </div>
+        )}
+
+        {result?.error && (
+          <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-4">
+            <p className="text-sm text-red-400">❌ {result.error}</p>
+          </div>
+        )}
+
+        <button onClick={doPull} disabled={pulling || !deviceId || !sbUrl || !sbKey}
+          className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-sm font-semibold text-white transition-colors">
+          {pulling ? '불러오는 중…' : '자격증명 불러오기'}
+        </button>
       </div>
     </div>
   );
