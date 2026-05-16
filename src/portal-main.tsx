@@ -517,11 +517,13 @@ function App() {
         }
       }
 
-      // 3) ports 테이블 device_name 컬럼
+      // 3) ports 테이블 device_name 컬럼 — portmgr_devices 미등록 기기도 추적
+      const portSeenIds = new Set<string>();
       const { data: portRows } = await sb.from('portmgr_ports').select('device_id, device_name').not('device_id', 'is', null);
       for (const r of portRows ?? []) {
         if (!r.device_id) continue;
         seenIds.add(r.device_id);
+        portSeenIds.add(r.device_id);
         if (r.device_name && !nameMap.has(r.device_id)) nameMap.set(r.device_id, r.device_name);
       }
 
@@ -536,12 +538,16 @@ function App() {
         }
       }
 
-      // devices 테이블에 행이 있으면 그것을 기준으로 필터링 (삭제된 기기 제외)
+      // portmgr_devices 등록 기기 + 포트 데이터가 있는 미등록 기기 모두 포함
+      // (portmgr_devices에서 삭제된 기기는 제외하되, 처음부터 없던 기기는 포함)
       const registeredIds = devRows && devRows.length > 0
         ? new Set(devRows.map(d => d.id))
         : null;
       const filteredIds = registeredIds
-        ? Array.from(seenIds).filter(id => registeredIds.has(id))
+        ? Array.from(new Set([
+            ...Array.from(seenIds).filter(id => registeredIds.has(id)),
+            ...Array.from(portSeenIds),  // 포트 데이터 있는 기기는 항상 포함
+          ]))
         : Array.from(seenIds);
 
       const list: DeviceRow[] = filteredIds.map(id => ({
