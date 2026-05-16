@@ -578,6 +578,9 @@ function App() {
         } else {
           setShowDevicePicker(true);
         }
+      } else if (selectedDeviceId && knownInList) {
+        // 이전 세션에서 선택한 기기가 유효 → 프로젝트·폴더 탭으로 바로 전환
+        setActiveTab('ports');
       }
     } catch (e) {
       showToast('기기 목록 조회 실패: ' + String(e), 'error');
