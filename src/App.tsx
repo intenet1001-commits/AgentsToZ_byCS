@@ -1612,23 +1612,29 @@ function App() {
   useEffect(() => {
     const loadPortsData = async () => {
       try {
-        // 재시도 로직: API 서버가 아직 준비되지 않은 경우 최대 6회 재시도 (총 ~15초)
         let data: PortInfo[] | null = null;
-        const retryDelays = [0, 800, 2000, 3500, 5000, 7000];
-        for (let attempt = 0; attempt < retryDelays.length; attempt++) {
-          try {
-            if (retryDelays[attempt] > 0) {
-              await new Promise(r => setTimeout(r, retryDelays[attempt]));
-              if (import.meta.env.DEV) console.log(`[App] Retrying port load (${attempt}/${retryDelays.length - 1})...`);
+
+        if (isDeployedWeb()) {
+          // 배포 웹: API 서버 없음 → Supabase에서 직접 로드 (아래 auto-pull에서 처리)
+          data = [];
+        } else {
+          // 재시도 로직: API 서버가 아직 준비되지 않은 경우 최대 6회 재시도 (총 ~15초)
+          const retryDelays = [0, 800, 2000, 3500, 5000, 7000];
+          for (let attempt = 0; attempt < retryDelays.length; attempt++) {
+            try {
+              if (retryDelays[attempt] > 0) {
+                await new Promise(r => setTimeout(r, retryDelays[attempt]));
+                if (import.meta.env.DEV) console.log(`[App] Retrying port load (${attempt}/${retryDelays.length - 1})...`);
+              }
+              data = await API.loadPorts();
+              break;
+            } catch (err) {
+              console.warn(`[App] Load attempt ${attempt + 1} failed:`, err);
+              if (attempt === retryDelays.length - 1) throw err;
             }
-            data = await API.loadPorts();
-            break;
-          } catch (err) {
-            console.warn(`[App] Load attempt ${attempt + 1} failed:`, err);
-            if (attempt === retryDelays.length - 1) throw err;
           }
+          if (!data) throw new Error('No data after retries');
         }
-        if (!data) throw new Error('No data after retries');
 
         // commandPath가 있는데 folderPath가 없는 경우 자동으로 추출
         const isWinPath = (p: string) => /^[A-Za-z]:[/\\]/.test(p);
@@ -1661,6 +1667,8 @@ function App() {
           let portalData: any;
           if (isTauri()) {
             portalData = await invoke('load_portal');
+          } else if (isDeployedWeb()) {
+            portalData = await getPortalCredentials();
           } else {
             const res = await fetch('/api/portal');
             if (res.ok) portalData = await res.json();
@@ -1693,7 +1701,7 @@ function App() {
                 }));
                 const merged = mergePorts(updatedData, remoteRows);
                 setPorts(merged);
-                await API.savePorts(merged);
+                if (!isDeployedWeb()) await API.savePorts(merged);
                 // 메모 복원
                 const pulledMemos: Record<string, { content: string; updatedAt: string }> = {};
                 remoteData.forEach((row: any) => {
@@ -1720,7 +1728,7 @@ function App() {
                   const localOnly = localRoots.filter(r => !remoteIds.has(r.id));
                   const mergedRoots = [...remoteRoots, ...localOnly];
                   setWorkspaceRoots(mergedRoots);
-                  await API.saveWorkspaceRoots(mergedRoots);
+                  if (!isDeployedWeb()) await API.saveWorkspaceRoots(mergedRoots);
                 }
                 // guard: rootData.length === 0 → skip, keep local roots intact
               }
