@@ -1792,10 +1792,6 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
             onSelectDevice={async (id) => {
               const newViewingId = id === data.deviceId ? '' : id;
               setViewingDeviceId(newViewingId);
-              if (newViewingId && sbUrl && sbKey) {
-                setShowSettings(false);
-                await pullFromSupabase({ skipConfirm: true, targetDeviceId: newViewingId });
-              }
             }}
             onResetDevice={() => setViewingDeviceId('')}
             onCopyDeviceId={() => { if (data.deviceId) { navigator.clipboard.writeText(data.deviceId); showToast('Device ID 복사됨', 'success'); } }}
