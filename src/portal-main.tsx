@@ -212,7 +212,10 @@ function PortsView({ deviceId, creds, showToast, onSwitchDevice }: {
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const sb = useCallback(() => createClient(creds.url, creds.key), [creds.url, creds.key]);
+  // Google OAuth 세션 무시 — anon 역할로 쿼리 (RLS: authenticated uid ≠ device_id 방지)
+  const sb = useCallback(() => createClient(creds.url, creds.key, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  }), [creds.url, creds.key]);
 
   async function loadPorts() {
     if (!deviceId) return;
@@ -495,7 +498,10 @@ function App() {
   async function loadDevices() {
     if (!creds) return;
     try {
-      const sb = createClient(creds.url, creds.key);
+      // Google OAuth 세션 무시 — anon 역할 강제 (RLS: auth.uid ≠ device_id 충돌 방지)
+      const sb = createClient(creds.url, creds.key, {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      });
       const nameMap = new Map<string, string>();
       const seenIds = new Set<string>();
 
