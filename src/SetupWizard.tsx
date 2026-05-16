@@ -1922,7 +1922,7 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
         {/* Body */}
         <div className="flex-1 overflow-hidden">
           {mode === 'choose' && (
-            <div className="h-full flex flex-col items-center justify-center p-4 sm:p-8 gap-6 overflow-y-auto">
+            <div className="h-full flex flex-col items-center p-4 sm:p-8 gap-6 overflow-y-auto justify-start pt-6">
               <div className="text-center space-y-2">
                 <h2 className="text-xl sm:text-2xl font-bold text-white">어떤 상황인가요?</h2>
                 <p className="text-zinc-400 text-sm">상황에 맞는 맞춤 가이드로 안내합니다.</p>
