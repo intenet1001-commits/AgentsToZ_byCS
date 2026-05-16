@@ -417,7 +417,9 @@ function App() {
   const [pwOk, setPwOk] = useState(isGoogleVerified);
   const [toasts, setToasts] = useState<{ id: number; message: string; type: 'success' | 'error' }[]>([]);
   const [openSettings, setOpenSettings] = useState(false);
-  const [activeTab, setActiveTab] = useState<Tab>('bookmarks');
+  const [activeTab, setActiveTab] = useState<Tab>(
+    () => localStorage.getItem(SELECTED_DEVICE_KEY) ? 'ports' : 'bookmarks'
+  );
   const [viewMode, setViewMode] = useState<ViewMode>(
     () => (localStorage.getItem(VIEW_MODE_KEY) as ViewMode) ?? 'auto'
   );
@@ -765,7 +767,6 @@ function App() {
               <div className="p-1.5 bg-blue-500/10 rounded-lg border border-blue-500/20">
                 <BookMarked className="w-4 h-4 text-blue-400" />
               </div>
-              <span className="font-semibold text-white text-sm hidden sm:inline">북마크</span>
             </div>
             {/* Tabs — compact mode only */}
             {!isFullLayout && (
