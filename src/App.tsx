@@ -945,6 +945,7 @@ function App() {
   }, [guideMode]);
   const [wslSetupStatus, setWslSetupStatus] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteRootConfirmId, setDeleteRootConfirmId] = useState<string | null>(null);
   const [memos, setMemos] = useState<Record<string, { content: string; updatedAt: string }>>({});
   const [sortBy, setSortBy] = useState<SortType>(
     () => (localStorage.getItem('portmanager-sortBy') as SortType) || 'recent'
@@ -3520,7 +3521,7 @@ function App() {
   const inpV3: React.CSSProperties = {
     width:'100%', padding:'7px 10px', background:'#15120f',
     border:'1px solid rgba(255,240,220,0.07)', borderRadius:6,
-    color:'#ede7dd', fontSize:12, outline:'none', fontFamily:'inherit', boxSizing:'border-box',
+    color:'#ede7dd', fontSize:12, fontFamily:'inherit', boxSizing:'border-box',
   };
 
   const renderV3Card = (item: PortInfo) => {
@@ -3584,11 +3585,11 @@ function App() {
         </div>
 
         {item.aiName && (
-          <div style={{fontSize:11.5,color:'#a39a8c',marginTop:-2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.aiName}</div>
+          <div style={{fontSize:12,color:'#a39a8c',marginTop:-2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.aiName}</div>
         )}
 
         {item.worktreePath && (
-          <div style={{display:'flex',alignItems:'center',gap:4,fontSize:10.5,fontFamily:'JetBrains Mono, monospace',color:'#7ba7c9',overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis'}}>
+          <div style={{display:'flex',alignItems:'center',gap:4,fontSize:11,fontFamily:'JetBrains Mono, monospace',color:'#7ba7c9',overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis'}}>
             <GitBranch style={{width:10,height:10,flexShrink:0}} />
             {item.worktreePath.split('/').pop() || item.worktreePath}
           </div>
@@ -3625,29 +3626,29 @@ function App() {
               폴더 열기
             </button>
           )}
-          <button data-help-key="card-worktree" onClick={e=>{e.stopPropagation(); toggleWorktreePanel(item.id, item.folderPath);}} style={{...btnBase, color:expandedWorktreeIds.has(item.id)?'#e8a557':'#ede7dd', borderColor:expandedWorktreeIds.has(item.id)?'rgba(232,165,87,0.3)':'rgba(255,240,220,0.07)'}} title="워크트리 관리">
-            <GitBranch style={{width:11,height:11}}/>
+          <button data-help-key="card-worktree" aria-label="워크트리 관리" onClick={e=>{e.stopPropagation(); toggleWorktreePanel(item.id, item.folderPath);}} style={{...btnBase, color:expandedWorktreeIds.has(item.id)?'#e8a557':'#ede7dd', borderColor:expandedWorktreeIds.has(item.id)?'rgba(232,165,87,0.3)':'rgba(255,240,220,0.07)'}} title="워크트리 관리">
+            <GitBranch style={{width:11,height:11}} aria-hidden="true"/>
           </button>
           {item.port && (
-            <button data-help-key="card-chrome" onClick={e=>{e.stopPropagation(); API.openInChrome(`http://localhost:${item.port}`).catch(()=>{});}} style={btnBase} title="localhost에서 열기">
-              <Laptop style={{width:11,height:11}}/>
+            <button data-help-key="card-chrome" aria-label={`localhost:${item.port} 열기`} onClick={e=>{e.stopPropagation(); API.openInChrome(`http://localhost:${item.port}`).catch(()=>{});}} style={btnBase} title="localhost에서 열기">
+              <Laptop style={{width:11,height:11}} aria-hidden="true"/>
             </button>
           )}
           {item.deployUrl && (
-            <button data-help-key="card-deploy" onClick={e=>{e.stopPropagation(); API.openInChrome(item.deployUrl!).catch(()=>{});}} style={btnBase} title={`배포 주소: ${item.deployUrl}`}>
-              <Globe style={{width:11,height:11}}/>
+            <button data-help-key="card-deploy" aria-label={`배포 주소 열기: ${item.deployUrl}`} onClick={e=>{e.stopPropagation(); API.openInChrome(item.deployUrl!).catch(()=>{});}} style={btnBase} title={`배포 주소: ${item.deployUrl}`}>
+              <Globe style={{width:11,height:11}} aria-hidden="true"/>
             </button>
           )}
           {item.githubUrl && (
-            <button data-help-key="card-github" onClick={e=>{e.stopPropagation(); API.openInChrome(item.githubUrl!).catch(()=>{});}} style={btnBase} title={`GitHub: ${item.githubUrl}`}>
-              <Github style={{width:11,height:11}}/>
+            <button data-help-key="card-github" aria-label={`GitHub 열기: ${item.githubUrl}`} onClick={e=>{e.stopPropagation(); API.openInChrome(item.githubUrl!).catch(()=>{});}} style={btnBase} title={`GitHub: ${item.githubUrl}`}>
+              <Github style={{width:11,height:11}} aria-hidden="true"/>
             </button>
           )}
-          <button data-help-key="card-favorite" onClick={e=>{e.stopPropagation(); toggleFavorite(item);}} style={{...btnBase, color: item.favorite?'#e8a557':'#ede7dd', borderColor: item.favorite?'rgba(232,165,87,0.3)':'rgba(255,240,220,0.07)'}} title={item.favorite?'즐겨찾기 해제':'즐겨찾기 추가'}>
-            <Star style={{width:11,height:11,fill:item.favorite?'#e8a557':'none'}}/>
+          <button data-help-key="card-favorite" aria-label={item.favorite?'즐겨찾기 해제':'즐겨찾기 추가'} onClick={e=>{e.stopPropagation(); toggleFavorite(item);}} style={{...btnBase, color: item.favorite?'#e8a557':'#ede7dd', borderColor: item.favorite?'rgba(232,165,87,0.3)':'rgba(255,240,220,0.07)'}} title={item.favorite?'즐겨찾기 해제':'즐겨찾기 추가'}>
+            <Star style={{width:11,height:11,fill:item.favorite?'#e8a557':'none'}} aria-hidden="true"/>
           </button>
-          <button data-help-key="card-more-menu" onClick={e=>{e.stopPropagation(); if(menuOpen){setV3MenuOpenId(null);setV3MenuRect(null);}else{const r=e.currentTarget.getBoundingClientRect();const menuH=340;const spaceBelow=window.innerHeight-r.bottom;const top=spaceBelow<menuH?Math.max(8,r.top-menuH-4):r.bottom+4;setV3MenuOpenId(item.id);setV3MenuRect({top,right:window.innerWidth-r.right});}}} style={{...btnBase, color: menuOpen?'#e8a557':'#ede7dd', borderColor: menuOpen?'rgba(232,165,87,0.3)':'rgba(255,240,220,0.07)'}}>
-            <ChevronDown style={{width:11,height:11}}/>
+          <button data-help-key="card-more-menu" aria-label="더보기 메뉴" onClick={e=>{e.stopPropagation(); if(menuOpen){setV3MenuOpenId(null);setV3MenuRect(null);}else{const r=e.currentTarget.getBoundingClientRect();const menuH=340;const spaceBelow=window.innerHeight-r.bottom;const top=spaceBelow<menuH?Math.max(8,r.top-menuH-4):r.bottom+4;setV3MenuOpenId(item.id);setV3MenuRect({top,right:window.innerWidth-r.right});}}} style={{...btnBase, color: menuOpen?'#e8a557':'#ede7dd', borderColor: menuOpen?'rgba(232,165,87,0.3)':'rgba(255,240,220,0.07)'}}>
+            <ChevronDown style={{width:11,height:11}} aria-hidden="true"/>
           </button>
         </div>
 
@@ -3727,9 +3728,9 @@ function App() {
         </button>
       </div>
       {worktreeLoading[portItem.id] ? (
-        <div style={{fontSize:10.5,color:'#6b6459',textAlign:'center',padding:'4px 0'}}>로딩 중...</div>
+        <div style={{fontSize:11,color:'#6b6459',textAlign:'center',padding:'4px 0'}}>로딩 중...</div>
       ) : (worktreeLists[portItem.id] ?? []).length === 0 ? (
-        <div style={{fontSize:10.5,color:'#6b6459',textAlign:'center',padding:'4px 0'}}>워크트리 없음</div>
+        <div style={{fontSize:11,color:'#6b6459',textAlign:'center',padding:'4px 0'}}>워크트리 없음</div>
       ) : (
         (worktreeLists[portItem.id] ?? []).map(wt => {
           const wtName = wt.path.replace(/\/$/, '').split('/').pop() ?? wt.path;
@@ -3795,7 +3796,7 @@ function App() {
         })
       )}
       <div style={{display:'flex',gap:4,marginTop:2}}>
-        <input type="text" value={worktreeNewBranch[portItem.id] ?? ''} onChange={e=>setWorktreeNewBranch(prev=>({...prev,[portItem.id]:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter'){e.stopPropagation();handleWorktreeAdd(portItem);}}} onClick={e=>e.stopPropagation()} placeholder="브랜치명" style={{flex:1,padding:'4px 7px',background:'#15120f',border:'1px solid rgba(255,240,220,0.07)',borderRadius:4,color:'#ede7dd',fontSize:10.5,outline:'none',fontFamily:'inherit'}}/>
+        <input type="text" value={worktreeNewBranch[portItem.id] ?? ''} onChange={e=>setWorktreeNewBranch(prev=>({...prev,[portItem.id]:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter'){e.stopPropagation();handleWorktreeAdd(portItem);}}} onClick={e=>e.stopPropagation()} placeholder="브랜치명" style={{flex:1,padding:'4px 7px',background:'#15120f',border:'1px solid rgba(255,240,220,0.07)',borderRadius:4,color:'#ede7dd',fontSize:11,fontFamily:'inherit'}}/>
         <button onClick={e=>{e.stopPropagation(); handleWorktreeAdd(portItem);}} style={{padding:'4px 8px',background:'rgba(232,165,87,0.1)',border:'1px solid rgba(232,165,87,0.25)',borderRadius:4,color:'#e8a557',fontSize:10,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>+ 추가</button>
       </div>
     </div>
@@ -3837,7 +3838,7 @@ function App() {
               ['wt',     t(lang,'filterWorktrees'), v3Ports.filter(p=>p.worktreePath).length],
             ] as [string,string,number][]).map(([id,label,count])=>(
               <button key={id} onClick={()=>setSidebarSection(id)} style={{
-                padding:'2px 7px',borderRadius:4,fontSize:10.5,cursor:'pointer',
+                padding:'2px 7px',borderRadius:4,fontSize:11,cursor:'pointer',
                 fontFamily:'Inter Tight, system-ui, sans-serif',
                 background:sidebarSection===id?'rgba(232,165,87,0.12)':'transparent',
                 color:sidebarSection===id?'#e8a557':'#6b6459',
@@ -3855,7 +3856,7 @@ function App() {
               <input value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder={t(lang,'jumpToProject')} style={{
                 width:'100%',padding:'6px 8px 6px 28px',background:'#0a0a0b',
                 border:'1px solid rgba(255,240,220,0.07)',borderRadius:5,
-                color:'#ede7dd',fontSize:12,fontFamily:monoFont,outline:'none',boxSizing:'border-box' as const,
+                color:'#ede7dd',fontSize:12,fontFamily:monoFont,boxSizing:'border-box' as const,
               }}/>
             </div>
           </div>
@@ -3914,7 +3915,7 @@ function App() {
                         style={{padding:'2px 6px',background:'rgba(232,165,87,0.1)',border:'1px solid rgba(232,165,87,0.2)',borderRadius:4,color:'#e8a557',cursor:'pointer',fontSize:10,fontFamily:'Inter Tight, system-ui, sans-serif',flexShrink:0}}
                       >새 폴더</button>
                       <button
-                        onClick={() => { if (confirm(`"${root.name}" 루트 폴더를 목록에서 제거하시겠습니까?`)) handleRemoveWorkspaceRoot(root.id); }}
+                        onClick={() => setDeleteRootConfirmId(root.id)}
                         title="루트 제거"
                         style={{padding:'2px 4px',background:'transparent',border:'none',color:'#6b6459',cursor:'pointer',display:'flex',alignItems:'center',flexShrink:0}}
                       ><XIcon style={{width:10,height:10}}/></button>
@@ -5034,9 +5035,9 @@ function App() {
                 <span style={{fontSize:14,fontWeight:600,color:'#ede7dd'}}>앱 열기 단축키</span>
                 <button onClick={() => setShowShortcutModal(false)} style={{background:'transparent',border:'none',cursor:'pointer',color:'#6b6459'}}><XIcon style={{width:14,height:14}}/></button>
               </div>
-              <p style={{fontSize:11.5,color:'#6b6459',margin:0}}>입력란 클릭 후 원하는 키 조합을 누르세요.</p>
+              <p style={{fontSize:12,color:'#6b6459',margin:0}}>입력란 클릭 후 원하는 키 조합을 누르세요.</p>
               <input
-                style={{padding:'8px 12px',background:'#0a0a0b',border:'1px solid rgba(255,240,220,0.12)',borderRadius:6,color:'#ede7dd',fontSize:13,fontFamily:'JetBrains Mono, monospace',outline:'none'}}
+                style={{padding:'8px 12px',background:'#0a0a0b',border:'1px solid rgba(255,240,220,0.12)',borderRadius:6,color:'#ede7dd',fontSize:13,fontFamily:'JetBrains Mono, monospace'}}
                 value={isRecordingShortcut ? '키를 누르세요...' : shortcutInput}
                 readOnly
                 placeholder="예: CommandOrControl+Alt+P"
@@ -5100,6 +5101,32 @@ function App() {
                 <div className="flex gap-2">
                   <button onClick={() => setDeleteConfirmId(null)} className="flex-1 py-2 bg-[#221f1b] hover:bg-[#2a2520] text-[#ede7dd]/90 text-sm rounded-xl border border-stone-700/50 transition-all">취소</button>
                   <button onClick={() => handleConfirmDelete(deleteConfirmId)} className="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white text-sm rounded-xl border border-red-500 transition-all">삭제</button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {deleteRootConfirmId && (() => {
+          const rootName = deleteRootConfirmId;
+          return (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-4" onClick={() => setDeleteRootConfirmId(null)}>
+              <div className="bg-[#1c1916] border border-stone-700/50 rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-9 h-9 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center justify-center shrink-0">
+                    <FolderOpen className="w-4 h-4 text-red-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">루트 폴더 제거</h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">목록에서만 제거되며 폴더는 삭제되지 않습니다</p>
+                  </div>
+                </div>
+                <p className="text-sm text-[#ede7dd]/90 mb-5">
+                  <span className="text-white font-medium">"{rootName}"</span> 루트 폴더를 목록에서 제거하시겠습니까?
+                </p>
+                <div className="flex gap-2">
+                  <button onClick={() => setDeleteRootConfirmId(null)} className="flex-1 py-2 bg-[#221f1b] hover:bg-[#2a2520] text-[#ede7dd]/90 text-sm rounded-xl border border-stone-700/50 transition-all">취소</button>
+                  <button onClick={() => { handleRemoveWorkspaceRoot(deleteRootConfirmId); setDeleteRootConfirmId(null); }} className="flex-1 py-2 bg-red-600 hover:bg-red-500 text-white text-sm rounded-xl border border-red-500 transition-all">제거</button>
                 </div>
               </div>
             </div>
@@ -5178,7 +5205,7 @@ function App() {
                     style={{
                       width:'100%',paddingLeft:26,paddingRight:8,paddingTop:6,paddingBottom:6,
                       background:'#221f1b',border:'1px solid rgba(255,240,220,0.07)',
-                      borderRadius:6,color:'#ede7dd',fontSize:12,outline:'none',
+                      borderRadius:6,color:'#ede7dd',fontSize:12,
                       fontFamily:'Inter Tight, system-ui, sans-serif',boxSizing:'border-box' as const,
                     }}
                   />
@@ -5204,7 +5231,7 @@ function App() {
                 }}>
                   <Icon style={{width:12,height:12,flexShrink:0}} />
                   <span style={{flex:1}}>{label}</span>
-                  <span style={{fontSize:10.5,color:'#6b6459',fontFamily:'JetBrains Mono, monospace'}}>{count}</span>
+                  <span style={{fontSize:11,color:'#6b6459',fontFamily:'JetBrains Mono, monospace'}}>{count}</span>
                 </button>
               ))}
 
@@ -5233,7 +5260,7 @@ function App() {
                         }}>
                           <span style={{width:7,height:7,borderRadius:2,background:'#e8a557',opacity:0.5,flexShrink:0}} />
                           <span style={{flex:1,fontFamily:'JetBrains Mono, monospace',fontSize:11}}>{tag}</span>
-                          <span style={{fontSize:10.5,color:'#6b6459',fontFamily:'JetBrains Mono, monospace'}}>{n}</span>
+                          <span style={{fontSize:11,color:'#6b6459',fontFamily:'JetBrains Mono, monospace'}}>{n}</span>
                         </button>
                       );
                     })}
@@ -5294,7 +5321,7 @@ function App() {
                             새 폴더
                           </button>
                           <button
-                            onClick={() => { if (confirm(`"${root.name}" 루트 폴더를 목록에서 제거하시겠습니까?`)) handleRemoveWorkspaceRoot(root.id); }}
+                            onClick={() => setDeleteRootConfirmId(root.id)}
                             title="루트 제거"
                             style={{padding:'2px 4px',background:'transparent',border:'none',color:'#6b6459',cursor:'pointer',display:'flex',alignItems:'center',flexShrink:0}}
                           >
@@ -5406,7 +5433,7 @@ function App() {
                     onClick={() => { setActiveRootId(workspaceRoots[0]?.id ?? null); setShowNewProjectModal(true); }}
                     style={{
                       padding:'5px 12px',background:'#e8a557',border:'none',borderRadius:5,
-                      fontSize:11.5,fontWeight:600,cursor:'pointer',color:'#15120f',
+                      fontSize:12,fontWeight:600,cursor:'pointer',color:'#15120f',
                       display:'flex',alignItems:'center',gap:4,
                       fontFamily:'Inter Tight, system-ui, sans-serif',
                     }}
