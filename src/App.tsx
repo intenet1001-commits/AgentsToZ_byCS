@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Server, Trash2, Plus, ExternalLink, Terminal, ArrowUpDown, Pencil, Check, X as XIcon, Play, Square, Rocket, FolderOpen, Upload, Download, Folder, FilePlus, Package, RefreshCw, FileText, RotateCw, Globe, Github, SquareTerminal, Info, Monitor, BookMarked, Cloud, CloudUpload, CloudDownload, Search, Sparkles, Settings, GitPullRequest, Copy, GitBranch, GitCommit, Star, BookOpen, ChevronDown, ChevronUp, StickyNote, Clock, Zap, History, Laptop, Keyboard, LayoutList, LayoutGrid } from 'lucide-react';
+import { Server, Trash2, Plus, ExternalLink, Terminal, ArrowUpDown, Pencil, Check, X as XIcon, Play, Square, Rocket, FolderOpen, Upload, Download, Folder, FilePlus, Package, RefreshCw, FileText, RotateCw, Globe, Github, SquareTerminal, Info, Monitor, BookMarked, Cloud, CloudUpload, CloudDownload, Search, Sparkles, Settings, GitPullRequest, Copy, GitBranch, GitCommit, Star, BookOpen, ChevronDown, ChevronUp, StickyNote, Clock, Zap, History, Laptop, Keyboard, LayoutList, LayoutGrid, MoreHorizontal } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { getSupabaseClient } from './lib/supabaseClient';
@@ -958,22 +958,10 @@ function App() {
   const [deployUrl, setDeployUrl] = useState('');
   const [githubUrl, setGithubUrl] = useState('');
   const [worktreePath, setWorktreePath] = useState('');
-  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
-  const [activeTab, setActiveTab] = useState<'ports' | 'portal'>(() =>
-    typeof window !== 'undefined' && window.innerWidth < 768 ? 'portal' : 'ports'
-  );
+  const [isMobile, setIsMobile] = useState(false);
+  const [activeTab, setActiveTab] = useState<'ports' | 'portal'>('ports');
   const [lang, setLang] = useState<Lang>(() => (localStorage.getItem('portmanager-lang') as Lang) ?? 'ko');
   useEffect(() => { document.title = t(lang, 'appName'); }, [lang]);
-
-  // Windows에서 macOS 전용 terminalApp이 저장된 경우 자동 수정 (HMR 후에도 동작)
-  useEffect(() => {
-    if (!isWindows()) return;
-    const macOnly: TerminalApp[] = ['cmux', 'iterm', 'terminal'];
-    if (macOnly.includes(terminalApp)) {
-      setTerminalApp('wsl');
-      localStorage.setItem('portmanager-terminalApp', 'wsl');
-    }
-  }, []);
   const [openPortalSettings, setOpenPortalSettings] = useState(false);
   const [showSetupWizard, setShowSetupWizard] = useState(false);
   const [guideMode, setGuideMode] = useState<boolean>(() => {
@@ -1004,8 +992,7 @@ function App() {
   const [terminalApp, setTerminalApp] = useState<TerminalApp>(
     () => {
       const saved = localStorage.getItem('portmanager-terminalApp') as TerminalApp | null;
-      const macOnlyApps: TerminalApp[] = ['cmux', 'iterm', 'terminal'];
-      if (saved && !(isWindows() && macOnlyApps.includes(saved))) return saved;
+      if (saved) return saved;
       return isWindows() ? 'wsl' : 'cmux';
     }
   );
@@ -1019,6 +1006,18 @@ function App() {
   const [showShortcutModal, setShowShortcutModal] = useState(false);
   const [shortcutInput, setShortcutInput] = useState('');
   const [isRecordingShortcut, setIsRecordingShortcut] = useState(false);
+  const [showToolsMenu, setShowToolsMenu] = useState(false);
+  const toolsMenuRef = useRef<HTMLDivElement>(null);
+  // Close tools menu on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (toolsMenuRef.current && !toolsMenuRef.current.contains(e.target as Node)) {
+        setShowToolsMenu(false);
+      }
+    };
+    if (showToolsMenu) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showToolsMenu]);
   const [portViewMode, setPortViewMode] = useState<'card'|'terminal'>(
     () => 'terminal'
   );
@@ -1538,7 +1537,7 @@ function App() {
 
   // cmux 는 macOS 전용 (Swift+AppKit) — Linux/WSL 빌드 자체가 존재하지 않아 대안 불가.
   // Windows 사용자는 카드 ⌄ 메뉴의 'tmux'/'tmux ↺ 새창' 항목 사용.
-  const cmuxMacOnlyToast = () => showToast('cmux는 macOS 전용입니다 — 헤더에서 powershell 또는 wsl 선택 후 Claude 버튼 사용', 'error');
+  const cmuxMacOnlyToast = () => showToast('cmux는 macOS 전용입니다 — Windows에서는 ⌄ 메뉴의 "tmux" 사용', 'error');
 
   const openCmuxClaudeNew = async (item: PortInfo, worktreePath?: string) => {
     if (isWindows()) { cmuxMacOnlyToast(); return; }
@@ -2030,10 +2029,9 @@ function App() {
 
   useEffect(() => {
     const handler = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-      if (mobile) setActiveTab('portal');
+      setIsMobile(window.innerWidth < 480);
     };
+    handler();
     window.addEventListener('resize', handler);
     return () => window.removeEventListener('resize', handler);
   }, []);
@@ -3659,82 +3657,80 @@ function App() {
           </div>
         )}
 
-        {/* MAIN 섹션 구분선 */}
-        <div style={{display:'flex',alignItems:'center',gap:6,marginTop:6,marginBottom:2}}>
-          <div style={{flex:1,height:'1px',background:'rgba(255,240,220,0.05)'}}/>
-          <span style={{fontSize:9,color:'#3d3830',fontWeight:700,letterSpacing:1,textTransform:'uppercase'}}>main</span>
-          <div style={{flex:1,height:'1px',background:'rgba(255,240,220,0.05)'}}/>
-        </div>
-
-        {/* Primary action strip — always visible */}
-        <div style={{marginTop:2,display:'flex',flexWrap:'wrap',gap:4}}>
+        {/* Primary action strip */}
+        <div style={{marginTop:8,display:'flex',flexWrap:'wrap',gap:3}}>
+          {/* Run/Stop or Open Folder - primary action */}
           {item.port ? (
             <button data-help-key="card-run-stop" onClick={e=>{e.stopPropagation(); item.isRunning ? stopCommand(item) : executeCommand(item);}} style={{
-              flex:1,padding:'5px 0',borderRadius:5,
+              padding:'4px 10px',borderRadius:4,
               background:item.isRunning?'rgba(201,106,90,0.14)':'rgba(143,185,110,0.14)',
               color:item.isRunning?'#c96a5a':'#8fb96e',
-              border:'none',fontSize:11,fontWeight:600,cursor:'pointer',
-              display:'flex',alignItems:'center',justifyContent:'center',gap:4,fontFamily:'inherit',
+              border:'none',fontSize:10,fontWeight:600,cursor:'pointer',
+              display:'flex',alignItems:'center',gap:3,fontFamily:'inherit',
             }}>
-              {item.isRunning ? <Square style={{width:9,height:9}}/> : <Play style={{width:9,height:9}}/>}
+              {item.isRunning ? <Square style={{width:8,height:8}}/> : <Play style={{width:8,height:8}}/>}
               {item.isRunning ? 'Stop' : 'Run'}
             </button>
           ) : (
-            <button data-help-key="menu-open-folder" onClick={e=>{e.stopPropagation(); item.folderPath ? API.openFolder(item.folderPath).catch(e=>showToast(`폴더 열기 실패: ${e.message}`, 'error')) : showToast('폴더 경로가 없습니다', 'error');}} style={{
-              flex:1,padding:'5px 0',borderRadius:5,
+            <button data-help-key="menu-open-folder" onClick={e=>{e.stopPropagation(); item.folderPath && API.openFolder(item.folderPath).catch(()=>{});}} style={{
+              padding:'4px 10px',borderRadius:4,
               background:'rgba(232,165,87,0.14)', color:'#e8a557',
-              border:'none',fontSize:11,fontWeight:600,cursor:'pointer',
-              display:'flex',alignItems:'center',justifyContent:'center',gap:4,fontFamily:'inherit',
+              border:'none',fontSize:10,fontWeight:600,cursor:'pointer',
+              display:'flex',alignItems:'center',gap:3,fontFamily:'inherit',
             }} title="폴더 열기">
-              <FolderOpen style={{width:9,height:9}}/>
-              폴더 열기
+              <FolderOpen style={{width:8,height:8}}/>
+              {lang==='ko'?'폴더':'Folder'}
             </button>
           )}
-          <button data-help-key="card-worktree" aria-label="워크트리 관리" onClick={e=>{e.stopPropagation(); toggleWorktreePanel(item.id, item.folderPath);}} style={{...btnBase, color:expandedWorktreeIds.has(item.id)?'#e8a557':'#ede7dd', borderColor:expandedWorktreeIds.has(item.id)?'rgba(232,165,87,0.3)':'rgba(255,240,220,0.07)'}} title="워크트리 관리">
-            <GitBranch style={{width:11,height:11}} aria-hidden="true"/>
+          {/* Claude button - prominent */}
+          <button onClick={e=>{e.stopPropagation();openClaudeMain(item, false);}} style={{
+            padding:'4px 10px',borderRadius:4,
+            background:'rgba(124,58,237,0.15)',color:'#a78bfa',
+            border:'none',fontSize:10,fontWeight:600,cursor:'pointer',
+            display:'flex',alignItems:'center',gap:3,fontFamily:'inherit',
+          }} title={`Claude (${terminalApp}${bgMode?' --bg':''})`}>
+            <Terminal style={{width:8,height:8}}/>
+            Claude
           </button>
+          {/* Icon buttons - secondary actions */}
           {item.port && (
-            <button data-help-key="card-chrome" aria-label={`localhost:${item.port} 열기`} onClick={e=>{e.stopPropagation(); API.openInChrome(`http://localhost:${item.port}`).catch(()=>{});}} style={btnBase} title="localhost에서 열기">
-              <Laptop style={{width:11,height:11}} aria-hidden="true"/>
+            <button data-help-key="card-chrome" aria-label={`localhost:${item.port}`} onClick={e=>{e.stopPropagation(); API.openInChrome(`http://localhost:${item.port}`).catch(()=>{});}} style={{...btnBase,padding:'4px 6px'}} title={`localhost:${item.port}`}>
+              <Laptop style={{width:10,height:10}} aria-hidden="true"/>
+            </button>
+          )}
+          <button data-help-key="card-worktree" aria-label="워크트리" onClick={e=>{e.stopPropagation(); toggleWorktreePanel(item.id, item.folderPath);}} style={{...btnBase,padding:'4px 6px', color:expandedWorktreeIds.has(item.id)?'#e8a557':'#ede7dd', borderColor:expandedWorktreeIds.has(item.id)?'rgba(232,165,87,0.3)':'rgba(255,240,220,0.07)'}} title="워크트리">
+            <GitBranch style={{width:10,height:10}} aria-hidden="true"/>
+          </button>
+          {item.githubUrl && (
+            <button data-help-key="card-github" aria-label="GitHub" onClick={e=>{e.stopPropagation(); API.openInChrome(item.githubUrl!).catch(()=>{});}} style={{...btnBase,padding:'4px 6px'}} title="GitHub">
+              <Github style={{width:10,height:10}} aria-hidden="true"/>
             </button>
           )}
           {item.deployUrl && (
-            <button data-help-key="card-deploy" aria-label={`배포 주소 열기: ${item.deployUrl}`} onClick={e=>{e.stopPropagation(); API.openInChrome(item.deployUrl!).catch(()=>{});}} style={btnBase} title={`배포 주소: ${item.deployUrl}`}>
-              <Globe style={{width:11,height:11}} aria-hidden="true"/>
+            <button data-help-key="card-deploy" aria-label="배포" onClick={e=>{e.stopPropagation(); API.openInChrome(item.deployUrl!).catch(()=>{});}} style={{...btnBase,padding:'4px 6px'}} title={item.deployUrl}>
+              <Globe style={{width:10,height:10}} aria-hidden="true"/>
             </button>
           )}
-          {item.githubUrl && (
-            <button data-help-key="card-github" aria-label={`GitHub 열기: ${item.githubUrl}`} onClick={e=>{e.stopPropagation(); API.openInChrome(item.githubUrl!).catch(()=>{});}} style={btnBase} title={`GitHub: ${item.githubUrl}`}>
-              <Github style={{width:11,height:11}} aria-hidden="true"/>
-            </button>
-          )}
-          <button data-help-key="card-favorite" aria-label={item.favorite?'즐겨찾기 해제':'즐겨찾기 추가'} onClick={e=>{e.stopPropagation(); toggleFavorite(item);}} style={{...btnBase, color: item.favorite?'#e8a557':'#ede7dd', borderColor: item.favorite?'rgba(232,165,87,0.3)':'rgba(255,240,220,0.07)'}} title={item.favorite?'즐겨찾기 해제':'즐겨찾기 추가'}>
-            <Star style={{width:11,height:11,fill:item.favorite?'#e8a557':'none'}} aria-hidden="true"/>
+          <button data-help-key="card-favorite" aria-label={item.favorite?'즐겨찾기 해제':'즐겨찾기'} onClick={e=>{e.stopPropagation(); toggleFavorite(item);}} style={{...btnBase,padding:'4px 6px', color: item.favorite?'#e8a557':'#ede7dd', borderColor: item.favorite?'rgba(232,165,87,0.3)':'rgba(255,240,220,0.07)'}} title={item.favorite?'즐겨찾기 해제':'즐겨찾기'}>
+            <Star style={{width:10,height:10,fill:item.favorite?'#e8a557':'none'}} aria-hidden="true"/>
           </button>
-          <button data-help-key="card-more-menu" aria-label="더보기 메뉴" onClick={e=>{e.stopPropagation(); if(menuOpen){setV3MenuOpenId(null);setV3MenuRect(null);}else{const r=e.currentTarget.getBoundingClientRect();setV3MenuOpenId(item.id);setV3MenuRect({top:r.bottom+4,right:window.innerWidth-r.right});}}} style={{...btnBase, color: menuOpen?'#e8a557':'#ede7dd', borderColor: menuOpen?'rgba(232,165,87,0.3)':'rgba(255,240,220,0.07)'}}>
-            <ChevronDown style={{width:11,height:11}} aria-hidden="true"/>
+          <button data-help-key="card-more-menu" aria-label="더보기" onClick={e=>{e.stopPropagation(); if(menuOpen){setV3MenuOpenId(null);setV3MenuRect(null);}else{const r=e.currentTarget.getBoundingClientRect();setV3MenuOpenId(item.id);setV3MenuRect({top:r.bottom+4,right:window.innerWidth-r.right});}}} style={{...btnBase,padding:'4px 6px', color: menuOpen?'#e8a557':'#ede7dd', borderColor: menuOpen?'rgba(232,165,87,0.3)':'rgba(255,240,220,0.07)'}}>
+            <ChevronDown style={{width:10,height:10}} aria-hidden="true"/>
           </button>
         </div>
 
-        {/* 터미널 액션 버튼 — 항상 노출 */}
-        <div style={{display:'flex', flexWrap:'wrap', gap:4, marginTop:4, paddingTop:4, borderTop:'1px solid #27272a'}} onClick={e=>e.stopPropagation()}>
-          <button onClick={()=>openClaudeMain(item, false)} style={terminalBtnStyle('#7c3aed')} title={`Claude 열기 (${terminalApp}${bgMode?' --bg':''})`}>
-            Claude 열기
-          </button>
-          <button onClick={()=>openClaudeMain(item, true)} style={terminalBtnStyle('#5b21b6')} title="새 워크스페이스에서 Claude 열기">
-            새창
-          </button>
-          {item.port && (
-            <button onClick={()=>API.openInChrome(`http://localhost:${item.port}`).catch(()=>{})} style={terminalBtnStyle('#0e7490')} title={`localhost:${item.port} 열기`}>
-              localhost
+        {/* Secondary actions - compact row (only shows cmux localhost on macOS) */}
+        {item.port && !isWindows() && (
+          <div style={{display:'flex', gap:3, marginTop:3}} onClick={e=>e.stopPropagation()}>
+            <button onClick={e=>{e.stopPropagation(); openCmuxLocalhost(item);}} style={{
+              padding:'3px 8px',borderRadius:3,fontSize:9,
+              background:'rgba(15,118,110,0.12)',color:'#2dd4bf',
+              border:'none',cursor:'pointer',fontFamily:'inherit',
+            }} title={`cmux localhost:${item.port}`}>
+              cmux :{item.port}
             </button>
-          )}
-          {item.port && !isWindows() && (
-            <button onClick={e=>{e.stopPropagation(); openCmuxLocalhost(item);}} style={terminalBtnStyle('#0f766e')} title={`cmux로 localhost:${item.port} 열기 (macOS 전용)`}>
-              cmux localhost
-            </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Worktree panel */}
         {expandedWorktreeIds.has(item.id) && renderWorktreePanel(item)}
@@ -3835,7 +3831,7 @@ function App() {
                 </button>
                 <button onClick={e=>{e.stopPropagation(); portItem.port && API.openInChrome(`http://localhost:${portItem.port}`).catch(()=>{});}} style={miniBtn} title="브라우저에서 열기"><Globe style={{width:9,height:9}}/></button>
                 {!isWindows() && <button onClick={e=>{e.stopPropagation(); openCmuxLocalhost(portItem);}} style={{...miniBtn,color:'#2dd4bf',borderColor:'rgba(45,212,191,0.2)'}} title={`cmux localhost:${portItem.port}`}><Terminal style={{width:9,height:9}}/></button>}
-                <button onClick={e=>{e.stopPropagation(); wt.path && API.openFolder(wt.path).catch(e=>showToast(`폴더 열기 실패: ${e.message}`, 'error'));}} style={miniBtn} title="Finder에서 열기"><FolderOpen style={{width:9,height:9}}/></button>
+                <button onClick={e=>{e.stopPropagation(); wt.path && API.openFolder(wt.path).catch(()=>{});}} style={miniBtn} title="Finder에서 열기"><FolderOpen style={{width:9,height:9}}/></button>
                 <button onClick={e=>{e.stopPropagation(); forceRestartCommand(portItem);}} style={{...miniBtn,color:'#e8a557',borderColor:'rgba(232,165,87,0.2)'}} title="강제 재실행"><RotateCw style={{width:9,height:9}}/></button>
                 <button onClick={e=>{e.stopPropagation(); wtClaudeBypass();}} style={{...miniBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}}><Zap style={{width:8,height:8,display:'inline',verticalAlign:'middle'}}/>{bypassPermissions?'Claude ⚡':'Claude'}</button>
                 <button onClick={e=>{e.stopPropagation(); setCommitModal({item:portItem,wt,msg:''});}} style={miniBtn}>커밋</button>
@@ -4064,7 +4060,7 @@ function App() {
 
             {/* 열기 */}
             <div style={{display:'flex',gap:6,flexWrap:'wrap' as const,marginBottom:8}}>
-              {sel.folderPath && <button onClick={() => API.openFolder(sel.folderPath!).catch(e=>showToast(`폴더 열기 실패: ${e.message}`, 'error'))} style={rowBtn}><FolderOpen style={{width:11,height:11}}/>폴더 열기</button>}
+              {sel.folderPath && <button onClick={() => API.openFolder(sel.folderPath!).catch(()=>{})} style={rowBtn}><FolderOpen style={{width:11,height:11}}/>폴더 열기</button>}
               <button onClick={() => handleViewPortLog(sel.id, sel.name)} style={rowBtn}><FileText style={{width:11,height:11}}/>로그 보기</button>
               {sel.port && <button onClick={() => API.openInChrome(`http://localhost:${sel.port}`).catch(()=>{})} style={rowBtn}><Laptop style={{width:11,height:11}}/>localhost</button>}
               {sel.port && !isWindows() && <button onClick={() => openCmuxLocalhost(sel)} style={{...rowBtn,color:'#2dd4bf',borderColor:'rgba(45,212,191,0.2)'}} title={`cmux로 localhost:${sel.port} 열기 (macOS 전용)`}><Terminal style={{width:11,height:11}}/>cmux localhost</button>}
@@ -4739,8 +4735,7 @@ function App() {
         <div className="flex items-center gap-2 px-6 py-2.5 shrink-0 flex-wrap" style={{borderBottom:'1px solid rgba(255,240,220,0.07)'}}>
           <div className="flex items-center gap-2">
             <div className="flex gap-1 rounded-xl p-1 w-fit" style={{background:'#1c1916',border:'1px solid rgba(255,240,220,0.07)'}}>
-              {!isMobile && (
-                <button
+              <button
                   data-help-key="tab-ports"
                   onClick={() => setActiveTab('ports')}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
@@ -4756,7 +4751,6 @@ function App() {
                   <Server className="w-3.5 h-3.5" />
                   {t(lang, 'tabProjects')}
                 </button>
-              )}
               <button
                 data-help-key="tab-portal"
                 onClick={() => setActiveTab('portal')}
@@ -4767,7 +4761,7 @@ function App() {
                 }}
               >
                 <BookMarked className="w-3.5 h-3.5" />
-                {isMobile ? t(lang, 'tabBookmarks') : t(lang, 'tabPortal')}
+                {t(lang, 'tabPortal')}
               </button>
             </div>
 
@@ -4870,125 +4864,166 @@ function App() {
               </>
             )}
 
-            {/* 글로벌 단축키 설정 */}
+          </div>
+
+          {/* Right side controls - spacer to push right */}
+          <div style={{flex:1}}/>
+
+          {/* Claude/Terminal Controls - 포털 탭 제외 */}
+          {activeTab !== 'portal' && (
+            <div className="flex items-center gap-1.5">
+              {/* Terminal app selector - compact */}
+              <div style={{display:'flex', background:'#1a1a1c', border:'1px solid #3f3f46', borderRadius:6, overflow:'hidden'}}>
+                {(isWindows()
+                  ? (['powershell','wsl'] as const)
+                  : (['cmux','iterm','terminal'] as const)
+                ).map(app => (
+                  <button key={app} onClick={() => { setTerminalApp(app); localStorage.setItem('portmanager-terminalApp', app); }}
+                    style={{ padding:'2px 6px', fontSize:10, background: terminalApp===app ? '#3f3f46' : 'transparent',
+                      color: terminalApp===app ? '#e4e4e7' : '#71717a', border:'none', cursor:'pointer', fontFamily:'inherit' }}>
+                    {app}
+                  </button>
+                ))}
+              </div>
+              {/* Mode toggles - compact pills */}
+              {!isWindows() && (<>
+                <button onClick={() => { const v=!bgMode; setBgMode(v); localStorage.setItem('portmanager-bgMode', String(v)); }}
+                  title="--bg 모드"
+                  style={{ padding:'2px 6px', fontSize:10, borderRadius:4, border:'1px solid', cursor:'pointer', fontFamily:'inherit',
+                    background: bgMode ? '#2d1f42' : 'transparent',
+                    borderColor: bgMode ? '#7c3aed' : '#3f3f46',
+                    color: bgMode ? '#c4b5fd' : '#52525b' }}>
+                  bg
+                </button>
+                <button onClick={() => { const v=!tmuxMode; setTmuxMode(v); localStorage.setItem('portmanager-tmuxMode', String(v)); }}
+                  title="tmux 모드"
+                  style={{ padding:'2px 6px', fontSize:10, borderRadius:4, border:'1px solid', cursor:'pointer', fontFamily:'inherit',
+                    background: tmuxMode ? '#1f2d20' : 'transparent',
+                    borderColor: tmuxMode ? '#22c55e' : '#3f3f46',
+                    color: tmuxMode ? '#86efac' : '#52525b' }}>
+                  tmux
+                </button>
+              </>)}
+              {/* bypass toggle - compact */}
+              <button
+                data-help-key="btn-bypass"
+                onClick={() => { const v = !bypassPermissions; setBypassPermissions(v); localStorage.setItem('portmanager-bypassPermissions', String(v)); }}
+                title={bypassPermissions ? 'bypass ON' : 'bypass OFF'}
+                style={{ padding:'2px 6px', fontSize:10, borderRadius:4, border:'1px solid', cursor:'pointer', fontFamily:'inherit',
+                  background: bypassPermissions ? 'rgba(168,85,247,0.15)' : 'transparent',
+                  borderColor: bypassPermissions ? 'rgba(168,85,247,0.4)' : '#3f3f46',
+                  color: bypassPermissions ? '#c4b5fd' : '#52525b' }}
+              >
+                <Zap style={{width:10,height:10,display:'inline',verticalAlign:'middle',marginRight:2}} />
+                {bypassPermissions ? 'ON' : 'OFF'}
+              </button>
+            </div>
+          )}
+
+          {/* Utility controls - always visible */}
+          <div className="flex items-center gap-1">
+            {/* Global shortcut - Tauri only */}
             {isTauri() && (
               <button
                 onClick={() => { setShortcutInput(globalShortcut); setShowShortcutModal(true); }}
-                title={`앱 열기 단축키: ${globalShortcut}`}
-                className="px-2.5 py-1.5 bg-[#1c1916] hover:bg-[#221f1b] text-zinc-500 hover:text-[#ede7dd]/90 text-xs rounded-xl border border-stone-800/40 hover:border-stone-700/60 transition-all flex items-center gap-1"
+                title={`${t(lang,'settings')}: ${globalShortcut}`}
+                className="p-1.5 bg-[#1c1916] hover:bg-[#221f1b] text-zinc-500 hover:text-[#ede7dd]/90 rounded-lg border border-stone-800/40 hover:border-stone-700/60 transition-all"
               >
                 <Keyboard className="w-3.5 h-3.5" />
-                <span className="font-mono">{globalShortcut.replace('CommandOrControl', '⌘').replace('Alt', '⌥').replace('Shift', '⇧').replace('Control', '⌃')}</span>
               </button>
             )}
-
-            {/* 터미널 앱 선택기 + 모드 토글 — 포털 탭 제외 */}
-            {activeTab !== 'portal' && (
-              <div style={{display:'flex', alignItems:'center', gap:4}}>
-                {/* 터미널 앱 선택 — 플랫폼별 옵션 */}
-                <div style={{display:'flex', background:'#1a1a1c', border:'1px solid #3f3f46', borderRadius:8, overflow:'hidden'}}>
-                  {(isWindows()
-                    ? (['powershell','wsl'] as const)
-                    : (['cmux','iterm','terminal'] as const)
-                  ).map(app => (
-                    <button key={app} onClick={() => { setTerminalApp(app); localStorage.setItem('portmanager-terminalApp', app); }}
-                      style={{ padding:'3px 8px', fontSize:11, background: terminalApp===app ? '#3f3f46' : 'transparent',
-                        color: terminalApp===app ? '#e4e4e7' : '#71717a', border:'none', cursor:'pointer', fontFamily:'inherit' }}>
-                      {app}
-                    </button>
-                  ))}
-                </div>
-                {/* --bg / tmux 토글 — macOS 전용 (cmux 의존) */}
-                {!isWindows() && (<>
-                  <button onClick={() => { const v=!bgMode; setBgMode(v); localStorage.setItem('portmanager-bgMode', String(v)); }}
-                    title="--bg 모드: claude --bg 로 백그라운드 실행"
-                    style={{ padding:'3px 8px', fontSize:11, borderRadius:6, border:'1px solid', cursor:'pointer', fontFamily:'inherit',
-                      background: bgMode ? '#2d1f42' : '#18181b',
-                      borderColor: bgMode ? '#7c3aed' : '#3f3f46',
-                      color: bgMode ? '#c4b5fd' : '#71717a' }}>
-                    --bg
-                  </button>
-                  <button onClick={() => { const v=!tmuxMode; setTmuxMode(v); localStorage.setItem('portmanager-tmuxMode', String(v)); }}
-                    title="tmux 모드: iTerm 선택 시 tmux 세션으로 실행"
-                    style={{ padding:'3px 8px', fontSize:11, borderRadius:6, border:'1px solid', cursor:'pointer', fontFamily:'inherit',
-                      background: tmuxMode ? '#1f2d20' : '#18181b',
-                      borderColor: tmuxMode ? '#22c55e' : '#3f3f46',
-                      color: tmuxMode ? '#86efac' : '#71717a' }}>
-                    tmux
-                  </button>
-                </>)}
-              </div>
-            )}
-
-            {/* bypass 토글 — 포털 탭에서 숨김 */}
-            {activeTab !== 'portal' && <button
-              data-help-key="btn-bypass"
-              onClick={() => { const v = !bypassPermissions; setBypassPermissions(v); localStorage.setItem('portmanager-bypassPermissions', String(v)); }}
-              title={bypassPermissions ? 'Claude bypass 모드 ON — 클릭하여 일반 모드로 전환' : 'Claude 일반 모드 — 클릭하여 bypass 모드로 전환'}
-              className={`px-2.5 py-1.5 text-xs rounded-xl border transition-all flex items-center gap-1.5 font-medium ${
-                bypassPermissions
-                  ? 'bg-purple-500/20 text-purple-200 border-purple-400/40 hover:bg-purple-500/30 shadow-[0_0_8px_rgba(168,85,247,0.15)]'
-                  : 'bg-[#1c1916] text-zinc-500 border-stone-800/40 hover:bg-[#221f1b] hover:text-zinc-400'
-              }`}
-            >
-              <Zap className={`w-3 h-3 ${bypassPermissions ? 'text-purple-300' : ''}`} />
-              <span>bypass {bypassPermissions ? 'ON' : 'OFF'}</span>
-            </button>}
-
-            {/* 설정 마법사 버튼 */}
+            {/* Settings wizard */}
             <button
               data-help-key="btn-setup-wizard"
               onClick={() => setShowSetupWizard(true)}
-              title="초기 설정 마법사"
-              className="px-2.5 py-1.5 bg-[#1c1916] hover:bg-[#221f1b] text-zinc-500 hover:text-[#ede7dd]/90 text-xs rounded-xl border border-stone-800/40 hover:border-stone-700/60 transition-all flex items-center gap-1"
+              title={t(lang, 'settings')}
+              className="p-1.5 bg-[#1c1916] hover:bg-[#221f1b] text-zinc-500 hover:text-[#ede7dd]/90 rounded-lg border border-stone-800/40 hover:border-stone-700/60 transition-all"
             >
               <Rocket className="w-3.5 h-3.5" />
-              <span>{t(lang, 'settings')}</span>
             </button>
-
-            {/* 로그 복사 버튼 */}
-            <button
-              data-help-key="btn-copy-log"
-              onClick={handleCopyLog}
-              title="앱 오류 로그 클립보드 복사 (개선에 활용)"
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-xl border transition-all ${
-                logCopied
-                  ? 'bg-green-500/10 border-green-500/30 text-green-400'
-                  : 'bg-[#1c1916] hover:bg-[#221f1b] text-zinc-500 hover:text-[#ede7dd]/90 border-stone-800/40 hover:border-stone-700/60'
-              }`}
-            >
-              {logCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{logCopied ? t(lang, 'logCopied') : t(lang, 'copyLog')}</span>
-            </button>
-
-            {/* 가이드 모드 토글 */}
+            {/* Guide mode toggle */}
             <button
               data-help-key="btn-guide-toggle"
               onClick={() => setGuideMode(!guideMode)}
-              title={guideMode ? "가이드 모드 끄기" : "가이드 모드 켜기 — 아무 버튼 눌러서 설명 보기"}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-xl border transition-all ${
+              title={guideMode ? t(lang, 'guideOn') : t(lang, 'guide')}
+              className={`p-1.5 rounded-lg border transition-all ${
                 guideMode
-                  ? 'bg-amber-500 text-black border-amber-400 hover:bg-amber-400 font-semibold shadow-[0_0_12px_rgba(245,158,11,0.35)]'
+                  ? 'bg-amber-500 text-black border-amber-400 hover:bg-amber-400'
                   : 'bg-[#1c1916] hover:bg-[#221f1b] text-zinc-500 hover:text-[#ede7dd]/90 border-stone-800/40 hover:border-stone-700/60'
               }`}
             >
               <BookOpen className="w-3.5 h-3.5" />
-              <span>{guideMode ? t(lang, 'guideOn') : t(lang, 'guide')}</span>
             </button>
-
-            {/* 언어 토글 */}
-            <button
-              onClick={() => {
-                const next: Lang = lang === 'ko' ? 'en' : 'ko';
-                setLang(next);
-                localStorage.setItem('portmanager-lang', next);
-              }}
-              title={lang === 'ko' ? 'Switch to English' : '한국어로 전환'}
-              className="px-2.5 py-1.5 bg-[#1c1916] hover:bg-[#221f1b] text-zinc-400 hover:text-[#ede7dd]/90 text-xs rounded-xl border border-stone-800/40 hover:border-stone-700/60 transition-all flex items-center gap-1 font-medium"
-            >
-              <Globe className="w-3.5 h-3.5" />
-              <span>{t(lang, 'langToggle')}</span>
-            </button>
+            {/* More menu */}
+            <div className="relative" ref={toolsMenuRef}>
+              <button
+                onClick={() => setShowToolsMenu(!showToolsMenu)}
+                title="More options"
+                className={`p-1.5 rounded-lg border transition-all ${
+                  showToolsMenu
+                    ? 'bg-[#221f1b] text-[#ede7dd]/90 border-stone-700/60'
+                    : 'bg-[#1c1916] hover:bg-[#221f1b] text-zinc-500 hover:text-[#ede7dd]/90 border-stone-800/40 hover:border-stone-700/60'
+                }`}
+              >
+                <MoreHorizontal className="w-3.5 h-3.5" />
+              </button>
+              {showToolsMenu && (
+                <div style={{
+                  position:'absolute', top:'100%', right:0, marginTop:4, zIndex:9999,
+                  background:'#221f1b', border:'1px solid rgba(255,240,220,0.12)', borderRadius:8,
+                  padding:'4px 0', boxShadow:'0 12px 32px rgba(0,0,0,0.7)', minWidth:160
+                }}>
+                  {/* Log copy */}
+                  <button
+                    data-help-key="btn-copy-log"
+                    onClick={() => { handleCopyLog(); setShowToolsMenu(false); }}
+                    style={{
+                      display:'flex', alignItems:'center', gap:8, padding:'7px 12px', width:'100%',
+                      background:'transparent', border:'none', cursor:'pointer',
+                      fontSize:12, color: logCopied ? '#4ade80' : '#ede7dd', fontFamily:'inherit', textAlign:'left'
+                    }}
+                    onMouseEnter={e=>(e.currentTarget.style.background='rgba(255,240,220,0.05)')}
+                    onMouseLeave={e=>(e.currentTarget.style.background='transparent')}
+                  >
+                    {logCopied ? <Check style={{width:12,height:12}}/> : <Copy style={{width:12,height:12}}/>}
+                    {logCopied ? t(lang, 'logCopied') : t(lang, 'copyLog')}
+                  </button>
+                  {/* Language toggle */}
+                  <button
+                    onClick={() => {
+                      const next: Lang = lang === 'ko' ? 'en' : 'ko';
+                      setLang(next);
+                      localStorage.setItem('portmanager-lang', next);
+                      setShowToolsMenu(false);
+                    }}
+                    style={{
+                      display:'flex', alignItems:'center', gap:8, padding:'7px 12px', width:'100%',
+                      background:'transparent', border:'none', cursor:'pointer',
+                      fontSize:12, color:'#ede7dd', fontFamily:'inherit', textAlign:'left'
+                    }}
+                    onMouseEnter={e=>(e.currentTarget.style.background='rgba(255,240,220,0.05)')}
+                    onMouseLeave={e=>(e.currentTarget.style.background='transparent')}
+                  >
+                    <Globe style={{width:12,height:12}}/>
+                    {t(lang, 'langToggle')}
+                  </button>
+                  {/* App data directory */}
+                  <button
+                    onClick={() => { API.openAppDataDir(); setShowToolsMenu(false); }}
+                    style={{
+                      display:'flex', alignItems:'center', gap:8, padding:'7px 12px', width:'100%',
+                      background:'transparent', border:'none', cursor:'pointer',
+                      fontSize:12, color:'#ede7dd', fontFamily:'inherit', textAlign:'left'
+                    }}
+                    onMouseEnter={e=>(e.currentTarget.style.background='rgba(255,240,220,0.05)')}
+                    onMouseLeave={e=>(e.currentTarget.style.background='transparent')}
+                  >
+                    <FolderOpen style={{width:12,height:12}}/>
+                    {lang === 'ko' ? '앱 데이터 폴더' : 'App Data Folder'}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -5454,7 +5489,7 @@ function App() {
                         <Monitor style={{width:13,height:13}} className={isBuilding && buildType==='windows' ? 'animate-spin' : ''} />
                         {t(lang, 'buildWin')}
                       </button>
-                      <button onClick={() => API.openBuildFolder().catch(e=>showToast(`폴더 열기 실패: ${e.message}`, 'error'))} title="빌드 폴더 열기" style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(255,240,220,0.07)',borderRadius:5,color:'#a39a8c',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
+                      <button onClick={() => API.openBuildFolder().catch(()=>{})} title="빌드 폴더 열기" style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(255,240,220,0.07)',borderRadius:5,color:'#a39a8c',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
                         <FolderOpen style={{width:13,height:13}} />
                         {t(lang, 'openBuildFolder')}
                       </button>
@@ -5469,7 +5504,7 @@ function App() {
                         <Package style={{width:13,height:13}} className={isBuilding && buildType==='dmg' ? 'animate-spin' : ''} />
                         DMG
                       </button>
-                      <button onClick={() => API.openBuildFolder().catch(e=>showToast(`폴더 열기 실패: ${e.message}`, 'error'))} title="빌드 폴더 열기" style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(255,240,220,0.07)',borderRadius:5,color:'#a39a8c',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
+                      <button onClick={() => API.openBuildFolder().catch(()=>{})} title="빌드 폴더 열기" style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(255,240,220,0.07)',borderRadius:5,color:'#a39a8c',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
                         <FolderOpen style={{width:13,height:13}} />
                         폴더 열기
                       </button>
