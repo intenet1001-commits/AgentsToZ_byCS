@@ -3338,6 +3338,56 @@ Analyze this project and reply with JSON only (no markdown, no explanation):
       return new TextDecoder().decode(dec);
     }
 
+    if (url.pathname === "/api/setup/init-tables" && req.method === "POST") {
+      try {
+        const body = await req.json() as any;
+        const sbUrl: string = body.supabaseUrl ?? "";
+        const sbKey: string = body.supabaseAnonKey ?? "";
+        if (!sbUrl || !sbKey) return new Response(JSON.stringify({ error: "supabaseUrl, supabaseAnonKey 필수" }), { status: 400, headers });
+
+        const { createClient } = await import("@supabase/supabase-js");
+        const sb = createClient(sbUrl, sbKey, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+
+        // DDL을 Supabase REST /rpc 또는 직접 실행 불가 (anon key 제한)
+        // 대신 각 테이블에 더미 select를 시도해서 존재 여부 확인 후 안내 반환
+        const tables = ["portmgr_ports", "portmgr_devices", "portmgr_portal_items", "portmgr_portal_categories", "portmgr_workspace_roots", "portmgr_push_snapshots", "portmgr_device_credentials"];
+        const results: Record<string, boolean> = {};
+        for (const t of tables) {
+          const { error } = await sb.from(t).select("id").limit(1);
+          results[t] = !error || !error.message.includes("does not exist");
+        }
+        const missing = Object.entries(results).filter(([, exists]) => !exists).map(([t]) => t);
+        const existing = Object.entries(results).filter(([, exists]) => exists).map(([t]) => t);
+
+        if (missing.length === 0) {
+          return new Response(JSON.stringify({ success: true, created: 0, message: "모든 테이블이 이미 존재합니다", tables: existing }), { headers });
+        }
+
+        // SQL DDL을 반환 (사용자가 Supabase SQL 에디터에서 실행)
+        const ddl = `
+-- portmgr 초기화 DDL (Supabase SQL Editor에서 실행)
+${missing.includes("portmgr_ports") ? `CREATE TABLE IF NOT EXISTS portmgr_ports (id text PRIMARY KEY, device_id text, name text, port integer, command_path text, folder_path text, terminal_command text, deploy_url text, github_url text, favorite boolean DEFAULT false, memo text, memo_updated_at timestamptz, device_name text, created_at timestamptz DEFAULT now());` : ""}
+${missing.includes("portmgr_devices") ? `CREATE TABLE IF NOT EXISTS portmgr_devices (id text PRIMARY KEY, name text, last_push_at timestamptz DEFAULT now());` : ""}
+${missing.includes("portmgr_portal_items") ? `CREATE TABLE IF NOT EXISTS portmgr_portal_items (id text PRIMARY KEY, device_id text, name text, type text, url text, path text, category text, description text, pinned boolean DEFAULT false, visit_count integer DEFAULT 0, last_visited timestamptz, created_at timestamptz DEFAULT now());` : ""}
+${missing.includes("portmgr_portal_categories") ? `CREATE TABLE IF NOT EXISTS portmgr_portal_categories (id text PRIMARY KEY, device_id text, name text, color text, "order" integer DEFAULT 0);` : ""}
+${missing.includes("portmgr_workspace_roots") ? `CREATE TABLE IF NOT EXISTS portmgr_workspace_roots (id text PRIMARY KEY, device_id text, name text, path text);` : ""}
+${missing.includes("portmgr_push_snapshots") ? `CREATE TABLE IF NOT EXISTS portmgr_push_snapshots (id text PRIMARY KEY, created_at timestamptz DEFAULT now(), table_name text, device_id text, device_name text, row_count integer, snapshot jsonb);` : ""}
+${missing.includes("portmgr_device_credentials") ? `CREATE TABLE IF NOT EXISTS portmgr_device_credentials (id text PRIMARY KEY, supabase_url text, supabase_anon_key text, github_token_enc text, vercel_token_enc text, supabase_access_token_enc text, portal_url text, setup_completed_at timestamptz, created_at timestamptz DEFAULT now()); ALTER TABLE portmgr_device_credentials ENABLE ROW LEVEL SECURITY; CREATE POLICY "anon_all" ON portmgr_device_credentials FOR ALL TO anon USING (true) WITH CHECK (true);` : ""}
+`.trim().replace(/\n+/g, '\n');
+
+        return new Response(JSON.stringify({
+          success: false,
+          needsManualDDL: true,
+          missing,
+          existing,
+          ddl,
+          message: `${missing.length}개 테이블이 없습니다. Supabase SQL 에디터에서 DDL을 실행해주세요.`,
+        }), { headers });
+      } catch (e: any) {
+        return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
+      }
+    }
+
     if (url.pathname === "/api/setup/push-credentials" && req.method === "POST") {
       try {
         // 1. 포털 자격증명 로드

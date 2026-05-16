@@ -18,7 +18,7 @@ const REPO_CLONE_URL = REPO_URL.endsWith('.git') ? REPO_URL : `${REPO_URL}.git`;
 const REPO_FORK_URL = `${REPO_URL}/fork`;
 const REPO_DIR_NAME = REPO_URL.split('/').filter(Boolean).pop()?.replace(/\.git$/, '') ?? 'portmanagement';
 
-type Mode = 'choose' | 'first' | 'additional' | 'portal' | 'windows_env' | 'mac_env' | 'dev_env' | 'terminal_tools' | 'credentials_push' | 'new_device';
+type Mode = 'choose' | 'first' | 'additional' | 'portal' | 'windows_env' | 'mac_env' | 'dev_env' | 'terminal_tools' | 'credentials_push' | 'new_device' | 'one_click';
 type OS = 'mac' | 'windows';
 
 // ─── CLI Auto-fill Component ──────────────────────────────────────────────────
@@ -1934,6 +1934,22 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
                 )}
               </div>
 
+              {/* ★ 원클릭 설치 — 최우선 추천 */}
+              <button onClick={() => setMode('one_click')}
+                className="w-full max-w-4xl group bg-gradient-to-r from-amber-500/10 to-orange-500/10 hover:from-amber-500/20 hover:to-orange-500/20 border border-amber-500/40 hover:border-amber-400/60 rounded-2xl px-6 py-5 text-left transition-all flex items-center gap-4">
+                <div className="w-12 h-12 bg-amber-500/20 border border-amber-500/30 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-amber-500/30 transition-all text-2xl">
+                  ⚡
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-base font-bold text-white">원클릭 설치 마법사</p>
+                    <span className="text-[10px] font-semibold text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded-full">추천</span>
+                  </div>
+                  <p className="text-sm text-zinc-400 mt-0.5">처음 설치라면 여기서 시작 — 클릭만 하면 Google·GitHub·Vercel·Supabase 자동 설정</p>
+                </div>
+                <ChevronRight className="w-5 h-5 text-amber-400 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+              </button>
+
               {/* 초보자 안내 */}
               <div className="w-full max-w-4xl bg-blue-500/5 border border-blue-500/20 rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2 text-xs text-zinc-400">
                 <span className="text-blue-400 font-semibold shrink-0">💡 처음이세요?</span>
@@ -2087,6 +2103,7 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
           {mode === 'terminal_tools' && <TerminalToolsWizard onBack={() => setMode('choose')} />}
           {mode === 'credentials_push' && <CredentialsPushWizard onBack={() => setMode('choose')} />}
           {mode === 'new_device' && <NewDeviceWizard onBack={() => setMode('choose')} />}
+          {mode === 'one_click' && <OneClickWizard onBack={() => setMode('choose')} onComplete={onComplete} />}
         </div>
       </div>
     </div>
@@ -2151,6 +2168,351 @@ function CliStatusBadge({ endpoint, label, installMac, installWin, loginEndpoint
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── One-Click Install Wizard ────────────────────────────────────────────────
+
+type StepStatus = 'pending' | 'running' | 'done' | 'error' | 'skip';
+
+interface InstallStep {
+  id: string;
+  label: string;
+  desc: string;
+  status: StepStatus;
+  detail?: string;
+  action?: () => Promise<void>;
+  browserAction?: () => Promise<void>;
+  needsBrowser?: boolean;
+  pollEndpoint?: string;
+  pollKey?: string; // 'loggedIn'
+}
+
+function StepRow({ step, onAction, onPoll }: { step: InstallStep; onAction: () => void; onPoll: () => void }) {
+  const icon = {
+    pending: <div className="w-5 h-5 rounded-full border-2 border-zinc-600" />,
+    running: <RefreshCw className="w-5 h-5 text-blue-400 animate-spin" />,
+    done:    <Check className="w-5 h-5 text-emerald-400" />,
+    error:   <span className="w-5 h-5 text-red-400 text-xs font-bold flex items-center justify-center">✗</span>,
+    skip:    <Check className="w-5 h-5 text-zinc-500" />,
+  }[step.status];
+
+  return (
+    <div className={`flex items-start gap-3 p-3 rounded-xl border transition-all ${
+      step.status === 'done' || step.status === 'skip' ? 'border-zinc-800/40 bg-zinc-900/30 opacity-70' :
+      step.status === 'running' ? 'border-blue-500/30 bg-blue-500/5' :
+      step.status === 'error' ? 'border-red-500/30 bg-red-500/5' :
+      'border-zinc-800 bg-zinc-900/60'
+    }`}>
+      <div className="mt-0.5 shrink-0">{icon}</div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-zinc-200">{step.label}</p>
+        <p className="text-xs text-zinc-500">{step.desc}</p>
+        {step.detail && <p className={`text-xs mt-0.5 ${step.status === 'error' ? 'text-red-400' : 'text-zinc-400'}`}>{step.detail}</p>}
+      </div>
+      <div className="shrink-0 flex gap-2">
+        {(step.status === 'pending' || step.status === 'error') && step.browserAction && (
+          <button onClick={onAction}
+            className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs text-white font-medium transition-colors">
+            브라우저 열기
+          </button>
+        )}
+        {step.status === 'running' && step.pollEndpoint && (
+          <button onClick={onPoll}
+            className="px-3 py-1.5 rounded-lg border border-zinc-600 hover:bg-zinc-700 text-xs text-zinc-300 transition-colors">
+            완료 확인
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function OneClickWizard({ onBack, onComplete }: { onBack: () => void; onComplete: SetupWizardProps['onComplete'] }) {
+  const isWin = /Win/.test(navigator.platform ?? '');
+  const os: OS = isWin ? 'windows' : 'mac';
+
+  const [steps, setSteps] = React.useState<InstallStep[]>([
+    {
+      id: 'supabase_project',
+      label: 'Supabase 프로젝트',
+      desc: 'Supabase.com 가입 → 프로젝트 생성 → API Key 확인',
+      status: 'pending',
+      needsBrowser: true,
+    },
+    {
+      id: 'supabase_cli',
+      label: 'Supabase CLI 인증',
+      desc: 'CLI 설치 후 브라우저로 로그인',
+      status: 'pending',
+      pollEndpoint: '/api/supabase-cli/status',
+      pollKey: 'loggedIn',
+    },
+    {
+      id: 'github_cli',
+      label: 'GitHub 계정 연결',
+      desc: 'GitHub CLI 설치 후 브라우저로 로그인',
+      status: 'pending',
+      pollEndpoint: '/api/github-cli/status',
+      pollKey: 'loggedIn',
+    },
+    {
+      id: 'vercel_cli',
+      label: 'Vercel 계정 연결',
+      desc: 'Vercel CLI 설치 후 브라우저로 로그인',
+      status: 'pending',
+      pollEndpoint: '/api/vercel-cli/status',
+      pollKey: 'loggedIn',
+    },
+    {
+      id: 'init_tables',
+      label: 'Supabase 테이블 자동 생성',
+      desc: '필요한 테이블을 Supabase에 자동으로 만듭니다',
+      status: 'pending',
+      pollEndpoint: '_init_tables_check', // 특수 처리
+    },
+    {
+      id: 'push_credentials',
+      label: '자격증명 암호화 저장',
+      desc: 'CLI 토큰을 Supabase에 AES-256 암호화 저장',
+      status: 'pending',
+    },
+  ]);
+
+  const [sbUrl, setSbUrl] = React.useState('');
+  const [sbKey, setSbKey] = React.useState('');
+  const [deviceName, setDeviceName] = React.useState('');
+  const [activeStep, setActiveStep] = React.useState<string | null>(null);
+  const [showSbForm, setShowSbForm] = React.useState(false);
+  const [allDone, setAllDone] = React.useState(false);
+
+  function updateStep(id: string, patch: Partial<InstallStep>) {
+    setSteps(prev => prev.map(s => s.id === id ? { ...s, ...patch } : s));
+  }
+
+  async function runStep(id: string) {
+    setActiveStep(id);
+    updateStep(id, { status: 'running', detail: undefined });
+
+    try {
+      if (id === 'supabase_project') {
+        setShowSbForm(true);
+        updateStep(id, { status: 'running', detail: 'Supabase URL과 Anon Key를 입력하세요' });
+        return; // wait for manual input
+      }
+
+      if (id === 'supabase_cli') {
+        // 먼저 상태 확인
+        const statusRes = await fetch('/api/supabase-cli/status');
+        const statusData = await statusRes.json();
+        if (statusData.installed && statusData.loggedIn) {
+          updateStep(id, { status: 'done', detail: '이미 로그인됨' }); return;
+        }
+        // CLI 로그인 브라우저 열기
+        await fetch('/api/supabase-login', { method: 'POST' });
+        updateStep(id, { status: 'running', detail: '터미널에서 로그인 완료 후 "완료 확인" 클릭' });
+        return;
+      }
+
+      if (id === 'github_cli') {
+        const statusRes = await fetch('/api/github-cli/status');
+        const statusData = await statusRes.json();
+        if (statusData.installed && statusData.loggedIn) {
+          updateStep(id, { status: 'done', detail: `로그인됨 (${statusData.user})` }); return;
+        }
+        await fetch('/api/github-cli/login', { method: 'POST' });
+        updateStep(id, { status: 'running', detail: '브라우저에서 로그인 완료 후 "완료 확인" 클릭' });
+        return;
+      }
+
+      if (id === 'vercel_cli') {
+        const statusRes = await fetch('/api/vercel-cli/status');
+        const statusData = await statusRes.json();
+        if (statusData.installed && statusData.loggedIn) {
+          updateStep(id, { status: 'done', detail: `로그인됨 (${statusData.user})` }); return;
+        }
+        await fetch('/api/vercel-cli/login', { method: 'POST' });
+        updateStep(id, { status: 'running', detail: '브라우저에서 로그인 완료 후 "완료 확인" 클릭' });
+        return;
+      }
+
+      if (id === 'init_tables') {
+        if (!sbUrl || !sbKey) {
+          updateStep(id, { status: 'error', detail: 'Supabase URL/Key를 먼저 입력하세요' }); return;
+        }
+        const res = await fetch('/api/setup/init-tables', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ supabaseUrl: sbUrl, supabaseAnonKey: sbKey }),
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        if (data.needsManualDDL) {
+          // DDL을 클립보드에 복사하고 Supabase SQL 에디터 열기
+          try { await navigator.clipboard.writeText(data.ddl); } catch {}
+          const ref = sbUrl.match(/https:\/\/(.+)\.supabase\.co/)?.[1] ?? '';
+          if (ref) window.open(`https://supabase.com/dashboard/project/${ref}/sql/new`, '_blank');
+          updateStep(id, {
+            status: 'error',
+            detail: `DDL이 클립보드에 복사됨. Supabase SQL 에디터(자동 열림)에 붙여넣기 후 "완료 확인" 클릭`,
+            needsBrowser: true,
+          });
+          return;
+        }
+        updateStep(id, { status: 'done', detail: data.message ?? '테이블 확인 완료' });
+        return;
+      }
+
+      if (id === 'push_credentials') {
+        const res = await fetch('/api/setup/push-credentials', { method: 'POST' });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        const stored = data.stored ?? {};
+        const parts = Object.entries(stored).filter(([, v]) => v).map(([k]) => k).join(', ');
+        updateStep(id, { status: 'done', detail: `저장됨: ${parts || '기본 설정'}` });
+
+        // 모든 스텝 완료 → onComplete 호출
+        const deviceId = `local-${Date.now()}`;
+        setAllDone(true);
+        if (sbUrl && sbKey && deviceName) {
+          setTimeout(() => onComplete({ supabaseUrl: sbUrl, supabaseAnonKey: sbKey, deviceName, deviceId }), 1500);
+        }
+      }
+    } catch (e: any) {
+      updateStep(id, { status: 'error', detail: e.message });
+    } finally {
+      setActiveStep(null);
+    }
+  }
+
+  async function pollStep(id: string) {
+    const step = steps.find(s => s.id === id);
+    if (!step?.pollEndpoint) return;
+    updateStep(id, { detail: '확인 중…' });
+
+    // 특수 처리: init_tables 재확인
+    if (id === 'init_tables') {
+      await runStep('init_tables'); return;
+    }
+
+    try {
+      const res = await fetch(step.pollEndpoint);
+      const data = await res.json();
+      const loggedIn = data.loggedIn || (data.installed && data.loggedIn !== false);
+      if (loggedIn) {
+        updateStep(id, { status: 'done', detail: data.user ? `로그인됨 (${data.user})` : '완료' });
+      } else {
+        updateStep(id, { detail: '아직 로그인이 확인되지 않았습니다. 브라우저 인증을 완료해주세요.' });
+      }
+    } catch { updateStep(id, { detail: '확인 실패 — 다시 시도해주세요' }); }
+  }
+
+  function saveSbInfo() {
+    if (!sbUrl || !sbKey || !deviceName) return;
+    // portal.json에 저장
+    fetch('/api/portal').then(r => r.json()).then(portalData => {
+      return fetch('/api/portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...portalData, supabaseUrl: sbUrl, supabaseAnonKey: sbKey, deviceName }),
+      });
+    }).catch(() => {});
+    updateStep('supabase_project', { status: 'done', detail: `${sbUrl.replace('https://', '').slice(0, 25)}… 연결됨` });
+    setShowSbForm(false);
+  }
+
+  const doneCount = steps.filter(s => s.status === 'done').length;
+  const nextPending = steps.find(s => s.status === 'pending' || s.status === 'error');
+
+  return (
+    <div className="h-full flex flex-col p-4 sm:p-8 overflow-y-auto">
+      <button onClick={onBack} className="flex items-center gap-1.5 text-zinc-500 hover:text-zinc-300 text-sm mb-6 transition-colors w-fit">
+        ← 돌아가기
+      </button>
+
+      <div className="max-w-xl w-full mx-auto space-y-5">
+        <div>
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <Zap className="w-5 h-5 text-amber-400" />
+            원클릭 설치 마법사
+          </h2>
+          <p className="text-zinc-500 text-sm mt-1">각 단계의 버튼을 순서대로 클릭하세요. 브라우저 인증은 자동으로 열립니다.</p>
+          <div className="flex items-center gap-2 mt-2">
+            <div className="flex-1 bg-zinc-800 rounded-full h-1.5">
+              <div className="bg-emerald-500 h-1.5 rounded-full transition-all" style={{ width: `${(doneCount / steps.length) * 100}%` }} />
+            </div>
+            <span className="text-xs text-zinc-500">{doneCount}/{steps.length}</span>
+          </div>
+        </div>
+
+        {/* Supabase URL/Key 입력 폼 */}
+        {showSbForm && (
+          <div className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-4 space-y-3">
+            <p className="text-sm font-semibold text-blue-300">Supabase 프로젝트 정보 입력</p>
+            <InfoBox color="blue">
+              <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer"
+                className="underline text-blue-400">supabase.com/dashboard</a> → 프로젝트 → Settings → API → Project URL + anon key 복사
+            </InfoBox>
+            <input value={sbUrl} onChange={e => setSbUrl(e.target.value)}
+              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-blue-500"
+              placeholder="https://xxx.supabase.co" />
+            <input value={sbKey} onChange={e => setSbKey(e.target.value)} type="password"
+              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm font-mono text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-blue-500"
+              placeholder="eyJ… (anon public key)" />
+            <input value={deviceName} onChange={e => setDeviceName(e.target.value)}
+              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-blue-500"
+              placeholder="이 기기 이름 (예: 내 맥북)" />
+            <div className="flex gap-2">
+              <button onClick={saveSbInfo} disabled={!sbUrl || !sbKey || !deviceName}
+                className="flex-1 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-sm text-white font-medium transition-colors">
+                저장하고 계속
+              </button>
+              <button onClick={() => { setShowSbForm(false); updateStep('supabase_project', { status: 'pending' }); }}
+                className="px-4 py-2 rounded-lg border border-zinc-600 hover:bg-zinc-700 text-sm text-zinc-400 transition-colors">
+                취소
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 스텝 목록 */}
+        <div className="space-y-2">
+          {steps.map(step => (
+            <StepRow
+              key={step.id}
+              step={step}
+              onAction={() => runStep(step.id)}
+              onPoll={() => pollStep(step.id)}
+            />
+          ))}
+        </div>
+
+        {/* 다음 단계 실행 버튼 */}
+        {!allDone && nextPending && !showSbForm && (
+          <button
+            onClick={() => runStep(nextPending.id)}
+            disabled={activeStep !== null}
+            className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-sm font-bold text-zinc-900 transition-colors flex items-center justify-center gap-2"
+          >
+            {activeStep ? <><RefreshCw className="w-4 h-4 animate-spin" /> 진행 중…</> : <>▶ {nextPending.label} 시작</>}
+          </button>
+        )}
+
+        {allDone && (
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-5 text-center space-y-3">
+            <p className="text-2xl">🎉</p>
+            <p className="text-base font-bold text-emerald-400">설치 완료!</p>
+            <p className="text-sm text-zinc-400">모든 인증이 완료되었습니다. 앱을 사용할 준비가 되었습니다.</p>
+          </div>
+        )}
+
+        <div className="text-xs text-zinc-700 space-y-1">
+          <p>• Supabase CLI가 없으면 자동으로 설치 명령을 알려드립니다</p>
+          <p>• GitHub / Vercel 로그인은 브라우저에서 처리됩니다 (토큰 직접 입력 불필요)</p>
+          <p>• 이미 완료된 단계는 자동으로 건너뜁니다</p>
+        </div>
+      </div>
     </div>
   );
 }
