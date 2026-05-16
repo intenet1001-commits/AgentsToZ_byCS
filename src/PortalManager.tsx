@@ -1179,7 +1179,7 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
       const ownDeviceId = data.deviceId ?? getOrCreateDeviceId();
       const targetDeviceId = opts?.targetDeviceId ?? viewingDeviceId ?? ownDeviceId;
       const [itemsRes, catsRes] = await Promise.all([
-        supabase.from('portmgr_portal_items').select('*').or(`device_id.eq.${targetDeviceId},device_id.eq.__shared__`),
+        supabase.from('portmgr_portal_items').select('*').in('device_id', [targetDeviceId, '__shared__']),
         supabase.from('portmgr_portal_categories').select('*').eq('device_id', '__shared__'),
       ]);
       if (itemsRes.error) throw new Error(itemsRes.error.message);
@@ -1207,14 +1207,17 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
       }));
 
       if (items.length === 0 && categories.length === 0) {
-        // Diagnose: check if any rows exist (device ID mismatch vs truly empty table)
-        const { data: anyItems } = await supabase.from('portmgr_portal_items').select('device_id').limit(5);
+        // Diagnose: distinguish "empty table", "device mismatch", and "query error"
+        const { data: anyItems, error: scanErr } = await supabase
+          .from('portmgr_portal_items').select('device_id').limit(5);
         const urlHint = sbUrl?.replace('https://', '').slice(0, 22) ?? '?';
-        if (anyItems && anyItems.length > 0) {
+        if (scanErr) {
+          showToast(`[${urlHint}] Supabase 조회 오류: ${scanErr.message}`, 'error');
+        } else if (anyItems && anyItems.length > 0) {
           const ids = [...new Set(anyItems.map((r: any) => r.device_id).filter(Boolean))];
           showToast(`[${urlHint}] 기기 ID(${targetDeviceId.slice(0, 8)}…)로 저장된 포털 데이터가 없습니다. 다른 기기(${ids.map((id: string) => id.slice(0, 8)).join(', ')}…) 데이터가 있습니다. 설정에서 기기를 선택 후 재시도하세요.`, 'error');
         } else {
-          showToast(`[${urlHint}] Supabase에 저장된 포털 데이터가 없습니다`, 'error');
+          showToast(`[${urlHint}] Supabase에 저장된 북마크가 없습니다. 북마크를 추가한 뒤 Push하세요.`, 'error');
         }
         return;
       }
