@@ -3663,6 +3663,11 @@ function App() {
               🌐 localhost
             </button>
           )}
+          {item.port && !isWindows() && (
+            <button onClick={e=>{e.stopPropagation(); openCmuxLocalhost(item);}} style={terminalBtnStyle('#6d28d9')} title={`cmux로 localhost:${item.port} 열기 (macOS 전용)`}>
+              cmux localhost
+            </button>
+          )}
         </div>
 
         {/* Worktree panel */}
