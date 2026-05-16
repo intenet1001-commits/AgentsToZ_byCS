@@ -846,6 +846,15 @@ function App() {
                 <Link2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">새 기기</span>
               </button>
             )}
+            <button
+              onClick={() => {
+                if (!confirm('localStorage를 초기화하고 재연결합니다.\n기기 선택이 초기화됩니다. 계속하시겠습니까?')) return;
+                ['portalData_v1','portalSelectedDevice','portalCreds','portal_google_verified','portalViewMode'].forEach(k => localStorage.removeItem(k));
+                window.location.reload();
+              }}
+              className={btnCls} title="localStorage 초기화 후 재연결">
+              <RefreshCw className="w-3.5 h-3.5" /><span className="hidden sm:inline">재연결</span>
+            </button>
             <button onClick={() => setOpenSettings(true)} className={btnCls}>
               <Settings className="w-3.5 h-3.5" /><span className="hidden sm:inline">설정</span>
             </button>
