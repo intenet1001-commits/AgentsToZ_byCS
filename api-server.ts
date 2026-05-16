@@ -262,7 +262,8 @@ async function killPid(pid: string, force = false): Promise<void> {
 /** 폴더/파일 열기 (Windows/macOS 공용) */
 function openPath(target: string): void {
   if (IS_WIN) {
-    spawn({ cmd: ['explorer.exe', target], stdout: 'inherit', stderr: 'inherit' });
+    const winPath = target.replace(/\//g, '\\');
+    spawn({ cmd: ['powershell.exe', '-NoProfile', '-WindowStyle', 'Hidden', '-Command', `Start-Process '${winPath}'`], stdout: 'pipe', stderr: 'pipe' });
   } else {
     spawn({ cmd: ['open', target], stdout: 'inherit', stderr: 'inherit' });
   }
@@ -1128,17 +1129,14 @@ const server = Bun.serve({
 
     if (url.pathname === "/api/open-build-folder" && req.method === "POST") {
       try {
-        // .cargo/config.toml의 target-dir 설정과 동일한 경로 (iCloud 밖)
-        const dmgFolder = join(process.env.HOME || "", "cargo-targets/portmanager/release/bundle/dmg");
+        const home = process.env.USERPROFILE || process.env.HOME || "";
+        // Windows: nsis 폴더, macOS: dmg 폴더
+        const bundleFolder = IS_WIN
+          ? join(home, "cargo-targets", "portmanager", "release", "bundle", "nsis")
+          : join(home, "cargo-targets", "portmanager", "release", "bundle", "dmg");
 
-        devLog(`[OpenBuildFolder] Attempting to open: ${dmgFolder}`);
-
-        // macOS에서 폴더 열기
-        spawn({
-          cmd: ["open", dmgFolder],
-          stdout: "inherit",
-          stderr: "inherit",
-        });
+        devLog(`[OpenBuildFolder] Attempting to open: ${bundleFolder}`);
+        openPath(bundleFolder);
 
         return new Response(
           JSON.stringify({

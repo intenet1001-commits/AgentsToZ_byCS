@@ -753,12 +753,25 @@ fn check_file_exists(path: String) -> bool {
 
 #[tauri::command]
 fn open_build_folder() -> Result<String, String> {
-    let home = std::env::var("HOME").unwrap_or_default();
-    // .cargo/config.toml의 target-dir 설정과 동일한 경로
-    let dmg_folder = format!("{}/cargo-targets/portmanager/release/bundle/dmg", home);
+    // Windows: USERPROFILE 우선, macOS: HOME
+    let home = std::env::var("USERPROFILE")
+        .or_else(|_| std::env::var("HOME"))
+        .unwrap_or_default();
 
+    #[cfg(target_os = "windows")]
+    let bundle_folder = format!("{}\\cargo-targets\\portmanager\\release\\bundle\\nsis", home);
+    #[cfg(not(target_os = "windows"))]
+    let bundle_folder = format!("{}/cargo-targets/portmanager/release/bundle/dmg", home);
+
+    #[cfg(target_os = "windows")]
+    Command::new("explorer")
+        .arg(&bundle_folder)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
+    #[cfg(not(target_os = "windows"))]
     Command::new("open")
-        .arg(&dmg_folder)
+        .arg(&bundle_folder)
         .spawn()
         .map_err(|e| e.to_string())?;
 
@@ -873,6 +886,13 @@ fn open_folder(folder_path: String) -> Result<String, String> {
         return Err(format!("폴더를 찾을 수 없습니다: \"{}\"", folder_path));
     }
 
+    #[cfg(target_os = "windows")]
+    Command::new("explorer")
+        .arg(&folder_path)
+        .spawn()
+        .map_err(|e| format!("폴더 열기 실패: {}", e))?;
+
+    #[cfg(not(target_os = "windows"))]
     Command::new("open")
         .arg(&folder_path)
         .spawn()
