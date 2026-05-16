@@ -771,15 +771,13 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
       setData(loaded);
       const envUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? '';
       const envKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? '';
-      setSbUrl(loaded.supabaseUrl || envUrl);
-      setSbKey(loaded.supabaseAnonKey || envKey);
-      // Persist env-var creds back to storage if missing
-      if ((!loaded.supabaseUrl && envUrl) || (!loaded.supabaseAnonKey && envKey)) {
-        loaded.supabaseUrl = envUrl;
-        loaded.supabaseAnonKey = envKey;
-      }
-      const resolvedUrl = loaded.supabaseUrl || envUrl;
-      const resolvedKey = loaded.supabaseAnonKey || envKey;
+      setSbUrl(envUrl || loaded.supabaseUrl);
+      setSbKey(envKey || loaded.supabaseAnonKey);
+      // env var이 있으면 항상 우선 사용 (Google OAuth 세션과 동일 프로젝트 보장)
+      if (envUrl) loaded.supabaseUrl = envUrl;
+      if (envKey) loaded.supabaseAnonKey = envKey;
+      const resolvedUrl = envUrl || loaded.supabaseUrl;
+      const resolvedKey = envKey || loaded.supabaseAnonKey;
 
       // Auto-recognize device name from Supabase devices table if not set locally
       if (!loaded.deviceName && resolvedUrl && resolvedKey && loaded.deviceId) {
