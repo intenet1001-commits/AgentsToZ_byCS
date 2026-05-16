@@ -16,6 +16,6 @@ console.log(`[build-win] CARGO_TARGET_DIR=${targetDir}`);
 
 await $`bun update-version.ts`;
 await $`bun run build`;
-await $`tauri build --bundles nsis`;
+await $`bunx tauri build --bundles nsis`;
 
 console.log(`\n✅ 빌드 완료: ${join(targetDir, "release", "bundle", "nsis")}\\*.exe`);

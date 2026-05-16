@@ -25,13 +25,18 @@ async function updateVersion() {
 
     console.log(`[UpdateVersion] ✅ ${old} → v${next} (${next}.0.0)`);
 
-    // 아이콘에 버전 번호 스탬프
+    // 아이콘에 버전 번호 스탬프 — Python 없으면 스킵
     const stampScript = join(import.meta.dir, "stamp-icon.py");
-    const stamp = Bun.spawn(["python3", stampScript], { stdout: "inherit", stderr: "inherit" });
-    const exitCode = await stamp.exited;
-    if (exitCode !== 0) {
-      console.warn(`[UpdateVersion] ⚠️ 아이콘 스탬프 실패 (빌드는 계속)`);
+    const pyCandidates = process.platform === 'win32' ? ['python', 'python3', 'py'] : ['python3', 'python'];
+    let stamped = false;
+    for (const pyCmd of pyCandidates) {
+      try {
+        const stamp = Bun.spawn([pyCmd, stampScript], { stdout: "inherit", stderr: "inherit" });
+        const exitCode = await stamp.exited;
+        if (exitCode === 0) { stamped = true; break; }
+      } catch { /* 해당 python 명령어 없음 — 다음 시도 */ }
     }
+    if (!stamped) console.warn(`[UpdateVersion] ⚠️ Python 없음 — 아이콘 스탬프 스킵 (빌드는 계속)`);
   } catch (error) {
     console.error(`[UpdateVersion] ❌ 에러:`, error);
     process.exit(1);
