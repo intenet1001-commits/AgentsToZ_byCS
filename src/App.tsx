@@ -958,10 +958,8 @@ function App() {
   const [deployUrl, setDeployUrl] = useState('');
   const [githubUrl, setGithubUrl] = useState('');
   const [worktreePath, setWorktreePath] = useState('');
-  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
-  const [activeTab, setActiveTab] = useState<'ports' | 'portal'>(() =>
-    typeof window !== 'undefined' && window.innerWidth < 768 ? 'portal' : 'ports'
-  );
+  const [isMobile, setIsMobile] = useState(false);
+  const [activeTab, setActiveTab] = useState<'ports' | 'portal'>('ports');
   const [lang, setLang] = useState<Lang>(() => (localStorage.getItem('portmanager-lang') as Lang) ?? 'ko');
   useEffect(() => { document.title = t(lang, 'appName'); }, [lang]);
   const [openPortalSettings, setOpenPortalSettings] = useState(false);
@@ -2019,10 +2017,9 @@ function App() {
 
   useEffect(() => {
     const handler = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-      if (mobile) setActiveTab('portal');
+      setIsMobile(window.innerWidth < 480);
     };
+    handler();
     window.addEventListener('resize', handler);
     return () => window.removeEventListener('resize', handler);
   }, []);
@@ -4728,8 +4725,7 @@ function App() {
         <div className="flex items-center gap-2 px-6 py-2.5 shrink-0 flex-wrap" style={{borderBottom:'1px solid rgba(255,240,220,0.07)'}}>
           <div className="flex items-center gap-2">
             <div className="flex gap-1 rounded-xl p-1 w-fit" style={{background:'#1c1916',border:'1px solid rgba(255,240,220,0.07)'}}>
-              {!isMobile && (
-                <button
+              <button
                   data-help-key="tab-ports"
                   onClick={() => setActiveTab('ports')}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
@@ -4745,7 +4741,6 @@ function App() {
                   <Server className="w-3.5 h-3.5" />
                   {t(lang, 'tabProjects')}
                 </button>
-              )}
               <button
                 data-help-key="tab-portal"
                 onClick={() => setActiveTab('portal')}
@@ -4756,7 +4751,7 @@ function App() {
                 }}
               >
                 <BookMarked className="w-3.5 h-3.5" />
-                {isMobile ? t(lang, 'tabBookmarks') : t(lang, 'tabPortal')}
+                {t(lang, 'tabPortal')}
               </button>
             </div>
 
