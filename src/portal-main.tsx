@@ -265,6 +265,7 @@ function PortsView({ deviceId, creds, showToast, onSwitchDevice }: {
           <Server className="w-10 h-10 text-zinc-700" />
           <p className="text-sm text-zinc-500">등록된 포트가 없습니다</p>
           <p className="text-xs text-zinc-600">로컬 앱에서 Push하면 여기에 나타납니다</p>
+          <p className="text-[10px] text-zinc-700 font-mono">device: {deviceId?.slice(0,8)}… / url: {creds.url.replace('https://','').slice(0,20)}</p>
           {onSwitchDevice && (
             <button onClick={onSwitchDevice}
               className="mt-2 px-3 py-1.5 text-xs text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/10 transition-colors">
@@ -277,19 +278,18 @@ function PortsView({ deviceId, creds, showToast, onSwitchDevice }: {
           <RefreshCw className="w-5 h-5 text-zinc-500 animate-spin" />
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+        <div className="divide-y divide-zinc-800/60">
           {ports.filter(p => {
             if (!searchQuery.trim()) return true;
             const q = searchQuery.toLowerCase();
             return (p.name?.toLowerCase().includes(q) || String(p.port ?? '').includes(q) || p.folder_path?.toLowerCase().includes(q));
           }).map(p => (
-            <div key={p.id} className="bg-zinc-900/60 border border-zinc-800/60 rounded-xl p-4 hover:border-zinc-700/60 transition-all">
-              <div className="mb-2">
-                <p className="text-sm font-medium text-white leading-snug truncate">{p.name}</p>
+            <div key={p.id} className="flex items-center gap-3 py-2.5 px-1 hover:bg-zinc-800/30 rounded-lg transition-colors group">
+              <div className="flex-1 min-w-0">
+                <span className="text-sm text-zinc-200 font-medium truncate block">{p.name}</span>
                 {p.port && <span className="text-[10px] text-zinc-600 font-mono">:{p.port}</span>}
               </div>
-
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex items-center gap-1.5 shrink-0">
                 {p.deploy_url && (
                   <a href={p.deploy_url} target="_blank" rel="noopener noreferrer"
                     className="flex items-center gap-1 px-2 py-1 text-[11px] bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 rounded-md transition-all">
@@ -301,9 +301,6 @@ function PortsView({ deviceId, creds, showToast, onSwitchDevice }: {
                     className="flex items-center gap-1 px-2 py-1 text-[11px] bg-zinc-800/60 hover:bg-zinc-700/60 text-zinc-300 border border-zinc-700/50 rounded-md transition-all">
                     <Github className="w-2.5 h-2.5" />GitHub
                   </a>
-                )}
-                {!p.deploy_url && !p.github_url && (
-                  <span className="text-[10px] text-zinc-700">링크 없음</span>
                 )}
               </div>
             </div>
