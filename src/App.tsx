@@ -764,7 +764,7 @@ const mergePortsFromOtherDevice = (local: PortInfo[], remote: PortInfo[]): PortI
 
 
 // localStorage credential fallback helper — works even when API server is offline
-const getPortalCredentials = async (): Promise<{ supabaseUrl?: string; supabaseAnonKey?: string; deviceId?: string; deviceName?: string }> => {
+const getPortalCredentials = async (): Promise<{ supabaseUrl?: string; supabaseAnonKey?: string; deviceId?: string; viewingDeviceId?: string; deviceName?: string }> => {
   try {
     const res = await Promise.race([
       fetch('/api/portal'),
@@ -772,7 +772,6 @@ const getPortalCredentials = async (): Promise<{ supabaseUrl?: string; supabaseA
     ]) as Response;
     if (res.ok) {
       const data = await res.json();
-      // Cache credential fields including deviceName
       if (data.supabaseUrl) {
         localStorage.setItem('portalCreds', JSON.stringify({
           supabaseUrl: data.supabaseUrl,
@@ -784,7 +783,32 @@ const getPortalCredentials = async (): Promise<{ supabaseUrl?: string; supabaseA
       return data;
     }
   } catch {}
-  // Fallback 1: portalData_v1 (portal-main.tsx 및 배포 웹 설정 UI가 저장하는 키)
+  // deviceId/viewingDeviceId/deviceName은 항상 localStorage에서 (기기 정체성)
+  let deviceId: string | undefined;
+  let viewingDeviceId: string | undefined;
+  let deviceName: string | undefined;
+  try {
+    const raw = localStorage.getItem('portalData_v1');
+    if (raw) {
+      const d = JSON.parse(raw);
+      deviceId = d.deviceId;
+      viewingDeviceId = d.viewingDeviceId;
+      deviceName = d.deviceName;
+    }
+  } catch {}
+  if (!deviceId) {
+    try {
+      const c = JSON.parse(localStorage.getItem('portalCreds') ?? '{}');
+      deviceId = c.deviceId;
+      deviceName = c.deviceName;
+    } catch {}
+  }
+  // URL/key: env var 최우선 — Google OAuth 세션은 env var URL 기준으로 수립되므로
+  // portalData_v1에 다른 URL이 저장돼 있어도 env var URL을 써야 RLS 통과 가능
+  const envUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? '';
+  const envKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? '';
+  if (envUrl && envKey) return { supabaseUrl: envUrl, supabaseAnonKey: envKey, deviceId, viewingDeviceId, deviceName };
+  // env var 미설정(로컬 개발) 시 localStorage URL/key 폴백
   try {
     const raw = localStorage.getItem('portalData_v1');
     if (raw) {
@@ -792,19 +816,10 @@ const getPortalCredentials = async (): Promise<{ supabaseUrl?: string; supabaseA
       if (d.supabaseUrl && d.supabaseAnonKey) return d;
     }
   } catch {}
-  // Fallback 2: portalCreds (기존 /api/portal 응답 캐시)
   try {
     const cached = localStorage.getItem('portalCreds');
     if (cached) return JSON.parse(cached);
   } catch {}
-  // Fallback 3: Vite env vars — portal-main.tsx / PortalManager.tsx와 동일한 URL 사용 보장
-  // 배포 웹에서 Google OAuth 세션은 env var URL 기준으로 수립되므로 App.tsx도 같은 URL을 써야
-  // RLS가 활성화된 경우 동일 프로젝트+세션으로만 읽기 가능
-  {
-    const envUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? '';
-    const envKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? '';
-    if (envUrl && envKey) return { supabaseUrl: envUrl, supabaseAnonKey: envKey };
-  }
   return {};
 };
 
