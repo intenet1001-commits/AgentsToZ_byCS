@@ -2260,23 +2260,34 @@ function OneClickWizard({ onBack, onComplete }: { onBack: () => void; onComplete
 
   const [steps, setSteps] = React.useState<InstallStep[]>([
     {
-      id: 'supabase_project',
-      label: '① Supabase 프로젝트',
-      desc: 'Supabase.com 가입 → 프로젝트 생성 → URL / Anon Key 입력',
-      status: 'pending',
-      needsBrowser: true,
-    },
-    {
-      id: 'supabase_cli',
-      label: '② Supabase CLI 인증',
-      desc: 'CLI 설치 후 브라우저로 로그인',
+      id: 'supabase_login',
+      label: '① Supabase 로그인',
+      desc: '브라우저에서 Supabase 계정으로 로그인 (CLI 자동 인증)',
       status: 'pending',
       pollEndpoint: '/api/supabase-cli/status',
       pollKey: 'loggedIn',
     },
     {
+      id: 'select_project',
+      label: '② 프로젝트 선택',
+      desc: '로그인 후 사용할 Supabase 프로젝트를 선택합니다',
+      status: 'pending',
+    },
+    {
+      id: 'fetch_credentials',
+      label: '③ 자격증명 자동 획득',
+      desc: 'CLI로 URL / Anon Key를 자동으로 가져옵니다 (수동 입력 불필요)',
+      status: 'pending',
+    },
+    {
+      id: 'create_tables',
+      label: '④ 테이블 자동 생성',
+      desc: 'Supabase CLI로 필요한 7개 테이블을 자동으로 생성합니다',
+      status: 'pending',
+    },
+    {
       id: 'github_cli',
-      label: '③ GitHub 계정 연결',
+      label: '⑤ GitHub 계정 연결',
       desc: 'GitHub CLI 설치 후 브라우저로 로그인',
       status: 'pending',
       pollEndpoint: '/api/github-cli/status',
@@ -2284,22 +2295,15 @@ function OneClickWizard({ onBack, onComplete }: { onBack: () => void; onComplete
     },
     {
       id: 'vercel_cli',
-      label: '④ Vercel 계정 연결',
+      label: '⑥ Vercel 계정 연결',
       desc: 'Vercel CLI 설치 후 브라우저로 로그인',
       status: 'pending',
       pollEndpoint: '/api/vercel-cli/status',
       pollKey: 'loggedIn',
     },
     {
-      id: 'init_tables',
-      label: '⑤ Supabase 테이블 생성',
-      desc: '필요한 테이블을 Supabase에 자동으로 만듭니다',
-      status: 'pending',
-      pollEndpoint: '_init_tables_check',
-    },
-    {
       id: 'push_credentials',
-      label: '⑥ 자격증명 암호화 저장',
+      label: '⑦ 자격증명 암호화 저장',
       desc: 'CLI 토큰을 Supabase에 AES-256 암호화 저장',
       status: 'pending',
     },
@@ -2311,6 +2315,8 @@ function OneClickWizard({ onBack, onComplete }: { onBack: () => void; onComplete
   const [activeStep, setActiveStep] = React.useState<string | null>(null);
   const [showSbForm, setShowSbForm] = React.useState(false);
   const [allDone, setAllDone] = React.useState(false);
+  const [projects, setProjects] = React.useState<{ref: string; name: string; region: string}[]>([]);
+  const [selectedRef, setSelectedRef] = React.useState('');
 
   // 기존 portal.json에서 Supabase URL/Key/기기명 자동 로드
   React.useEffect(() => {
@@ -2337,26 +2343,88 @@ function OneClickWizard({ onBack, onComplete }: { onBack: () => void; onComplete
     updateStep(id, { status: 'running', detail: undefined });
 
     try {
-      if (id === 'supabase_project') {
-        setShowSbForm(true);
-        updateStep(id, { status: 'running', detail: 'Supabase URL과 Anon Key를 입력하세요' });
-        return; // wait for manual input
-      }
-
-      if (id === 'supabase_cli') {
+      if (id === 'supabase_login') {
         const statusRes = await fetch('/api/supabase-cli/status');
-        const statusData = await statusRes.json();
-        if (statusData.installed && statusData.loggedIn) {
-          updateStep(id, { status: 'done', detail: '이미 로그인됨' }); return;
+        const statusData = await statusRes.json() as any;
+        if (statusData.loggedIn) {
+          // 이미 로그인 → 프로젝트 목록 자동 로드
+          setProjects(statusData.projects ?? []);
+          updateStep(id, { status: 'done', detail: `이미 로그인됨 (${statusData.projects?.length ?? 0}개 프로젝트)` });
+          return;
         }
         if (!statusData.installed) {
-          updateStep(id, {
-            status: 'error',
-            detail: `먼저 터미널에서 설치: ${cmd.supabaseCli}`,
-          }); return;
+          updateStep(id, { status: 'error', detail: `CLI 먼저 설치: ${cmd.supabaseCli}` });
+          return;
         }
         await fetch('/api/supabase-login', { method: 'POST' });
-        updateStep(id, { status: 'running', detail: `터미널에서 "${cmd.supabaseLogin}" 완료 후 "완료 확인" 클릭` });
+        updateStep(id, { status: 'running', detail: '터미널에서 Supabase 로그인 완료 후 "완료 확인" 클릭' });
+        return;
+      }
+
+      if (id === 'select_project') {
+        // 프로젝트 목록 로드 (없으면 다시 조회)
+        if (projects.length === 0) {
+          const statusRes = await fetch('/api/supabase-cli/status');
+          const statusData = await statusRes.json() as any;
+          setProjects(statusData.projects ?? []);
+        }
+        // 프로젝트가 1개면 자동 선택
+        const pList = projects.length > 0 ? projects : [];
+        if (pList.length === 1 && !selectedRef) {
+          setSelectedRef(pList[0].ref);
+          updateStep(id, { status: 'done', detail: `자동 선택: ${pList[0].name}` });
+        } else if (selectedRef) {
+          const proj = pList.find(p => p.ref === selectedRef);
+          updateStep(id, { status: 'done', detail: `선택됨: ${proj?.name ?? selectedRef}` });
+        } else {
+          updateStep(id, { status: 'running', detail: '아래 드롭다운에서 프로젝트를 선택하세요' });
+        }
+        return;
+      }
+
+      if (id === 'fetch_credentials') {
+        if (!selectedRef) {
+          updateStep(id, { status: 'error', detail: '② 프로젝트를 먼저 선택하세요' }); return;
+        }
+        const res = await fetch(`/api/supabase-cli/apikeys?ref=${selectedRef}`);
+        const data = await res.json() as any;
+        if (data.error) throw new Error(data.error);
+        setSbUrl(data.projectUrl);
+        setSbKey(data.anonKey);
+        // portal.json에 자동 저장
+        const portalRes = await fetch('/api/portal');
+        const portalData = await portalRes.json() as any;
+        await fetch('/api/portal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...portalData, supabaseUrl: data.projectUrl, supabaseAnonKey: data.anonKey, deviceName: deviceName || portalData.deviceName }),
+        });
+        updateStep(id, { status: 'done', detail: `URL/Key 자동 획득: ${data.projectUrl?.slice(0, 30)}…` });
+        return;
+      }
+
+      if (id === 'create_tables') {
+        if (!selectedRef) {
+          updateStep(id, { status: 'error', detail: '② 프로젝트를 먼저 선택하세요' }); return;
+        }
+        updateStep(id, { status: 'running', detail: 'CLI로 테이블 생성 중…' });
+        // 1. 프로젝트 링크
+        const linkRes = await fetch('/api/supabase-cli/link', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ref: selectedRef }),
+        });
+        const linkData = await linkRes.json() as any;
+        if (linkData.error && !linkData.error.includes('already')) {
+          // 링크 실패해도 create-tables 시도 (이미 링크된 경우 등)
+        }
+        // 2. 테이블 자동 생성
+        const tableRes = await fetch('/api/supabase-cli/create-tables', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ref: selectedRef }),
+        });
+        const tableData = await tableRes.json() as any;
+        if (tableData.error) throw new Error(tableData.error);
+        updateStep(id, { status: 'done', detail: tableData.message ?? '7개 테이블 생성 완료' });
         return;
       }
 
@@ -2391,32 +2459,7 @@ function OneClickWizard({ onBack, onComplete }: { onBack: () => void; onComplete
         return;
       }
 
-      if (id === 'init_tables') {
-        if (!sbUrl || !sbKey) {
-          updateStep(id, { status: 'error', detail: 'Supabase URL/Key를 먼저 입력하세요' }); return;
-        }
-        const res = await fetch('/api/setup/init-tables', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ supabaseUrl: sbUrl, supabaseAnonKey: sbKey }),
-        });
-        const data = await res.json();
-        if (data.error) throw new Error(data.error);
-        if (data.needsManualDDL) {
-          // DDL을 클립보드에 복사하고 Supabase SQL 에디터 열기
-          try { await navigator.clipboard.writeText(data.ddl); } catch {}
-          const ref = sbUrl.match(/https:\/\/(.+)\.supabase\.co/)?.[1] ?? '';
-          if (ref) window.open(`https://supabase.com/dashboard/project/${ref}/sql/new`, '_blank');
-          updateStep(id, {
-            status: 'error',
-            detail: `DDL이 클립보드에 복사됨. Supabase SQL 에디터(자동 열림)에 붙여넣기 후 "완료 확인" 클릭`,
-            needsBrowser: true,
-          });
-          return;
-        }
-        updateStep(id, { status: 'done', detail: data.message ?? '테이블 확인 완료' });
-        return;
-      }
+      // init_tables는 새 흐름에서 create_tables로 대체됨 (fallback 유지)
 
       if (id === 'push_credentials') {
         const res = await fetch('/api/setup/push-credentials', { method: 'POST' });
@@ -2445,10 +2488,11 @@ function OneClickWizard({ onBack, onComplete }: { onBack: () => void; onComplete
     if (!step?.pollEndpoint) return;
     updateStep(id, { detail: '확인 중…' });
 
-    // 특수 처리: init_tables 재확인
-    if (id === 'init_tables') {
-      await runStep('init_tables'); return;
-    }
+    // 특수 처리
+    if (id === 'supabase_login') { await pollSupabaseLogin(); return; }
+    if (id === 'select_project') { await runStep('select_project'); return; }
+    if (id === 'create_tables') { await runStep('create_tables'); return; }
+    if (id === 'init_tables') { await runStep('create_tables'); return; }
 
     try {
       const res = await fetch(step.pollEndpoint);
@@ -2474,6 +2518,26 @@ function OneClickWizard({ onBack, onComplete }: { onBack: () => void; onComplete
     }).catch(() => {});
     updateStep('supabase_project', { status: 'done', detail: `${sbUrl.replace('https://', '').slice(0, 25)}… 연결됨` });
     setShowSbForm(false);
+  }
+
+  // pollStep에서 supabase_login 특수 처리
+  async function pollSupabaseLogin() {
+    updateStep('supabase_login', { detail: '로그인 확인 중…' });
+    try {
+      const res = await fetch('/api/supabase-cli/status');
+      const data = await res.json() as any;
+      if (data.loggedIn) {
+        setProjects(data.projects ?? []);
+        updateStep('supabase_login', { status: 'done', detail: `로그인됨 (${data.projects?.length ?? 0}개 프로젝트 발견)` });
+        // 프로젝트 1개면 자동 선택
+        if (data.projects?.length === 1) {
+          setSelectedRef(data.projects[0].ref);
+          updateStep('select_project', { status: 'done', detail: `자동 선택: ${data.projects[0].name}` });
+        }
+      } else {
+        updateStep('supabase_login', { detail: '아직 로그인이 완료되지 않았습니다. 터미널을 확인해주세요.' });
+      }
+    } catch { updateStep('supabase_login', { detail: '확인 실패 — 다시 시도해주세요' }); }
   }
 
   const doneCount = steps.filter(s => s.status === 'done').length;
@@ -2516,34 +2580,48 @@ function OneClickWizard({ onBack, onComplete }: { onBack: () => void; onComplete
           </div>
         </div>
 
-        {/* Supabase URL/Key 입력 폼 */}
-        {showSbForm && (
+        {/* ② 프로젝트 선택 드롭다운 — 로그인 후 프로젝트 목록이 있을 때 표시 */}
+        {projects.length > 0 && steps.find(s => s.id === 'select_project')?.status !== 'done' && (
           <div className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-4 space-y-3">
-            <p className="text-sm font-semibold text-blue-300">Supabase 프로젝트 정보 입력</p>
-            <InfoBox color="blue">
-              <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer"
-                className="underline text-blue-400">supabase.com/dashboard</a> → 프로젝트 → Settings → API → Project URL + anon key 복사
-            </InfoBox>
-            <input value={sbUrl} onChange={e => setSbUrl(e.target.value)}
-              autoComplete="off" spellCheck={false}
-              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-blue-500"
-              placeholder="https://xxx.supabase.co" />
-            <input value={sbKey} onChange={e => setSbKey(e.target.value)} type="password"
-              autoComplete="new-password"
-              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm font-mono text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-blue-500"
-              placeholder="eyJ… (anon public key)" />
+            <p className="text-sm font-semibold text-blue-300">② Supabase 프로젝트 선택</p>
+            <select
+              value={selectedRef}
+              onChange={e => setSelectedRef(e.target.value)}
+              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-100 focus:outline-none focus:border-blue-500"
+            >
+              <option value="">프로젝트를 선택하세요</option>
+              {projects.map(p => (
+                <option key={p.ref} value={p.ref}>{p.name} ({p.region})</option>
+              ))}
+            </select>
             <input value={deviceName} onChange={e => setDeviceName(e.target.value)}
               className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-blue-500"
-              placeholder="이 기기 이름 (예: 내 맥북)" />
+              placeholder="이 기기 이름 (예: 내 맥북 프로)" />
+            <button
+              onClick={async () => {
+                if (!selectedRef) return;
+                const proj = projects.find(p => p.ref === selectedRef);
+                updateStep('select_project', { status: 'done', detail: `선택됨: ${proj?.name}` });
+                // 즉시 다음 단계(fetch_credentials) 자동 실행
+                await runStep('fetch_credentials');
+              }}
+              disabled={!selectedRef}
+              className="w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-sm text-white font-medium transition-colors"
+            >
+              이 프로젝트 선택 →
+            </button>
+          </div>
+        )}
+
+        {/* 기기 이름 입력 (별도 상태) */}
+        {steps.find(s => s.id === 'select_project')?.status === 'done' &&
+         steps.find(s => s.id === 'push_credentials')?.status !== 'done' && !deviceName && (
+          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+            <p className="text-xs text-amber-300 mb-2">이 기기 이름을 입력하세요 (최종 저장에 필요)</p>
             <div className="flex gap-2">
-              <button onClick={saveSbInfo} disabled={!sbUrl || !sbKey || !deviceName}
-                className="flex-1 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-sm text-white font-medium transition-colors">
-                저장하고 계속
-              </button>
-              <button onClick={() => { setShowSbForm(false); updateStep('supabase_project', { status: 'pending' }); }}
-                className="px-4 py-2 rounded-lg border border-zinc-600 hover:bg-zinc-700 text-sm text-zinc-400 transition-colors">
-                취소
-              </button>
+              <input value={deviceName} onChange={e => setDeviceName(e.target.value)}
+                className="flex-1 px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-amber-500"
+                placeholder="예: 내 맥북 프로" />
             </div>
           </div>
         )}

@@ -3237,6 +3237,117 @@ Analyze this project and reply with JSON only (no markdown, no explanation):
       }
     }
 
+    // ─── Supabase CLI: link project + create tables ──────────────────────────
+
+    if (url.pathname === "/api/supabase-cli/link" && req.method === "POST") {
+      try {
+        const { ref } = await req.json() as any;
+        if (!ref) return new Response(JSON.stringify({ error: "ref 필수" }), { status: 400, headers });
+
+        const statusRes = await fetch(`http://localhost:${server.port}/api/supabase-cli/status`);
+        const statusData = await statusRes.json() as any;
+        if (!statusData.cliPath) return new Response(JSON.stringify({ error: "Supabase CLI 미설치" }), { status: 400, headers });
+
+        const cliPath = statusData.cliPath;
+        const extraPath = IS_WIN
+          ? `${process.env.APPDATA}\\scoop\\shims;${process.env.PATH ?? ""}`
+          : `/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${homedir()}/.local/bin:${process.env.PATH ?? ""}`;
+
+        const p = Bun.spawn([cliPath, "link", "--project-ref", ref, "--experimental"], {
+          stdout: "pipe", stderr: "pipe",
+          env: { ...process.env, PATH: extraPath },
+          stdin: "pipe",
+        });
+        await p.exited;
+        const out = await new Response(p.stdout).text();
+        const err = await new Response(p.stderr).text();
+        const combined = out + err;
+
+        if (p.exitCode !== 0 && !combined.includes("linked")) {
+          return new Response(JSON.stringify({ error: `링크 실패: ${err.slice(0, 200)}` }), { status: 500, headers });
+        }
+        return new Response(JSON.stringify({ success: true, ref, message: `프로젝트 ${ref} 링크 완료` }), { headers });
+      } catch (e: any) {
+        return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
+      }
+    }
+
+    if (url.pathname === "/api/supabase-cli/create-tables" && req.method === "POST") {
+      try {
+        const { ref } = await req.json() as any;
+        if (!ref) return new Response(JSON.stringify({ error: "ref 필수" }), { status: 400, headers });
+
+        const statusRes = await fetch(`http://localhost:${server.port}/api/supabase-cli/status`);
+        const statusData = await statusRes.json() as any;
+        const cliPath = statusData.cliPath ?? "supabase";
+        const extraPath = IS_WIN
+          ? `${process.env.APPDATA}\\scoop\\shims;${process.env.PATH ?? ""}`
+          : `/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${homedir()}/.local/bin:${process.env.PATH ?? ""}`;
+
+        // DDL 전체 스키마 — portmgr_ 프리픽스 테이블들
+        const ddl = `
+CREATE TABLE IF NOT EXISTS portmgr_ports (
+  id text PRIMARY KEY, device_id text, name text, port integer,
+  command_path text, folder_path text, terminal_command text,
+  deploy_url text, github_url text, favorite boolean DEFAULT false,
+  memo text, memo_updated_at timestamptz, device_name text,
+  created_at timestamptz DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS portmgr_devices (
+  id text PRIMARY KEY, name text, last_push_at timestamptz DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS portmgr_portal_items (
+  id text PRIMARY KEY, device_id text, name text, type text, url text, path text,
+  category text, description text, pinned boolean DEFAULT false,
+  visit_count integer DEFAULT 0, last_visited timestamptz, created_at timestamptz DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS portmgr_portal_categories (
+  id text PRIMARY KEY, device_id text, name text, color text, "order" integer DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS portmgr_workspace_roots (
+  id text PRIMARY KEY, device_id text, name text, path text
+);
+CREATE TABLE IF NOT EXISTS portmgr_push_snapshots (
+  id text PRIMARY KEY, created_at timestamptz DEFAULT now(),
+  table_name text, device_id text, device_name text, row_count integer, snapshot jsonb
+);
+CREATE TABLE IF NOT EXISTS portmgr_device_credentials (
+  id text PRIMARY KEY, supabase_url text, supabase_anon_key text,
+  github_token_enc text, vercel_token_enc text, supabase_access_token_enc text,
+  portal_url text, setup_completed_at timestamptz, created_at timestamptz DEFAULT now()
+);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename='portmgr_device_credentials' AND policyname='anon_all') THEN
+    ALTER TABLE portmgr_device_credentials ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY "anon_all" ON portmgr_device_credentials FOR ALL TO anon USING (true) WITH CHECK (true);
+  END IF;
+END $$;
+`.trim();
+
+        // 임시 SQL 파일 저장
+        const sqlFile = IS_WIN
+          ? `${process.env.TEMP ?? "C:\\Temp"}\\portmgr_schema.sql`
+          : `/tmp/portmgr_schema.sql`;
+        await Bun.write(sqlFile, ddl);
+
+        // supabase db query --linked --file /tmp/portmgr_schema.sql
+        const p = Bun.spawn([cliPath, "db", "query", "--linked", "--file", sqlFile], {
+          stdout: "pipe", stderr: "pipe",
+          env: { ...process.env, PATH: extraPath, SUPABASE_PROJECT_REF: ref },
+        });
+        await p.exited;
+        const out = await new Response(p.stdout).text();
+        const err = await new Response(p.stderr).text();
+
+        if (p.exitCode !== 0) {
+          return new Response(JSON.stringify({ error: `테이블 생성 실패: ${err.slice(0, 300)}`, sql: ddl }), { status: 500, headers });
+        }
+        return new Response(JSON.stringify({ success: true, message: "7개 테이블 자동 생성 완료", tables: 7 }), { headers });
+      } catch (e: any) {
+        return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
+      }
+    }
+
     // ─── GitHub CLI ──────────────────────────────────────────────────────────
 
     if (url.pathname === "/api/github-cli/status" && req.method === "GET") {
