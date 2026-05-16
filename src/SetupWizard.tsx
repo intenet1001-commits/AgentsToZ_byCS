@@ -1997,8 +1997,8 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
                     시작하기 <ChevronRight className="w-3.5 h-3.5" />
                   </div>
                 </button>
-                <button onClick={() => setMode('additional')}
-                  className="group bg-zinc-900 hover:bg-zinc-800 border-2 border-emerald-500/40 hover:border-emerald-500/70 rounded-2xl p-5 sm:p-7 text-left transition-all duration-200 relative">
+                <div role="button" tabIndex={0} onClick={() => setMode('additional')} onKeyDown={e => e.key === 'Enter' && setMode('additional')}
+                  className="group bg-zinc-900 hover:bg-zinc-800 border-2 border-emerald-500/40 hover:border-emerald-500/70 rounded-2xl p-5 sm:p-7 text-left transition-all duration-200 relative cursor-pointer">
                   <span className="absolute top-2 right-2 text-[9px] text-emerald-300 bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 rounded-full">빠름</span>
                   <div className="w-10 h-10 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-center justify-center mb-3 sm:mb-4 group-hover:bg-emerald-500/20 transition-all">
                     <Laptop className="w-5 h-5 text-emerald-400" />
@@ -2017,7 +2017,7 @@ export default function SetupWizard({ onComplete, onSkip }: SetupWizardProps) {
                       <ClipboardPaste className="w-2.5 h-2.5" /> 클립보드
                     </button>
                   </div>
-                </button>
+                </div>
                 <button onClick={() => setMode('dev_env')}
                   className={`group bg-zinc-900 hover:bg-zinc-800 border rounded-2xl p-5 sm:p-7 text-left transition-all duration-200 ${detectedOs ? 'border-zinc-700 hover:border-sky-500/50' : 'border-zinc-700 hover:border-sky-500/50'}`}>
                   <div className="flex items-start justify-between mb-3 sm:mb-4">
