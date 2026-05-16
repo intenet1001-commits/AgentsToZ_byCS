@@ -573,7 +573,9 @@ function App() {
           setShowDevicePicker(true);
         }
       }
-    } catch {}
+    } catch (e) {
+      showToast('기기 목록 조회 실패: ' + String(e), 'error');
+    }
   }
 
   async function registerThisDevice() {
@@ -620,6 +622,8 @@ function App() {
     } catch {}
     setShowDevicePicker(false);
     if (autoSwitch) setActiveTab('ports');
+    // 단말 선택 시 북마크도 즉시 Pull (shared 데이터 갱신)
+    setTimeout(() => { actionsRef.current?.pull(); }, 200);
   }
 
   async function openPortsHistory() {
