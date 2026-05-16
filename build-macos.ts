@@ -45,7 +45,19 @@ if (isDmg) {
     process.exit(result.exitCode);
   }
 } else {
-  await $`tauri build`;
+  const result = await $`tauri build`.nothrow();
+  // DMG 후처리 — bundle_dmg.sh 실패 시 임시 DMG로 자동 복구
+  await $`bun fix-dmg.ts`;
+  if (result.exitCode !== 0) {
+    const { readdirSync, existsSync } = await import("node:fs");
+    const dmgDir = join(targetDir, "release", "bundle", "dmg");
+    const hasDmg = existsSync(dmgDir) && readdirSync(dmgDir).some((f: string) => f.endsWith(".dmg"));
+    if (!hasDmg) {
+      console.error(`[build-macos] 빌드 실패 (exit code ${result.exitCode})`);
+      process.exit(result.exitCode);
+    }
+    console.log(`[build-macos] ⚠️  bundle_dmg.sh 오류 — fix-dmg로 복구 완료`);
+  }
 }
 
 // 4. 버전 파일 git commit (push는 수동)
