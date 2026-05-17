@@ -975,11 +975,13 @@ function WslSetupModal({ status, onClose, onInstallTmux }: {
 
 // Click-to-edit single URL row used in the right-side detail panel. Empty rows still
 // render as a clickable affordance so users can add a URL without opening the full form.
-function InlineUrlRow({ label, value, onSave, placeholder }: {
+// `mobile` enlarges the touch target and uses fontSize 16 to prevent iOS Safari auto-zoom.
+function InlineUrlRow({ label, value, onSave, placeholder, mobile = false }: {
   label: string;
   value?: string;
   onSave: (next: string) => void;
   placeholder: string;
+  mobile?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value ?? '');
@@ -994,13 +996,17 @@ function InlineUrlRow({ label, value, onSave, placeholder }: {
   };
   const cancel = () => { setDraft(value ?? ''); setEditing(false); };
 
+  const rowPad = mobile ? '8px 0' : '0';
+  const inputFont = mobile ? 16 : 12;
+  const inputPad = mobile ? '8px 10px' : '2px 6px';
+
   const labelStyle = { color:'#4b4540', minWidth:72, flexShrink:0 } as const;
   const valueStyle = { color:'#7ba7c9', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', cursor:'text', flex:1 } as const;
   const emptyStyle = { color:'#4b4540', cursor:'text', flex:1, fontStyle:'italic' } as const;
 
   if (editing) {
     return (
-      <div style={{display:'flex',gap:10,alignItems:'center'}}>
+      <div style={{display:'flex',gap:10,alignItems:'center',padding:rowPad}}>
         <span style={labelStyle}>{label}</span>
         <input
           ref={inputRef}
@@ -1010,13 +1016,13 @@ function InlineUrlRow({ label, value, onSave, placeholder }: {
           onBlur={commit}
           onKeyDown={e => { if (e.key === 'Enter') commit(); else if (e.key === 'Escape') cancel(); }}
           placeholder={placeholder}
-          style={{flex:1,padding:'2px 6px',background:'#0a0a0b',border:'1px solid rgba(255,240,220,0.18)',borderRadius:4,color:'#ede7dd',fontSize:12,fontFamily:'inherit'}}
+          style={{flex:1,padding:inputPad,background:'#0a0a0b',border:'1px solid rgba(255,240,220,0.18)',borderRadius:4,color:'#ede7dd',fontSize:inputFont,fontFamily:'inherit'}}
         />
       </div>
     );
   }
   return (
-    <div style={{display:'flex',gap:10,alignItems:'center'}} onClick={() => setEditing(true)} title="클릭하여 수정">
+    <div style={{display:'flex',gap:10,alignItems:'center',padding:rowPad}} onClick={() => setEditing(true)} title="클릭하여 수정">
       <span style={labelStyle}>{label}</span>
       {value
         ? <span style={valueStyle}>{value}</span>
@@ -4000,8 +4006,15 @@ function App() {
 
     return (
       <div style={{flex:1,display:'flex',overflow:'hidden'}}>
-        {/* 좌측 목록 패널 */}
-        <div style={{width:300,flexShrink:0,borderRight:'1px solid rgba(255,240,220,0.07)',display:'flex',flexDirection:'column',background:'#1c1916'}}>
+        {/* 좌측 목록 패널 — 모바일에선 선택 항목이 있으면 숨기고 전체 너비로 전환 */}
+        <div style={{
+          width: isMobile ? '100%' : 300,
+          flexShrink: 0,
+          borderRight: isMobile ? 'none' : '1px solid rgba(255,240,220,0.07)',
+          display: (isMobile && sel) ? 'none' : 'flex',
+          flexDirection: 'column',
+          background: '#1c1916',
+        }}>
           {/* 섹션 필터 칩 */}
           <div style={{padding:'8px 10px 0',display:'flex',gap:3,flexWrap:'wrap' as const,borderBottom:'1px solid rgba(255,240,220,0.05)'}}>
             {([
@@ -4104,8 +4117,8 @@ function App() {
           </div>}
         </div>
 
-        {/* 우측 상세 패널 */}
-        {sel ? (
+        {/* 우측 상세 패널 — 모바일에선 선택이 없으면 렌더 자체를 생략 */}
+        {(!isMobile || sel) && (sel ? (
           editingId === sel.id ? (
             /* 수정 폼 */
             <div style={{flex:1,overflowY:'auto',padding:'28px 32px',display:'flex',flexDirection:'column',gap:6}}>
@@ -4130,6 +4143,13 @@ function App() {
           <div style={{flex:1,overflowY:'auto',padding:'28px 32px'}}>
             {/* 헤더 */}
             <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:6}}>
+              {isMobile && (
+                <button
+                  onClick={() => setV4SelectedId(null)}
+                  style={{padding:'6px 10px',background:'transparent',border:'1px solid rgba(255,240,220,0.12)',borderRadius:6,cursor:'pointer',color:'#a39a8c',fontSize:13,display:'flex',alignItems:'center',gap:4}}
+                  title="목록으로"
+                >← 목록</button>
+              )}
               <span style={{width:8,height:8,borderRadius:4,background:sel.isRunning?'#8fb96e':'#6b6459',flexShrink:0}}/>
               <h2 style={{margin:0,fontSize:20,fontWeight:600,letterSpacing:-0.3,color:'#ede7dd'}}>{sel.name}</h2>
               {sel.port && <span style={{fontSize:15,fontFamily:monoFont,color:'#e8a557'}}>:{sel.port}</span>}
@@ -4149,8 +4169,8 @@ function App() {
               {sel.folderPath && <div style={{display:'flex',gap:10}}><span style={{color:'#4b4540',minWidth:72,flexShrink:0}}>folder</span><span style={{color:'#a39a8c',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{sel.folderPath}</span></div>}
               {sel.commandPath && <div style={{display:'flex',gap:10}}><span style={{color:'#4b4540',minWidth:72,flexShrink:0}}>command</span><span style={{color:'#a39a8c',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{sel.commandPath}</span></div>}
               {sel.terminalCommand && <div style={{display:'flex',gap:10}}><span style={{color:'#4b4540',minWidth:72,flexShrink:0}}>terminal</span><span style={{color:'#a39a8c',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{sel.terminalCommand}</span></div>}
-              <InlineUrlRow label="deploy" value={sel.deployUrl} onSave={(v) => saveInlineUrl(sel.id, 'deployUrl', v)} placeholder="배포 주소 입력" />
-              <InlineUrlRow label="github" value={sel.githubUrl} onSave={(v) => saveInlineUrl(sel.id, 'githubUrl', v)} placeholder="GitHub 주소 입력" />
+              <InlineUrlRow label="deploy" value={sel.deployUrl} onSave={(v) => saveInlineUrl(sel.id, 'deployUrl', v)} placeholder="배포 주소 입력" mobile={isMobile} />
+              <InlineUrlRow label="github" value={sel.githubUrl} onSave={(v) => saveInlineUrl(sel.id, 'githubUrl', v)} placeholder="GitHub 주소 입력" mobile={isMobile} />
             </div>
 
             {/* 실행 제어 */}
@@ -4204,7 +4224,7 @@ function App() {
             <SquareTerminal style={{width:36,height:36,opacity:0.2}}/>
             <p style={{fontSize:12,margin:0,fontFamily:'JetBrains Mono, monospace'}}>select a project</p>
           </div>
-        )}
+        ))}
       </div>
     );
   };
