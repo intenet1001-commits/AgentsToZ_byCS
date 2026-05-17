@@ -1528,7 +1528,8 @@ function App() {
   const callCmux = async (
     rustCmd: 'open_cmux_claude' | 'open_cmux_claude_new' | 'open_cmux_terminal' | 'open_cmux_localhost' | 'open_cmux_tmux' | 'open_cmux_agent_view' | 'open_cmux_project_agents' | 'open_claude_bg',
     httpPath: '/api/open-cmux-claude' | '/api/open-cmux-claude-new' | '/api/open-cmux-terminal' | '/api/open-cmux-localhost' | '/api/open-cmux-tmux' | '/api/open-cmux-agent-view' | '/api/open-cmux-project-agents' | '/api/open-claude-bg',
-    body: { folderPath?: string; worktreePath?: string; bypass?: boolean; name?: string; port?: number; fresh?: boolean }
+    body: { folderPath?: string; worktreePath?: string; bypass?: boolean; name?: string; port?: number; fresh?: boolean },
+    { retry = 0 }: { retry?: number } = {}
   ): Promise<string> => {
     if (isTauri()) {
       return await invoke<string>(rustCmd, body as any);
@@ -1541,6 +1542,11 @@ function App() {
     });
     const data = await res.json();
     if (!res.ok || data?.success === false) {
+      // WSL agent 엔드포인트는 첫 호출 distro 캐시 미워밍업으로 실패 가능 → 1회 재시도
+      if (retry > 0 && httpPath.includes('agent')) {
+        await new Promise(r => setTimeout(r, 600));
+        return callCmux(rustCmd, httpPath, body, { retry: retry - 1 });
+      }
       throw new Error(data?.error ?? `HTTP ${res.status}`);
     }
     return data?.message ?? 'OK';
@@ -1648,7 +1654,7 @@ function App() {
     try {
       const msg = await callCmux('open_cmux_agent_view', '/api/open-cmux-agent-view', {
         bypass: bypassPermissions,
-      });
+      }, { retry: 1 });
       showToast(msg, 'success');
     } catch (e: any) {
       const raw = typeof e === 'string' ? e : (e?.message ?? String(e));
@@ -1674,7 +1680,7 @@ function App() {
         folderPath: item.folderPath,
         name: getSessionName(item),
         bypass: bypassPermissions,
-      });
+      }, { retry: 1 });
       showToast(msg, 'success');
     } catch (e: any) {
       const raw = typeof e === 'string' ? e : (e?.message ?? String(e));
