@@ -1989,8 +1989,8 @@ end try`);
     if (url.pathname === "/api/install-app" && req.method === "POST") {
       try {
         // CARGO_TARGET_DIR 동적 설정 (build-macos.ts에서 $HOME/cargo-targets/portmanager로 설정)
-        const appPath = join(process.env.HOME || "", "cargo-targets/portmanager/release/bundle/macos/CS_Manager.app");
-        const destPath = "/Applications/CS_Manager.app";
+        const appPath = join(process.env.HOME || "", "cargo-targets/portmanager/release/bundle/macos/AgentsToZ_byCS.app");
+        const destPath = "/Applications/AgentsToZ_byCS.app";
 
         devLog(`[InstallApp] Installing from: ${appPath} to: ${destPath}`);
 

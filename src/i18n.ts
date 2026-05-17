@@ -2,8 +2,8 @@ export type Lang = 'ko' | 'en';
 
 export const translations = {
   ko: {
-    appName: '프로젝트 관리 끝판왕',
-    appNameShort: '끝',
+    appName: 'AgentsToZ',
+    appNameShort: 'A',
     tabProjects: '프로젝트·폴더',
     tabPortal: '포털',
     tabBookmarks: '북마크',
@@ -59,8 +59,8 @@ export const translations = {
     noProjects: '프로젝트 없음',
   },
   en: {
-    appName: 'Project Manager Pro',
-    appNameShort: 'P',
+    appName: 'AgentsToZ',
+    appNameShort: 'A',
     tabProjects: 'Projects',
     tabPortal: 'Portal',
     tabBookmarks: 'Bookmarks',
