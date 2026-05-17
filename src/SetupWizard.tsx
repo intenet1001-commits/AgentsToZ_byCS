@@ -13,7 +13,7 @@ interface SetupWizardProps {
 /** 포크 사용자는 VITE_REPO_URL 환경변수만 설정하면 됩니다.
  *  git clone 예시 / "이 앱 포크" 링크가 자동으로 이 저장소를 가리킵니다. */
 const REPO_URL: string = (import.meta as any).env?.VITE_REPO_URL
-  ?? 'https://github.com/intenet1001-commits/portmanagement';
+  ?? 'https://github.com/intenet1001-commits/AgentsToZ_byCS';
 const REPO_CLONE_URL = REPO_URL.endsWith('.git') ? REPO_URL : `${REPO_URL}.git`;
 const REPO_FORK_URL = `${REPO_URL}/fork`;
 const REPO_DIR_NAME = REPO_URL.split('/').filter(Boolean).pop()?.replace(/\.git$/, '') ?? 'portmanagement';

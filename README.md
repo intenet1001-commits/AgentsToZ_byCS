@@ -20,7 +20,7 @@ curl -fsSL https://bun.sh/install | bash   # macOS
 # powershell -c "irm bun.sh/install.ps1 | iex"   # Windows
 
 # 저장소 받기 & 실행
-git clone https://github.com/intenet1001-commits/portmanagement.git
+git clone https://github.com/intenet1001-commits/AgentsToZ_byCS.git
 cd portmanagement
 bun install
 bun run start
