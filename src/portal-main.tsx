@@ -7,6 +7,7 @@ import {
   ExternalLink, Github, RefreshCw, Clock, Monitor, Smartphone,
   Server, Pencil, Trash2, Search,
   ChevronDown, X, MoreHorizontal, Link2,
+  Plus, Check,
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { fetchPushHistory, type PushSnapshot } from './pushHistory';
@@ -60,6 +61,8 @@ interface PortRow {
   github_url?: string | null;
   device_id?: string | null;
   device_name?: string | null;
+  description?: string | null;
+  category?: string | null;
 }
 
 interface DeviceRow {
@@ -202,6 +205,16 @@ function Toast({ message, type }: { message: string; type: 'success' | 'error' }
 
 // ─── Ports View ───────────────────────────────────────────────────────────────
 
+type PortFormDraft = {
+  name: string;
+  port: string;
+  deploy_url: string;
+  github_url: string;
+  category: string;
+  description: string;
+};
+const emptyDraft: PortFormDraft = { name:'', port:'', deploy_url:'', github_url:'', category:'', description:'' };
+
 function PortsView({ deviceId, creds, showToast, onSwitchDevice }: {
   deviceId: string;
   creds: { url: string; key: string };
@@ -211,6 +224,15 @@ function PortsView({ deviceId, creds, showToast, onSwitchDevice }: {
   const [ports, setPorts] = useState<PortRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null); // 2단계 삭제 확인
+  const [inlineEdit, setInlineEdit] = useState<{ id: string; field: 'deploy_url' | 'github_url' } | null>(null);
+  const [inlineDraft, setInlineDraft] = useState('');
+  const [showAdd, setShowAdd] = useState(false);
+  const [addDraft, setAddDraft] = useState<PortFormDraft>(emptyDraft);
+  const [showEdit, setShowEdit] = useState<{ id: string } | null>(null);
+  const [editDraft, setEditDraft] = useState<PortFormDraft>(emptyDraft);
+  const [submitting, setSubmitting] = useState(false);
 
   // Google OAuth 세션 무시 — anon 역할로 쿼리 (RLS: authenticated uid ≠ device_id 방지)
   const sb = useCallback(() => createClient(creds.url, creds.key, {
@@ -236,6 +258,99 @@ function PortsView({ deviceId, creds, showToast, onSwitchDevice }: {
     loadPorts();
   }, [deviceId]);
 
+  // Draft → DB payload (빈 문자열은 null로)
+  const draftToPayload = (d: PortFormDraft) => {
+    const portNum = d.port.trim() ? parseInt(d.port.trim(), 10) : null;
+    return {
+      name: d.name.trim(),
+      port: portNum != null && !isNaN(portNum) ? portNum : null,
+      deploy_url: d.deploy_url.trim() || null,
+      github_url: d.github_url.trim() || null,
+      category: d.category.trim() || null,
+      description: d.description.trim() || null,
+    };
+  };
+
+  const rowToDraft = (p: PortRow): PortFormDraft => ({
+    name: p.name ?? '',
+    port: p.port != null ? String(p.port) : '',
+    deploy_url: p.deploy_url ?? '',
+    github_url: p.github_url ?? '',
+    category: p.category ?? '',
+    description: p.description ?? '',
+  });
+
+  async function saveInlineUrl(id: string, field: 'deploy_url' | 'github_url', value: string) {
+    const trimmed = value.trim() || null;
+    setPorts(prev => prev.map(p => p.id === id ? { ...p, [field]: trimmed } : p));
+    try {
+      const { error } = await sb().from('portmgr_ports').update({ [field]: trimmed }).eq('id', id);
+      if (error) throw error;
+      showToast(`${field === 'deploy_url' ? '배포 주소' : 'GitHub 주소'} 저장됨 ✓`, 'success');
+    } catch (e: any) {
+      showToast('저장 실패: ' + (e?.message ?? e), 'error');
+      loadPorts();
+    }
+  }
+
+  async function createProject() {
+    const payload = draftToPayload(addDraft);
+    if (!payload.name) { showToast('이름은 필수입니다', 'error'); return; }
+    setSubmitting(true);
+    try {
+      const newId = crypto.randomUUID();
+      const { error } = await sb().from('portmgr_ports').insert({ ...payload, id: newId, device_id: deviceId });
+      if (error) throw error;
+      setAddDraft(emptyDraft);
+      setShowAdd(false);
+      showToast(`'${payload.name}' 추가됨 ✓`, 'success');
+      await loadPorts();
+    } catch (e: any) {
+      showToast('추가 실패: ' + (e?.message ?? e), 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function updateProject() {
+    if (!showEdit) return;
+    const payload = draftToPayload(editDraft);
+    if (!payload.name) { showToast('이름은 필수입니다', 'error'); return; }
+    setSubmitting(true);
+    try {
+      const { error } = await sb().from('portmgr_ports').update(payload).eq('id', showEdit.id);
+      if (error) throw error;
+      setShowEdit(null);
+      setEditDraft(emptyDraft);
+      showToast('수정됨 ✓', 'success');
+      await loadPorts();
+    } catch (e: any) {
+      showToast('수정 실패: ' + (e?.message ?? e), 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function deleteProject(id: string) {
+    setDeletingId(id);
+    try {
+      const { error } = await sb().from('portmgr_ports').delete().eq('id', id);
+      if (error) throw error;
+      showToast('삭제됨', 'success');
+      setPendingDeleteId(null);
+      await loadPorts();
+    } catch (e: any) {
+      showToast('삭제 실패: ' + (e?.message ?? e), 'error');
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  function openEdit(p: PortRow) {
+    setEditDraft(rowToDraft(p));
+    setShowEdit({ id: p.id });
+  }
+
   if (!deviceId) return (
     <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
       <Server className="w-10 h-10 text-zinc-700" />
@@ -243,14 +358,83 @@ function PortsView({ deviceId, creds, showToast, onSwitchDevice }: {
     </div>
   );
 
+  // ── Inline URL pill: 빈 값은 placeholder, 값 있으면 외부 링크 + 펜슬 ──
+  const inlineUrlPill = (p: PortRow, field: 'deploy_url' | 'github_url') => {
+    const value = p[field];
+    const editing = inlineEdit?.id === p.id && inlineEdit?.field === field;
+    const isDeploy = field === 'deploy_url';
+    const label = isDeploy ? '배포' : 'GitHub';
+    const Icon = isDeploy ? ExternalLink : Github;
+    const baseCls = isDeploy
+      ? 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border-blue-500/20'
+      : 'bg-zinc-800/60 hover:bg-zinc-700/60 text-zinc-300 border-zinc-700/50';
+    if (editing) {
+      return (
+        <div className="flex items-center gap-1">
+          <input
+            autoFocus
+            type="url"
+            value={inlineDraft}
+            onChange={e => setInlineDraft(e.target.value)}
+            onBlur={() => {
+              if (inlineDraft.trim() !== (value ?? '')) saveInlineUrl(p.id, field, inlineDraft);
+              setInlineEdit(null);
+            }}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                if (inlineDraft.trim() !== (value ?? '')) saveInlineUrl(p.id, field, inlineDraft);
+                setInlineEdit(null);
+              } else if (e.key === 'Escape') {
+                setInlineEdit(null);
+              }
+            }}
+            placeholder={isDeploy ? 'https://...' : 'https://github.com/...'}
+            style={{ fontSize: 16 }}
+            className="w-44 sm:w-56 px-2 py-1 bg-zinc-950 border border-zinc-600 rounded-md text-zinc-200 focus:outline-none focus:border-blue-500"
+          />
+        </div>
+      );
+    }
+    if (value) {
+      return (
+        <div className="flex items-center gap-0.5">
+          <a href={value} target="_blank" rel="noopener noreferrer"
+            className={`flex items-center gap-1 px-2 py-1 text-[11px] border rounded-md transition-all ${baseCls}`}>
+            <Icon className="w-2.5 h-2.5" />{label}
+          </a>
+          <button
+            onClick={() => { setInlineEdit({ id: p.id, field }); setInlineDraft(value ?? ''); }}
+            title={`${label} 수정`}
+            className="p-1 text-zinc-600 hover:text-zinc-300 transition-colors"
+          ><Pencil className="w-2.5 h-2.5" /></button>
+        </div>
+      );
+    }
+    return (
+      <button
+        onClick={() => { setInlineEdit({ id: p.id, field }); setInlineDraft(''); }}
+        title={`${label} 추가`}
+        className="flex items-center gap-1 px-2 py-1 text-[11px] bg-zinc-900/40 hover:bg-zinc-800/60 text-zinc-500 hover:text-zinc-300 border border-dashed border-zinc-700/50 rounded-md transition-all"
+      >
+        <Plus className="w-2.5 h-2.5" />{label}
+      </button>
+    );
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
         <p className="text-xs text-zinc-500">{ports.length}개 포트</p>
-        <button onClick={loadPorts} disabled={loading}
-          className="p-1.5 text-zinc-500 hover:text-zinc-300 transition-colors disabled:opacity-50">
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button onClick={() => { setAddDraft(emptyDraft); setShowAdd(true); }}
+            className="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg transition-colors">
+            <Plus className="w-3 h-3" />프로젝트
+          </button>
+          <button onClick={loadPorts} disabled={loading}
+            className="p-1.5 text-zinc-500 hover:text-zinc-300 transition-colors disabled:opacity-50">
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </div>
       <div className="relative mb-4">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500 pointer-events-none" />
@@ -267,7 +451,7 @@ function PortsView({ deviceId, creds, showToast, onSwitchDevice }: {
         <div className="flex flex-col items-center justify-center py-20 gap-3 text-center">
           <Server className="w-10 h-10 text-zinc-700" />
           <p className="text-sm text-zinc-500">등록된 포트가 없습니다</p>
-          <p className="text-xs text-zinc-600">로컬 앱에서 Push하면 여기에 나타납니다</p>
+          <p className="text-xs text-zinc-600">로컬 앱에서 Push하거나 위 '+ 프로젝트'로 추가하세요</p>
           <p className="text-[10px] text-zinc-700 font-mono">device: {deviceId?.slice(0,8)}… / url: {creds.url.replace('https://','').slice(0,20)}</p>
           {onSwitchDevice && (
             <button onClick={onSwitchDevice}
@@ -287,23 +471,46 @@ function PortsView({ deviceId, creds, showToast, onSwitchDevice }: {
             const q = searchQuery.toLowerCase();
             return (p.name?.toLowerCase().includes(q) || String(p.port ?? '').includes(q) || p.folder_path?.toLowerCase().includes(q));
           }).map(p => (
-            <div key={p.id} className="flex items-center gap-3 py-2.5 px-1 hover:bg-zinc-800/30 rounded-lg transition-colors group">
-              <div className="flex-1 min-w-0">
+            <div key={p.id} className="flex flex-wrap items-center gap-2 sm:gap-3 py-3 px-1 hover:bg-zinc-800/30 rounded-lg transition-colors group">
+              <div className="flex-1 min-w-[120px]">
                 <span className="text-sm text-zinc-200 font-medium truncate block">{p.name}</span>
-                {p.port && <span className="text-[10px] text-zinc-600 font-mono">:{p.port}</span>}
+                <div className="flex items-center gap-2 text-[10px] text-zinc-600 font-mono mt-0.5">
+                  {p.port && <span>:{p.port}</span>}
+                  {p.category && <span className="text-zinc-500">· {p.category}</span>}
+                </div>
               </div>
-              <div className="flex items-center gap-1.5 shrink-0">
-                {p.deploy_url && (
-                  <a href={p.deploy_url} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1 px-2 py-1 text-[11px] bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 rounded-md transition-all">
-                    <ExternalLink className="w-2.5 h-2.5" />배포
-                  </a>
-                )}
-                {p.github_url && (
-                  <a href={p.github_url} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1 px-2 py-1 text-[11px] bg-zinc-800/60 hover:bg-zinc-700/60 text-zinc-300 border border-zinc-700/50 rounded-md transition-all">
-                    <Github className="w-2.5 h-2.5" />GitHub
-                  </a>
+              <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                {inlineUrlPill(p, 'deploy_url')}
+                {inlineUrlPill(p, 'github_url')}
+                <button
+                  onClick={() => openEdit(p)}
+                  title="수정"
+                  className="flex items-center gap-1 px-2 py-1 text-[11px] bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-md transition-all"
+                >
+                  <Pencil className="w-2.5 h-2.5" />수정
+                </button>
+                {pendingDeleteId === p.id ? (
+                  <>
+                    <button
+                      onClick={() => deleteProject(p.id)}
+                      disabled={deletingId === p.id}
+                      className="flex items-center gap-1 px-2 py-1 text-[11px] bg-red-500/30 hover:bg-red-500/50 text-red-200 border border-red-500/50 rounded-md transition-all disabled:opacity-50"
+                    >
+                      <Check className="w-2.5 h-2.5" />확인
+                    </button>
+                    <button
+                      onClick={() => setPendingDeleteId(null)}
+                      className="flex items-center gap-1 px-2 py-1 text-[11px] bg-zinc-800/60 hover:bg-zinc-700/60 text-zinc-400 border border-zinc-700/50 rounded-md transition-all"
+                    >취소</button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => setPendingDeleteId(p.id)}
+                    title="삭제"
+                    className="flex items-center gap-1 px-2 py-1 text-[11px] bg-transparent hover:bg-red-500/15 text-red-400 border border-red-500/30 rounded-md transition-all"
+                  >
+                    <Trash2 className="w-2.5 h-2.5" />삭제
+                  </button>
                 )}
               </div>
             </div>
@@ -311,6 +518,120 @@ function PortsView({ deviceId, creds, showToast, onSwitchDevice }: {
         </div>
       )}
 
+      {(showAdd || showEdit) && (
+        <PortFormModal
+          mode={showAdd ? 'add' : 'edit'}
+          draft={showAdd ? addDraft : editDraft}
+          setDraft={showAdd ? setAddDraft : setEditDraft}
+          submitting={submitting}
+          onSubmit={showAdd ? createProject : updateProject}
+          onClose={() => { setShowAdd(false); setShowEdit(null); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function PortFormModal({ mode, draft, setDraft, submitting, onSubmit, onClose }: {
+  mode: 'add' | 'edit';
+  draft: PortFormDraft;
+  setDraft: (d: PortFormDraft) => void;
+  submitting: boolean;
+  onSubmit: () => void;
+  onClose: () => void;
+}) {
+  const update = <K extends keyof PortFormDraft>(k: K, v: string) => setDraft({ ...draft, [k]: v });
+  const inpCls = 'w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-md text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-blue-500';
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-zinc-900 border border-zinc-700 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[88vh] overflow-y-auto shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800 sticky top-0 bg-zinc-900">
+          <span className="text-sm font-semibold text-white">{mode === 'add' ? '프로젝트 추가' : '프로젝트 수정'}</span>
+          <button onClick={onClose} className="p-1 text-zinc-500 hover:text-zinc-300 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="px-5 py-4 space-y-3" style={{ fontSize: 14 }}>
+          <label className="block">
+            <span className="text-[11px] text-zinc-400 mb-1 block">이름 *</span>
+            <input
+              autoFocus type="text" value={draft.name}
+              onChange={e => update('name', e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && draft.name.trim()) onSubmit(); else if (e.key === 'Escape') onClose(); }}
+              placeholder="프로젝트 이름"
+              style={{ fontSize: 16 }}
+              className={inpCls}
+            />
+          </label>
+          <label className="block">
+            <span className="text-[11px] text-zinc-400 mb-1 block">포트 (선택)</span>
+            <input
+              type="number" inputMode="numeric" value={draft.port}
+              onChange={e => update('port', e.target.value)}
+              placeholder="예: 3000"
+              style={{ fontSize: 16 }}
+              className={inpCls}
+            />
+          </label>
+          <label className="block">
+            <span className="text-[11px] text-zinc-400 mb-1 block">배포 주소 (선택)</span>
+            <input
+              type="url" value={draft.deploy_url}
+              onChange={e => update('deploy_url', e.target.value)}
+              placeholder="https://..."
+              style={{ fontSize: 16 }}
+              className={inpCls}
+            />
+          </label>
+          <label className="block">
+            <span className="text-[11px] text-zinc-400 mb-1 block">GitHub 주소 (선택)</span>
+            <input
+              type="url" value={draft.github_url}
+              onChange={e => update('github_url', e.target.value)}
+              placeholder="https://github.com/..."
+              style={{ fontSize: 16 }}
+              className={inpCls}
+            />
+          </label>
+          <label className="block">
+            <span className="text-[11px] text-zinc-400 mb-1 block">카테고리 (선택)</span>
+            <input
+              type="text" value={draft.category}
+              onChange={e => update('category', e.target.value)}
+              placeholder="예: 프로젝트, 도구, 실험"
+              style={{ fontSize: 16 }}
+              className={inpCls}
+            />
+          </label>
+          <label className="block">
+            <span className="text-[11px] text-zinc-400 mb-1 block">설명 (선택)</span>
+            <input
+              type="text" value={draft.description}
+              onChange={e => update('description', e.target.value)}
+              placeholder="한 줄 설명"
+              style={{ fontSize: 16 }}
+              className={inpCls}
+            />
+          </label>
+        </div>
+        <div className="px-5 py-4 border-t border-zinc-800 flex justify-end gap-2 sticky bottom-0 bg-zinc-900">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-zinc-400 border border-zinc-700 rounded-md hover:bg-zinc-800 transition-colors"
+          >취소</button>
+          <button
+            onClick={onSubmit}
+            disabled={!draft.name.trim() || submitting}
+            className="px-5 py-2 text-sm font-medium text-zinc-950 bg-emerald-400 hover:bg-emerald-300 rounded-md transition-colors disabled:bg-emerald-700 disabled:text-zinc-500 disabled:cursor-not-allowed"
+          >{submitting ? '저장 중...' : (mode === 'add' ? '추가' : '저장')}</button>
+        </div>
+      </div>
     </div>
   );
 }
