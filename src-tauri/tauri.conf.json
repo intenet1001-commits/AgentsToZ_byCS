@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "CS_Manager",
+  "productName": "AgentsToZ_byCS",
   "version": "88.0.0",
   "identifier": "com.portmanager.portmanager",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "CS_Manager",
+        "title": "AgentsToZ_byCS",
         "width": 1000,
         "height": 1050,
         "resizable": true,

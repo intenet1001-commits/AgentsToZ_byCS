@@ -20,7 +20,7 @@ async function updateVersion() {
     const config = await confFile.json() as Record<string, unknown>;
     const old = config.version;
     config.version = `${next}.0.0`;
-    config.productName = 'CS_Manager';
+    config.productName = 'AgentsToZ_byCS';
     await Bun.write(TAURI_CONF_PATH, JSON.stringify(config, null, 2) + '\n');
 
     console.log(`[UpdateVersion] ✅ ${old} → v${next} (${next}.0.0)`);
