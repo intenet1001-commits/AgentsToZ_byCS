@@ -4187,8 +4187,8 @@ function App() {
             </div>
           ) : (
           <div style={{flex:1,overflowY:'auto',padding:'28px 32px'}}>
-            {/* 헤더 */}
-            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:6}}>
+            {/* 헤더 — flexWrap으로 좁은 화면에서 줄바꿈, 수정/삭제 버튼은 항상 텍스트로 노출 */}
+            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:6,flexWrap:'wrap' as const}}>
               {isMobile && (
                 <button
                   onClick={() => setV4SelectedId(null)}
@@ -4197,15 +4197,33 @@ function App() {
                 >← 목록</button>
               )}
               <span style={{width:8,height:8,borderRadius:4,background:sel.isRunning?'#8fb96e':'#6b6459',flexShrink:0}}/>
-              <h2 style={{margin:0,fontSize:20,fontWeight:600,letterSpacing:-0.3,color:'#ede7dd'}}>{sel.name}</h2>
+              <h2 style={{margin:0,fontSize:isMobile?17:20,fontWeight:600,letterSpacing:-0.3,color:'#ede7dd',wordBreak:'break-word' as const,minWidth:0,flexShrink:1}}>{sel.name}</h2>
               {sel.port && <span style={{fontSize:15,fontFamily:monoFont,color:'#e8a557'}}>:{sel.port}</span>}
               {sel.favorite && <Star style={{width:13,height:13,color:'#e8a557',fill:'#e8a557'}}/>}
-              <div style={{marginLeft:'auto',display:'flex',gap:4}}>
-                <button onClick={() => startEdit(sel)} style={{padding:'4px 6px',background:'transparent',border:'1px solid rgba(255,240,220,0.08)',borderRadius:5,cursor:'pointer',display:'flex',alignItems:'center',color:'#6b6459'}} title="수정">
-                  <Pencil style={{width:11,height:11}}/>
+              <div style={{marginLeft:'auto',display:'flex',gap:6,flexShrink:0}}>
+                <button
+                  onClick={() => startEdit(sel)}
+                  style={{
+                    padding: isMobile?'8px 14px':'6px 12px',
+                    background:'rgba(232,165,87,0.10)',border:'1px solid rgba(232,165,87,0.3)',borderRadius:6,
+                    cursor:'pointer',color:'#e8a557',fontSize:isMobile?14:12,fontWeight:500,
+                    display:'flex',alignItems:'center',gap:5,
+                  }}
+                  title="수정"
+                >
+                  <Pencil style={{width:13,height:13}}/>수정
                 </button>
-                <button onClick={() => setDeleteConfirmId(sel.id)} style={{padding:'4px 6px',background:'transparent',border:'1px solid rgba(201,106,90,0.15)',borderRadius:5,cursor:'pointer',display:'flex',alignItems:'center',color:'#c96a5a'}} title="삭제">
-                  <Trash2 style={{width:11,height:11}}/>
+                <button
+                  onClick={() => setDeleteConfirmId(sel.id)}
+                  style={{
+                    padding: isMobile?'8px 14px':'6px 12px',
+                    background:'transparent',border:'1px solid rgba(201,106,90,0.3)',borderRadius:6,
+                    cursor:'pointer',color:'#c96a5a',fontSize:isMobile?14:12,fontWeight:500,
+                    display:'flex',alignItems:'center',gap:5,
+                  }}
+                  title="삭제"
+                >
+                  <Trash2 style={{width:13,height:13}}/>삭제
                 </button>
               </div>
             </div>
