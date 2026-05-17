@@ -1104,6 +1104,14 @@ function App() {
   const [globalShortcut, setGlobalShortcut] = useState('CommandOrControl+Alt+P');
   const [showShortcutModal, setShowShortcutModal] = useState(false);
   const [shortcutInput, setShortcutInput] = useState('');
+  // Quick-add project modal (works on deployed web — no folder picker required)
+  const [showQuickAddModal, setShowQuickAddModal] = useState(false);
+  const [qaName, setQaName] = useState('');
+  const [qaPort, setQaPort] = useState('');
+  const [qaDeployUrl, setQaDeployUrl] = useState('');
+  const [qaGithubUrl, setQaGithubUrl] = useState('');
+  const [qaCategory, setQaCategory] = useState('');
+  const [qaDescription, setQaDescription] = useState('');
   const [isRecordingShortcut, setIsRecordingShortcut] = useState(false);
   const [showToolsMenu, setShowToolsMenu] = useState(false);
   const toolsMenuRef = useRef<HTMLDivElement>(null);
@@ -2404,6 +2412,33 @@ function App() {
     setPorts(updated);
     try { await API.savePorts(updated); } catch (e) { console.warn('[saveInlineUrl] persist failed:', e); }
   }, [ports]);
+
+  const closeQuickAddModal = () => {
+    setShowQuickAddModal(false);
+    setQaName(''); setQaPort(''); setQaDeployUrl(''); setQaGithubUrl(''); setQaCategory(''); setQaDescription('');
+  };
+  const saveQuickAddProject = async () => {
+    const name = qaName.trim();
+    if (!name) return;
+    const portNum = qaPort.trim() ? parseInt(qaPort.trim(), 10) : undefined;
+    const newPort: PortInfo = {
+      id: crypto.randomUUID(),
+      name,
+      port: portNum && !isNaN(portNum) ? portNum : undefined,
+      deployUrl: qaDeployUrl.trim() || undefined,
+      githubUrl: qaGithubUrl.trim() || undefined,
+      category: qaCategory.trim() || undefined,
+      description: qaDescription.trim() || undefined,
+      isRunning: false,
+      sourceDeviceId: portalConfigRef.current?.deviceId,
+    };
+    const updated = [newPort, ...ports];
+    setPorts(updated);
+    try { await API.savePorts(updated); } catch (e) { console.warn('[saveQuickAddProject] persist failed:', e); }
+    setV4SelectedId(newPort.id);
+    closeQuickAddModal();
+    showToast(`'${name}' 추가됨`, 'success');
+  };
 
   const executeCommand = async (item: PortInfo) => {
     let runTarget = item.terminalCommand || item.commandPath;
@@ -4015,8 +4050,8 @@ function App() {
           flexDirection: 'column',
           background: '#1c1916',
         }}>
-          {/* 섹션 필터 칩 */}
-          <div style={{padding:'8px 10px 0',display:'flex',gap:3,flexWrap:'wrap' as const,borderBottom:'1px solid rgba(255,240,220,0.05)'}}>
+          {/* 섹션 필터 칩 + 빠른 추가 */}
+          <div style={{padding:'8px 10px 0',display:'flex',gap:3,flexWrap:'wrap' as const,alignItems:'center',borderBottom:'1px solid rgba(255,240,220,0.05)'}}>
             {([
               ['all',    t(lang,'filterAll'),       v3Ports.length],
               ['running',t(lang,'filterRunning'),   v3Running.length],
@@ -4035,6 +4070,17 @@ function App() {
                 <span style={{fontSize:9.5,fontFamily:'JetBrains Mono, monospace',opacity:0.7}}>{count}</span>
               </button>
             ))}
+            <button
+              onClick={() => setShowQuickAddModal(true)}
+              title="프로젝트 빠른 추가"
+              style={{
+                marginLeft:'auto',padding:'2px 8px',borderRadius:4,fontSize:11,cursor:'pointer',
+                fontFamily:'Inter Tight, system-ui, sans-serif',
+                background:'rgba(143,185,110,0.10)',color:'#8fb96e',
+                border:'1px solid rgba(143,185,110,0.25)',
+                display:'flex',alignItems:'center',gap:3,
+              }}
+            >+ 프로젝트</button>
           </div>
           <div style={{padding:'8px 12px 10px',borderBottom:'1px solid rgba(255,240,220,0.07)'}}>
             <div style={{position:'relative'}}>
@@ -5305,6 +5351,135 @@ function App() {
                     showToast('단축키 설정 실패: ' + e.message, 'error');
                   }
                 }} style={{padding:'6px 14px',background:'#e8a557',border:'none',borderRadius:6,color:'#0a0a0b',cursor:'pointer',fontSize:12,fontWeight:600}}>저장</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 프로젝트 빠른 추가 모달 — 배포 웹/모바일에서도 폴더 피커 없이 추가 가능 */}
+        {showQuickAddModal && (
+          <div
+            style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:9500,display:'flex',alignItems:isMobile?'flex-end':'center',justifyContent:'center'}}
+            onClick={closeQuickAddModal}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                background:'#1c1916',border:'1px solid rgba(255,240,220,0.12)',
+                borderRadius: isMobile ? '14px 14px 0 0' : 12,
+                padding: isMobile ? '20px 18px 24px' : 24,
+                width: isMobile ? '100%' : 380,
+                maxHeight: isMobile ? '85vh' : 'auto',
+                overflowY: 'auto',
+                display:'flex',flexDirection:'column',gap:12,
+              }}
+            >
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <span style={{fontSize:15,fontWeight:600,color:'#ede7dd'}}>프로젝트 추가</span>
+                <button onClick={closeQuickAddModal} style={{background:'transparent',border:'none',cursor:'pointer',color:'#6b6459',padding:4}}>
+                  <XIcon style={{width:16,height:16}}/>
+                </button>
+              </div>
+              <p style={{fontSize:11,color:'#6b6459',margin:0,lineHeight:1.5}}>
+                폴더 경로·실행 명령은 데스크톱 앱에서 설정. 여기선 메타데이터(이름·URL 등)만 입력해도 충분합니다.
+              </p>
+              {(() => {
+                const inpStyle = {
+                  padding: isMobile ? '10px 12px' : '7px 10px',
+                  background:'#0a0a0b',
+                  border:'1px solid rgba(255,240,220,0.12)',
+                  borderRadius:6,
+                  color:'#ede7dd',
+                  fontSize: isMobile ? 16 : 13,
+                  fontFamily:'inherit',
+                  width:'100%',
+                  boxSizing:'border-box' as const,
+                };
+                const lbl = (s: string) => <span style={{fontSize:11,color:'#a39a8c',marginBottom:2}}>{s}</span>;
+                return (
+                  <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                    <label style={{display:'flex',flexDirection:'column'}}>
+                      {lbl('이름 *')}
+                      <input
+                        autoFocus
+                        type="text"
+                        value={qaName}
+                        onChange={e => setQaName(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' && qaName.trim()) saveQuickAddProject(); else if (e.key === 'Escape') closeQuickAddModal(); }}
+                        placeholder="프로젝트 이름"
+                        style={inpStyle}
+                      />
+                    </label>
+                    <label style={{display:'flex',flexDirection:'column'}}>
+                      {lbl('포트 (선택)')}
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        value={qaPort}
+                        onChange={e => setQaPort(e.target.value)}
+                        placeholder="예: 3000"
+                        style={inpStyle}
+                      />
+                    </label>
+                    <label style={{display:'flex',flexDirection:'column'}}>
+                      {lbl('배포 주소 (선택)')}
+                      <input
+                        type="url"
+                        value={qaDeployUrl}
+                        onChange={e => setQaDeployUrl(e.target.value)}
+                        placeholder="https://..."
+                        style={inpStyle}
+                      />
+                    </label>
+                    <label style={{display:'flex',flexDirection:'column'}}>
+                      {lbl('GitHub 주소 (선택)')}
+                      <input
+                        type="url"
+                        value={qaGithubUrl}
+                        onChange={e => setQaGithubUrl(e.target.value)}
+                        placeholder="https://github.com/..."
+                        style={inpStyle}
+                      />
+                    </label>
+                    <label style={{display:'flex',flexDirection:'column'}}>
+                      {lbl('카테고리 (선택)')}
+                      <input
+                        type="text"
+                        value={qaCategory}
+                        onChange={e => setQaCategory(e.target.value)}
+                        placeholder="예: 프로젝트, 도구, 실험"
+                        style={inpStyle}
+                      />
+                    </label>
+                    <label style={{display:'flex',flexDirection:'column'}}>
+                      {lbl('설명 (선택)')}
+                      <input
+                        type="text"
+                        value={qaDescription}
+                        onChange={e => setQaDescription(e.target.value)}
+                        placeholder="한 줄 설명"
+                        style={inpStyle}
+                      />
+                    </label>
+                  </div>
+                );
+              })()}
+              <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:4}}>
+                <button
+                  onClick={closeQuickAddModal}
+                  style={{padding: isMobile?'10px 16px':'7px 14px',background:'transparent',border:'1px solid rgba(255,240,220,0.1)',borderRadius:6,color:'#a39a8c',cursor:'pointer',fontSize:isMobile?14:12}}
+                >취소</button>
+                <button
+                  onClick={saveQuickAddProject}
+                  disabled={!qaName.trim()}
+                  style={{
+                    padding: isMobile?'10px 18px':'7px 16px',
+                    background: qaName.trim() ? '#8fb96e' : 'rgba(143,185,110,0.3)',
+                    border:'none',borderRadius:6,
+                    color:'#0a0a0b',cursor: qaName.trim() ? 'pointer' : 'not-allowed',
+                    fontSize: isMobile?14:12,fontWeight:600,
+                  }}
+                >추가</button>
               </div>
             </div>
           </div>
