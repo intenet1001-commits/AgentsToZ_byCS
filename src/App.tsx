@@ -703,7 +703,10 @@ const withTimeout = <T,>(promise: PromiseLike<T>, ms: number): Promise<T> =>
 
 /**
  * Model B merge: remote wins for known IDs, local-only rows survive.
- * isRunning is preserved from the local copy.
+ * isRunning preserved from local. deployUrl/githubUrl/description treat local as authoritative
+ * so user edits aren't clobbered by stale Supabase rows between push debounce windows.
+ * After id-merge, dedupe port-less folder rows by folderPath to absorb the case where
+ * the same folder was migrated independently on multiple devices with different ids.
  */
 const mergePorts = (local: PortInfo[], remote: PortInfo[]): PortInfo[] => {
   const remoteById = new Map(remote.map(p => [p.id, p]));
@@ -717,11 +720,38 @@ const mergePorts = (local: PortInfo[], remote: PortInfo[]): PortInfo[] => {
       folderPath: p.folderPath ?? r.folderPath,
       commandPath: p.commandPath ?? r.commandPath,
       worktreePath: p.worktreePath ?? r.worktreePath,
+      deployUrl: p.deployUrl ?? r.deployUrl,
+      githubUrl: p.githubUrl ?? r.githubUrl,
+      description: p.description ?? r.description,
     };
   });
   const localIds = new Set(local.map(p => p.id));
   const newFromRemote = remote.filter(p => !localIds.has(p.id));
-  return [...merged, ...newFromRemote];
+  return dedupeFolderRows([...merged, ...newFromRemote]);
+};
+
+// Collapse port-less rows (folder-only entries) that share the same folderPath.
+// Rows with a port are never collapsed — a folder may legitimately host multiple servers.
+const dedupeFolderRows = (rows: PortInfo[]): PortInfo[] => {
+  const byFolder = new Map<string, PortInfo>();
+  const kept: PortInfo[] = [];
+  for (const row of rows) {
+    if (row.port || !row.folderPath) { kept.push(row); continue; }
+    const key = row.folderPath;
+    const prev = byFolder.get(key);
+    if (!prev) { byFolder.set(key, row); kept.push(row); continue; }
+    // Prefer the row with more populated fields; on tie keep the earlier (local) one
+    const score = (p: PortInfo) =>
+      [p.name, p.deployUrl, p.githubUrl, p.description, p.commandPath, p.terminalCommand, p.category]
+        .filter(Boolean).length + (p.favorite ? 1 : 0);
+    if (score(row) > score(prev)) {
+      // Replace prev with row in-place
+      const idx = kept.indexOf(prev);
+      if (idx !== -1) kept[idx] = row;
+      byFolder.set(key, row);
+    }
+  }
+  return kept;
 };
 
 // 다른 기기 Pull 전용 병합: name 기준으로 매칭, 새 항목만 새 ID로 추가
@@ -939,6 +969,58 @@ function WslSetupModal({ status, onClose, onInstallTmux }: {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// Click-to-edit single URL row used in the right-side detail panel. Empty rows still
+// render as a clickable affordance so users can add a URL without opening the full form.
+function InlineUrlRow({ label, value, onSave, placeholder }: {
+  label: string;
+  value?: string;
+  onSave: (next: string) => void;
+  placeholder: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value ?? '');
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => { if (!editing) setDraft(value ?? ''); }, [value, editing]);
+  useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
+
+  const commit = () => {
+    setEditing(false);
+    if ((draft ?? '').trim() !== (value ?? '')) onSave(draft);
+  };
+  const cancel = () => { setDraft(value ?? ''); setEditing(false); };
+
+  const labelStyle = { color:'#4b4540', minWidth:72, flexShrink:0 } as const;
+  const valueStyle = { color:'#7ba7c9', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', cursor:'text', flex:1 } as const;
+  const emptyStyle = { color:'#4b4540', cursor:'text', flex:1, fontStyle:'italic' } as const;
+
+  if (editing) {
+    return (
+      <div style={{display:'flex',gap:10,alignItems:'center'}}>
+        <span style={labelStyle}>{label}</span>
+        <input
+          ref={inputRef}
+          type="text"
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={e => { if (e.key === 'Enter') commit(); else if (e.key === 'Escape') cancel(); }}
+          placeholder={placeholder}
+          style={{flex:1,padding:'2px 6px',background:'#0a0a0b',border:'1px solid rgba(255,240,220,0.18)',borderRadius:4,color:'#ede7dd',fontSize:12,fontFamily:'inherit'}}
+        />
+      </div>
+    );
+  }
+  return (
+    <div style={{display:'flex',gap:10,alignItems:'center'}} onClick={() => setEditing(true)} title="클릭하여 수정">
+      <span style={labelStyle}>{label}</span>
+      {value
+        ? <span style={valueStyle}>{value}</span>
+        : <span style={emptyStyle}>+ {placeholder}</span>}
     </div>
   );
 }
@@ -1970,10 +2052,17 @@ function App() {
           return;
         }
         const existingPaths = new Set(ports.map(p => p.folderPath).filter(Boolean) as string[]);
+        // Deterministic id derived from folder path so the same folder migrated on
+        // a different device collapses to one row instead of stacking duplicates on Pull.
+        const pathId = (path: string) => {
+          let h = 0;
+          for (let i = 0; i < path.length; i++) h = ((h << 5) - h + path.charCodeAt(i)) | 0;
+          return `migrated-${(h >>> 0).toString(36)}-${path.length.toString(36)}`;
+        };
         const newPorts: PortInfo[] = folderItems
           .filter(it => !existingPaths.has(it.path))
           .map(it => ({
-            id: `migrated-${it.id ?? crypto.randomUUID()}`,
+            id: pathId(it.path as string),
             name: it.name,
             folderPath: it.path,
             category: it.category || undefined,
@@ -2301,6 +2390,13 @@ function App() {
     const updated = ports.map(p => p.id === item.id ? { ...p, favorite: !p.favorite } : p);
     setPorts(updated);
     await API.savePorts(updated);
+  }, [ports]);
+
+  const saveInlineUrl = useCallback(async (id: string, field: 'deployUrl' | 'githubUrl', value: string) => {
+    const trimmed = value.trim();
+    const updated = ports.map(p => p.id === id ? { ...p, [field]: trimmed || undefined } : p);
+    setPorts(updated);
+    try { await API.savePorts(updated); } catch (e) { console.warn('[saveInlineUrl] persist failed:', e); }
   }, [ports]);
 
   const executeCommand = async (item: PortInfo) => {
@@ -4053,8 +4149,8 @@ function App() {
               {sel.folderPath && <div style={{display:'flex',gap:10}}><span style={{color:'#4b4540',minWidth:72,flexShrink:0}}>folder</span><span style={{color:'#a39a8c',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{sel.folderPath}</span></div>}
               {sel.commandPath && <div style={{display:'flex',gap:10}}><span style={{color:'#4b4540',minWidth:72,flexShrink:0}}>command</span><span style={{color:'#a39a8c',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{sel.commandPath}</span></div>}
               {sel.terminalCommand && <div style={{display:'flex',gap:10}}><span style={{color:'#4b4540',minWidth:72,flexShrink:0}}>terminal</span><span style={{color:'#a39a8c',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{sel.terminalCommand}</span></div>}
-              {sel.deployUrl && <div style={{display:'flex',gap:10}}><span style={{color:'#4b4540',minWidth:72,flexShrink:0}}>deploy</span><span style={{color:'#7ba7c9',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{sel.deployUrl}</span></div>}
-              {sel.githubUrl && <div style={{display:'flex',gap:10}}><span style={{color:'#4b4540',minWidth:72,flexShrink:0}}>github</span><span style={{color:'#7ba7c9',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{sel.githubUrl}</span></div>}
+              <InlineUrlRow label="deploy" value={sel.deployUrl} onSave={(v) => saveInlineUrl(sel.id, 'deployUrl', v)} placeholder="배포 주소 입력" />
+              <InlineUrlRow label="github" value={sel.githubUrl} onSave={(v) => saveInlineUrl(sel.id, 'githubUrl', v)} placeholder="GitHub 주소 입력" />
             </div>
 
             {/* 실행 제어 */}
