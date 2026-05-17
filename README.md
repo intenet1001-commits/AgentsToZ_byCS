@@ -148,9 +148,12 @@ bun run build:portal
 
 ---
 
-## Claude Agent 통합 (macOS)
+## Claude Agent 통합
 
-포트 관리기는 Claude Code 및 cmux와 깊이 통합되어, 코딩 에이전트 워크플로를 포트 카드에서 직접 실행합니다.
+포트 관리기는 Claude Code와 깊이 통합되어, 코딩 에이전트 워크플로를 포트 카드에서 직접 실행합니다.
+
+> **플랫폼별 지원**: macOS는 cmux, Windows는 WSL2 + tmux 경로를 사용합니다.  
+> Windows에서는 헤더의 터미널 선택기를 **`wsl`로 전환**하면 `agents` / `--bg` 버튼이 활성화됩니다.
 
 ### claude --bg (bypass 모드)
 
@@ -174,14 +177,15 @@ bun run build:portal
 
 ### Claude Agent View (전역 Agents)
 
-헤더 툴바의 `[Agents]` 버튼으로 cmux에서 claude agents 뷰를 엽니다.
+헤더 툴바의 `[Agents]` 버튼으로 `claude agents` 뷰를 엽니다.
 
-| 버튼 | 동작 |
-|---|---|
-| 헤더 `[Agents]` | `~/.claude` 디렉토리에서 claude agents 전역 뷰 |
-| 포트 카드 `▼` → `Agent View` | cmux_claude_agent — 현재 워크스페이스에서 agent 뷰 |
+| 버튼 | macOS | Windows (WSL 모드) |
+|---|---|---|
+| 헤더 `[Agents]` | cmux에서 전역 claude agents | WSL 터미널에서 claude agents |
+| 포트 카드 `▼` → `Agent View` | cmux 워크스페이스 agent 뷰 | WSL에서 프로젝트 폴더 claude agents |
 
-> Claude Agent View는 **cmux 전용** 기능입니다. cmux 미설치 시 자동으로 설치 안내가 표시됩니다.
+> **Windows**: 헤더 터미널 선택기를 `wsl`로 전환 시 `[Agents]` 버튼이 나타납니다.  
+> macOS: cmux 미설치 시 설치 안내가 표시됩니다.
 
 ---
 
@@ -416,6 +420,39 @@ $env:Path += ";$env:USERPROFILE\supabase-cli"
 
 ---
 
+### Claude Agents / --bg (WSL2 사용 시)
+
+WSL2가 설치되어 있으면 Windows에서도 `claude agents`와 `claude --bg`를 사용할 수 있습니다.
+
+**1. WSL2 + Ubuntu 설치**
+```powershell
+# PowerShell 관리자 권한
+wsl --install
+# 재시작 후 Ubuntu 실행 → 사용자 이름/비밀번호 설정
+```
+
+**2. Ubuntu에서 Claude Code 설치**
+```bash
+# WSL Ubuntu 터미널에서
+npm install -g @anthropic-ai/claude-code
+claude  # 로그인
+```
+
+**3. 앱에서 WSL 모드 전환**
+```
+헤더 터미널 선택기 → [wsl] 클릭
+→ [Agents] 버튼과 [bg] 버튼이 나타남
+```
+
+| 버튼 | 동작 |
+|---|---|
+| `[Agents]` | WSL Ubuntu에서 `claude agents` 실행 |
+| `[bg]` 활성 → Claude 버튼 | WSL에서 `claude --bg '프로젝트명'` 백그라운드 실행 |
+
+> WSL2 없이 `[powershell]` 모드에서는 Windows Terminal에서 `claude` 인터랙티브 세션만 사용 가능합니다.
+
+---
+
 ### 기존 기기 → 새 Windows PC로 이전
 
 ```powershell
@@ -508,9 +545,11 @@ bun run tauri:build:win
 | 실행 파일 등록 | `.command` 파일 | `.bat` 또는 `.ps1` 파일 |
 | Tauri 앱 빌드 | `.app` / `.dmg` | `.exe` (NSIS) |
 | 데이터 경로 | `~/Library/Application Support/...` | `%APPDATA%\...` |
+| 터미널 선택기 | cmux / iTerm / Terminal | **powershell / wsl** |
 | cmux 통합 | ✅ 지원 | ❌ (자동 숨김) |
-| Claude Agent View | ✅ cmux 통합 | WSL2 + tmux 사용 |
-| claude --bg bypass | ✅ 버튼 제공 | 수동 실행 필요 |
+| Claude 열기 | cmux / iTerm / Terminal | PowerShell 또는 WSL |
+| Claude Agent View | ✅ cmux 통합 | ✅ **WSL2 모드에서 지원** |
+| claude --bg bypass | ✅ 버튼 제공 | ✅ **WSL2 모드에서 지원** |
 
 ---
 
