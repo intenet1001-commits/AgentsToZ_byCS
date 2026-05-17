@@ -962,6 +962,17 @@ function App() {
   const [activeTab, setActiveTab] = useState<'ports' | 'portal'>('ports');
   const [lang, setLang] = useState<Lang>(() => (localStorage.getItem('portmanager-lang') as Lang) ?? 'ko');
   useEffect(() => { document.title = t(lang, 'appName'); }, [lang]);
+
+  // Windows에서 macOS 전용 terminalApp이 저장된 경우 자동 수정 (HMR 후에도 동작)
+  useEffect(() => {
+    if (!isWindows()) return;
+    const macOnly: TerminalApp[] = ['cmux', 'iterm', 'terminal'];
+    if (macOnly.includes(terminalApp)) {
+      setTerminalApp('wsl');
+      localStorage.setItem('portmanager-terminalApp', 'wsl');
+    }
+  }, []);
+
   const [openPortalSettings, setOpenPortalSettings] = useState(false);
   const [showSetupWizard, setShowSetupWizard] = useState(false);
   const [guideMode, setGuideMode] = useState<boolean>(() => {
@@ -1517,7 +1528,8 @@ function App() {
   const callCmux = async (
     rustCmd: 'open_cmux_claude' | 'open_cmux_claude_new' | 'open_cmux_terminal' | 'open_cmux_localhost' | 'open_cmux_tmux' | 'open_cmux_agent_view' | 'open_cmux_project_agents' | 'open_claude_bg',
     httpPath: '/api/open-cmux-claude' | '/api/open-cmux-claude-new' | '/api/open-cmux-terminal' | '/api/open-cmux-localhost' | '/api/open-cmux-tmux' | '/api/open-cmux-agent-view' | '/api/open-cmux-project-agents' | '/api/open-claude-bg',
-    body: { folderPath?: string; worktreePath?: string; bypass?: boolean; name?: string; port?: number; fresh?: boolean }
+    body: { folderPath?: string; worktreePath?: string; bypass?: boolean; name?: string; port?: number; fresh?: boolean },
+    { retry = 0 }: { retry?: number } = {}
   ): Promise<string> => {
     if (isTauri()) {
       return await invoke<string>(rustCmd, body as any);
@@ -1530,6 +1542,11 @@ function App() {
     });
     const data = await res.json();
     if (!res.ok || data?.success === false) {
+      // WSL agent 엔드포인트는 첫 호출 distro 캐시 미워밍업으로 실패 가능 → 1회 재시도
+      if (retry > 0 && httpPath.includes('agent')) {
+        await new Promise(r => setTimeout(r, 600));
+        return callCmux(rustCmd, httpPath, body, { retry: retry - 1 });
+      }
       throw new Error(data?.error ?? `HTTP ${res.status}`);
     }
     return data?.message ?? 'OK';
@@ -1633,11 +1650,11 @@ function App() {
   };
 
   const openCmuxAgentView = async () => {
-    if (isWindows()) { cmuxMacOnlyToast(); return; }
+    if (isWindows() && terminalApp !== 'wsl') { cmuxMacOnlyToast(); return; }
     try {
       const msg = await callCmux('open_cmux_agent_view', '/api/open-cmux-agent-view', {
         bypass: bypassPermissions,
-      });
+      }, { retry: 1 });
       showToast(msg, 'success');
     } catch (e: any) {
       const raw = typeof e === 'string' ? e : (e?.message ?? String(e));
@@ -1656,14 +1673,14 @@ function App() {
   };
 
   const openCmuxProjectAgents = async (item: PortInfo) => {
-    if (isWindows()) { cmuxMacOnlyToast(); return; }
+    if (isWindows() && terminalApp !== 'wsl') { cmuxMacOnlyToast(); return; }
     recordVisit(item.id);
     try {
       const msg = await callCmux('open_cmux_project_agents', '/api/open-cmux-project-agents', {
         folderPath: item.folderPath,
         name: getSessionName(item),
         bypass: bypassPermissions,
-      });
+      }, { retry: 1 });
       showToast(msg, 'success');
     } catch (e: any) {
       const raw = typeof e === 'string' ? e : (e?.message ?? String(e));
@@ -1673,7 +1690,7 @@ function App() {
 
 
   const openClaudeBg = async (item: PortInfo) => {
-    if (isWindows()) { cmuxMacOnlyToast(); return; }
+    if (isWindows() && terminalApp !== 'wsl') { cmuxMacOnlyToast(); return; }
     recordVisit(item.id);
     try {
       const msg = await callCmux('open_claude_bg', '/api/open-claude-bg', {
@@ -3672,7 +3689,7 @@ function App() {
               {item.isRunning ? 'Stop' : 'Run'}
             </button>
           ) : (
-            <button data-help-key="menu-open-folder" onClick={e=>{e.stopPropagation(); item.folderPath && API.openFolder(item.folderPath).catch(()=>{});}} style={{
+            <button data-help-key="menu-open-folder" onClick={e=>{e.stopPropagation(); item.folderPath ? API.openFolder(item.folderPath).catch(e=>showToast(`폴더 열기 실패: ${e.message}`, 'error')) : showToast('폴더 경로가 없습니다', 'error');}} style={{
               padding:'4px 10px',borderRadius:4,
               background:'rgba(232,165,87,0.14)', color:'#e8a557',
               border:'none',fontSize:10,fontWeight:600,cursor:'pointer',
@@ -3831,7 +3848,7 @@ function App() {
                 </button>
                 <button onClick={e=>{e.stopPropagation(); portItem.port && API.openInChrome(`http://localhost:${portItem.port}`).catch(()=>{});}} style={miniBtn} title="브라우저에서 열기"><Globe style={{width:9,height:9}}/></button>
                 {!isWindows() && <button onClick={e=>{e.stopPropagation(); openCmuxLocalhost(portItem);}} style={{...miniBtn,color:'#2dd4bf',borderColor:'rgba(45,212,191,0.2)'}} title={`cmux localhost:${portItem.port}`}><Terminal style={{width:9,height:9}}/></button>}
-                <button onClick={e=>{e.stopPropagation(); wt.path && API.openFolder(wt.path).catch(()=>{});}} style={miniBtn} title="Finder에서 열기"><FolderOpen style={{width:9,height:9}}/></button>
+                <button onClick={e=>{e.stopPropagation(); wt.path && API.openFolder(wt.path).catch(e=>showToast(`폴더 열기 실패: ${e.message}`, 'error'));}} style={miniBtn} title="Finder에서 열기"><FolderOpen style={{width:9,height:9}}/></button>
                 <button onClick={e=>{e.stopPropagation(); forceRestartCommand(portItem);}} style={{...miniBtn,color:'#e8a557',borderColor:'rgba(232,165,87,0.2)'}} title="강제 재실행"><RotateCw style={{width:9,height:9}}/></button>
                 <button onClick={e=>{e.stopPropagation(); wtClaudeBypass();}} style={{...miniBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}}><Zap style={{width:8,height:8,display:'inline',verticalAlign:'middle'}}/>{bypassPermissions?'Claude ⚡':'Claude'}</button>
                 <button onClick={e=>{e.stopPropagation(); setCommitModal({item:portItem,wt,msg:''});}} style={miniBtn}>커밋</button>
@@ -4060,7 +4077,7 @@ function App() {
 
             {/* 열기 */}
             <div style={{display:'flex',gap:6,flexWrap:'wrap' as const,marginBottom:8}}>
-              {sel.folderPath && <button onClick={() => API.openFolder(sel.folderPath!).catch(()=>{})} style={rowBtn}><FolderOpen style={{width:11,height:11}}/>폴더 열기</button>}
+              {sel.folderPath && <button onClick={() => API.openFolder(sel.folderPath!).catch(e=>showToast(`폴더 열기 실패: ${e.message}`, 'error'))} style={rowBtn}><FolderOpen style={{width:11,height:11}}/>폴더 열기</button>}
               <button onClick={() => handleViewPortLog(sel.id, sel.name)} style={rowBtn}><FileText style={{width:11,height:11}}/>로그 보기</button>
               {sel.port && <button onClick={() => API.openInChrome(`http://localhost:${sel.port}`).catch(()=>{})} style={rowBtn}><Laptop style={{width:11,height:11}}/>localhost</button>}
               {sel.port && !isWindows() && <button onClick={() => openCmuxLocalhost(sel)} style={{...rowBtn,color:'#2dd4bf',borderColor:'rgba(45,212,191,0.2)'}} title={`cmux로 localhost:${sel.port} 열기 (macOS 전용)`}><Terminal style={{width:11,height:11}}/>cmux localhost</button>}
@@ -4885,24 +4902,24 @@ function App() {
                   </button>
                 ))}
               </div>
-              {/* Mode toggles - compact pills */}
-              {!isWindows() && (<>
+              {/* Mode toggles — macOS 전용 또는 Windows WSL 모드에서 표시 */}
+              {(!isWindows() || terminalApp === 'wsl') && (<>
                 <button onClick={() => { const v=!bgMode; setBgMode(v); localStorage.setItem('portmanager-bgMode', String(v)); }}
-                  title="--bg 모드"
+                  title={isWindows() ? '--bg 모드 (WSL에서 claude --bg 실행)' : '--bg 모드'}
                   style={{ padding:'2px 6px', fontSize:10, borderRadius:4, border:'1px solid', cursor:'pointer', fontFamily:'inherit',
                     background: bgMode ? '#2d1f42' : 'transparent',
                     borderColor: bgMode ? '#7c3aed' : '#3f3f46',
                     color: bgMode ? '#c4b5fd' : '#52525b' }}>
                   bg
                 </button>
-                <button onClick={() => { const v=!tmuxMode; setTmuxMode(v); localStorage.setItem('portmanager-tmuxMode', String(v)); }}
+                {!isWindows() && <button onClick={() => { const v=!tmuxMode; setTmuxMode(v); localStorage.setItem('portmanager-tmuxMode', String(v)); }}
                   title="tmux 모드"
                   style={{ padding:'2px 6px', fontSize:10, borderRadius:4, border:'1px solid', cursor:'pointer', fontFamily:'inherit',
                     background: tmuxMode ? '#1f2d20' : 'transparent',
                     borderColor: tmuxMode ? '#22c55e' : '#3f3f46',
                     color: tmuxMode ? '#86efac' : '#52525b' }}>
                   tmux
-                </button>
+                </button>}
               </>)}
               {/* bypass toggle - compact */}
               <button
@@ -5472,8 +5489,10 @@ function App() {
                   cmux
                 </button>
                 )}
-                {!isWindows() && (
-                <button data-help-key="header-cmux-agent-view" onClick={openCmuxAgentView} title="전체 Agent View — claude agents (HOME 기준, macOS 전용)" style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(200,168,240,0.15)',borderRadius:5,color:'#c8a8f0',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
+                {(!isWindows() || terminalApp === 'wsl') && (
+                <button data-help-key="header-cmux-agent-view" onClick={openCmuxAgentView}
+                  title={isWindows() ? 'claude agents (WSL에서 실행)' : '전체 Agent View — claude agents (HOME 기준)'}
+                  style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(200,168,240,0.15)',borderRadius:5,color:'#c8a8f0',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
                   <Sparkles style={{width:13,height:13}} />
                   agents
                 </button>
@@ -5489,7 +5508,7 @@ function App() {
                         <Monitor style={{width:13,height:13}} className={isBuilding && buildType==='windows' ? 'animate-spin' : ''} />
                         {t(lang, 'buildWin')}
                       </button>
-                      <button onClick={() => API.openBuildFolder().catch(()=>{})} title="빌드 폴더 열기" style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(255,240,220,0.07)',borderRadius:5,color:'#a39a8c',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
+                      <button onClick={() => API.openBuildFolder().catch(e=>showToast(`폴더 열기 실패: ${e.message}`, 'error'))} title="빌드 폴더 열기" style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(255,240,220,0.07)',borderRadius:5,color:'#a39a8c',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
                         <FolderOpen style={{width:13,height:13}} />
                         {t(lang, 'openBuildFolder')}
                       </button>
@@ -5504,7 +5523,7 @@ function App() {
                         <Package style={{width:13,height:13}} className={isBuilding && buildType==='dmg' ? 'animate-spin' : ''} />
                         DMG
                       </button>
-                      <button onClick={() => API.openBuildFolder().catch(()=>{})} title="빌드 폴더 열기" style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(255,240,220,0.07)',borderRadius:5,color:'#a39a8c',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
+                      <button onClick={() => API.openBuildFolder().catch(e=>showToast(`폴더 열기 실패: ${e.message}`, 'error'))} title="빌드 폴더 열기" style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(255,240,220,0.07)',borderRadius:5,color:'#a39a8c',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
                         <FolderOpen style={{width:13,height:13}} />
                         폴더 열기
                       </button>

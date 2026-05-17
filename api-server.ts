@@ -142,17 +142,19 @@ async function cmuxSendNodeWithRetry(cli: string, payload: string): Promise<{ ok
   return { ok: false, stderr: lastErr || 'unknown' };
 }
 
-/** WSL distro 목록 캐시 */
+/** WSL distro 목록 캐시 (빈 결과도 캐시해서 registry 반복 쿼리 방지) */
 let _cachedDistros: string[] | null = null;
+let _distrosCached = false;
 
 /** WSL registry에서 distro 목록 조회 (reg.exe 사용 — powershell보다 훨씬 빠르고 안정적) */
 function listWslDistros(): string[] {
-  if (_cachedDistros && _cachedDistros.length > 0) return _cachedDistros;
+  if (_distrosCached) return _cachedDistros ?? [];
   const r = nodeSpawnSync('reg', ['query', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Lxss', '/s', '/v', 'DistributionName'],
     { timeout: 5000, stdio: 'pipe' });
   const stdout = r.stdout?.toString('utf8') ?? '';
   if (r.status !== 0 || r.error) {
     console.error('[listWslDistros] failed:', { status: r.status, error: r.error?.message });
+    _cachedDistros = []; _distrosCached = true;
     return [];
   }
   // reg output format: "    DistributionName    REG_SZ    <name>"
@@ -160,7 +162,8 @@ function listWslDistros(): string[] {
     .map((m: RegExpMatchArray) => m[1].trim())
     .filter((n: string) => n && !n.toLowerCase().includes('docker'));
   devLog('[listWslDistros] found:', distros);
-  if (distros.length > 0) _cachedDistros = distros;
+  _cachedDistros = distros;
+  _distrosCached = true;
   return distros;
 }
 
@@ -212,15 +215,22 @@ function buildWslTmuxBashCmd(sessionName: string, folderPath: string | null, wor
   return `${cdPart}tmux new-session -A -s '${sess}' '${inner}'`;
 }
 
+/** Windows Terminal 설치 여부 캐시 (매 호출마다 where 실행 방지) */
+let _cachedHasWt: boolean | null = null;
+function hasWindowsTerminal(): boolean {
+  if (_cachedHasWt !== null) return _cachedHasWt;
+  _cachedHasWt = Bun.spawnSync(['where', 'wt.exe'], { stdout: 'pipe', stderr: 'pipe' }).exitCode === 0;
+  return _cachedHasWt;
+}
+
 /** WSL tmux 세션 열기 (Windows Terminal 우선, 없으면 cmd 폴백) */
 function spawnWslTmux(bashCmd: string, title?: string): void {
   const distro = findWslDistro();
   if (!distro) throw new Error('WSL Ubuntu distro를 찾을 수 없습니다.');
-  const hasWt = Bun.spawnSync(['where', 'wt.exe'], { stdout: 'pipe', stderr: 'pipe' }).exitCode === 0;
   // bash -c (기본) → WSL의 default PATH가 Windows PATH를 import하므로 npm global(claude.exe 등)도 자동 접근
   // -i (interactive) 플래그는 WSL pty 레이어에서 hang 유발 가능 → 사용 금지
   const titleArgs = title ? ['--title', title] : [];
-  if (hasWt) {
+  if (hasWindowsTerminal()) {
     // wt.exe는 Windows App 앨리어스라 직접 spawn 불가 → cmd /c start로 우회
     spawn({ cmd: ['cmd.exe', '/c', 'start', 'wt', ...titleArgs, 'wsl', '-d', distro, '--', 'bash', '-c', bashCmd], stdout: 'inherit', stderr: 'inherit' });
   } else {
@@ -424,6 +434,12 @@ async function saveWorkspaceRootsData(data: any) {
     await Bun.write(WORKSPACE_ROOTS_FILE, JSON.stringify(data, null, 2));
     return true;
   } catch (e) { console.error("[Data] Error saving workspace roots:", e); return false; }
+}
+
+// Windows: 서버 시작 시 WSL distro + wt.exe 미리 감지 (첫 버튼 클릭 cold start 제거)
+if (IS_WIN) {
+  listWslDistros();
+  hasWindowsTerminal();
 }
 
 const server = Bun.serve({
@@ -1505,7 +1521,17 @@ end try`);
     }
 
     if (url.pathname === "/api/open-cmux-agent-view" && req.method === "POST") {
-      if (IS_WIN) return new Response(JSON.stringify({ error: 'cmux는 맥에서만 가능합니다' }), { status: 400, headers });
+      // Windows: WSL fallback
+      if (IS_WIN) {
+        try {
+          const { bypass = false } = await req.json().catch(() => ({}));
+          const claudeCmd = bypass ? 'claude --dangerously-skip-permissions agents' : 'claude agents';
+          spawnWslTmux(claudeCmd, '🤖 Agent View');
+          return new Response(JSON.stringify({ success: true, message: 'WSL에서 claude agents 열림' }), { headers });
+        } catch (e: any) {
+          return new Response(JSON.stringify({ success: false, error: e.message }), { status: 500, headers });
+        }
+      }
       try {
         const cli = resolveCmuxCli();
         if (!cli && !cmuxAppExists()) {
@@ -1530,7 +1556,21 @@ end try`);
     }
 
     if (url.pathname === "/api/open-cmux-project-agents" && req.method === "POST") {
-      if (IS_WIN) return new Response(JSON.stringify({ error: 'cmux는 맥에서만 가능합니다' }), { status: 400, headers });
+      // Windows: WSL fallback
+      if (IS_WIN) {
+        try {
+          const { folderPath, name = '', bypass = false } = await req.json();
+          const rawPath = folderPath && String(folderPath).trim();
+          const wslPath = rawPath ? winToWslPath(rawPath) : null;
+          const cdPart = wslPath ? `cd '${escapeSq(wslPath)}' && ` : '';
+          const baseName = (name && String(name).trim()) || (rawPath?.split(/[/\\]/).filter(Boolean).pop()) || 'project';
+          const claudeCmd = bypass ? `${cdPart}claude --dangerously-skip-permissions agents` : `${cdPart}claude agents`;
+          spawnWslTmux(claudeCmd, `🤖 ${baseName} agents`);
+          return new Response(JSON.stringify({ success: true, message: `WSL에서 claude agents 열림 (${baseName})` }), { headers });
+        } catch (e: any) {
+          return new Response(JSON.stringify({ success: false, error: e.message }), { status: 500, headers });
+        }
+      }
       try {
         const { folderPath, name = '', bypass = false } = await req.json();
         const cdPath = (folderPath && String(folderPath).trim()) || homedir() || '/';
@@ -1557,7 +1597,26 @@ end try`);
     }
 
     if (url.pathname === "/api/open-claude-bg" && req.method === "POST") {
-      if (IS_WIN) return new Response(JSON.stringify({ error: 'claude --bg는 맥에서만 가능합니다' }), { status: 400, headers });
+      // Windows: WSL에서 claude --bg 실행
+      if (IS_WIN) {
+        try {
+          const { folderPath, name = '', bypass = false } = await req.json();
+          const rawPath = folderPath && String(folderPath).trim();
+          const wslPath = rawPath ? winToWslPath(rawPath) : null;
+          const cdPart = wslPath ? `cd '${escapeSq(wslPath)}' && ` : '';
+          const label = (name && String(name).trim()) || (rawPath?.split(/[/\\]/).filter(Boolean).pop()) || 'project';
+          const bgArgs = bypass
+            ? `claude --dangerously-skip-permissions --bg '${escapeSq(label)} 작업 시작'`
+            : `claude --bg '${escapeSq(label)} 작업 시작'`;
+          // --bg는 claude가 백그라운드 에이전트를 spawn하고 바로 종료 → async spawn으로 이벤트 루프 blocking 방지
+          const distro = findWslDistro();
+          if (!distro) throw new Error('WSL Ubuntu distro를 찾을 수 없습니다. wsl 모드 설정 후 다시 시도하세요.');
+          spawn({ cmd: ['wsl', '-d', distro, '--', 'bash', '-lc', `${cdPart}${bgArgs}`], stdout: 'pipe', stderr: 'pipe' });
+          return new Response(JSON.stringify({ success: true, message: `WSL에서 claude --bg 시작 (${label})` }), { headers });
+        } catch (e: any) {
+          return new Response(JSON.stringify({ success: false, error: e.message }), { status: 500, headers });
+        }
+      }
       try {
         const { folderPath, name = '', bypass = false } = await req.json();
         const rawPath = folderPath && String(folderPath).trim();
