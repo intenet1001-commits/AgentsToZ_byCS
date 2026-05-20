@@ -445,6 +445,36 @@ const API = {
     }
   },
 
+  async openTmuxCodex(sessionName: string, folderPath?: string, worktreePath?: string, bypass?: boolean): Promise<string> {
+    if (isTauri()) {
+      return invoke<string>('open_tmux_codex', { sessionName, folderPath: folderPath ?? null, worktreePath: worktreePath ?? null, bypass: bypass ?? false });
+    } else {
+      const response = await fetch('/api/open-tmux-codex', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionName, folderPath: folderPath ?? null, worktreePath: worktreePath ?? null, bypass: bypass ?? false })
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error);
+      return result.message;
+    }
+  },
+
+  async openTmuxAgy(sessionName: string, folderPath?: string, worktreePath?: string, bypass?: boolean): Promise<string> {
+    if (isTauri()) {
+      return invoke<string>('open_tmux_agy', { sessionName, folderPath: folderPath ?? null, worktreePath: worktreePath ?? null, bypass: bypass ?? false });
+    } else {
+      const response = await fetch('/api/open-tmux-agy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionName, folderPath: folderPath ?? null, worktreePath: worktreePath ?? null, bypass: bypass ?? false })
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error);
+      return result.message;
+    }
+  },
+
   async createFolder(folderPath: string): Promise<{ success: boolean; path: string }> {
     if (isTauri()) {
       try {
@@ -1835,14 +1865,24 @@ function App() {
     if (!item.folderPath) { showToast('폴더 경로가 없습니다.', 'error'); return; }
     if (bgMode) showToast('Codex는 bg 모드 미지원 — 일반 실행합니다', 'error');
     recordVisit(item.id);
+    const sessionName = getSessionName(item);
     try {
       if (terminalApp === 'cmux') {
         if (isWindows()) { cmuxMacOnlyToast(); return; }
-        const msg = await callCmux('open_cmux_codex', '/api/open-cmux-codex', { name: getSessionName(item), folderPath: item.folderPath, worktreePath, bypass: bypassPermissions });
+        const msg = await callCmux('open_cmux_codex', '/api/open-cmux-codex', { name: sessionName, folderPath: item.folderPath, worktreePath, bypass: bypassPermissions });
         showToast(msg, 'success');
-      } else {
-        await API.openTerminalCodex(item.folderPath, getSessionName(item), worktreePath, bypassPermissions);
+      } else if (terminalApp === 'iterm' || terminalApp === 'wsl') {
+        // iterm/wsl — tmux 세션으로 실행
+        await API.openTmuxCodex(sessionName, item.folderPath, worktreePath, bypassPermissions);
+        showToast(`tmux + Codex${bypassPermissions ? ' ⚡' : ''} 실행 중 (${sessionName})`, 'success');
+      } else if (terminalApp === 'powershell') {
+        // powershell — Terminal.app fallback
+        await API.openTerminalCodex(item.folderPath, sessionName, worktreePath, bypassPermissions);
         showToast(`Codex${bypassPermissions ? ' ⚡' : ''} 실행 중`, 'success');
+      } else {
+        // terminal — tmux 세션으로 실행 (Claude와 동일한 패턴)
+        await API.openTmuxCodex(sessionName, item.folderPath, worktreePath, bypassPermissions);
+        showToast(`tmux + Codex${bypassPermissions ? ' ⚡' : ''} 실행 중 (${sessionName})`, 'success');
       }
     } catch (e: any) {
       const raw = typeof e === 'string' ? e : (e?.message ?? String(e));
@@ -1854,14 +1894,24 @@ function App() {
     if (!item.folderPath) { showToast('폴더 경로가 없습니다.', 'error'); return; }
     if (bgMode) showToast('Antigravity는 bg 모드 미지원 — 일반 실행합니다', 'error');
     recordVisit(item.id);
+    const sessionName = getSessionName(item);
     try {
       if (terminalApp === 'cmux') {
         if (isWindows()) { cmuxMacOnlyToast(); return; }
-        const msg = await callCmux('open_cmux_agy', '/api/open-cmux-agy', { name: getSessionName(item), folderPath: item.folderPath, worktreePath, bypass: bypassPermissions });
+        const msg = await callCmux('open_cmux_agy', '/api/open-cmux-agy', { name: sessionName, folderPath: item.folderPath, worktreePath, bypass: bypassPermissions });
         showToast(msg, 'success');
-      } else {
-        await API.openTerminalAgy(item.folderPath, getSessionName(item), worktreePath, bypassPermissions);
+      } else if (terminalApp === 'iterm' || terminalApp === 'wsl') {
+        // iterm/wsl — tmux 세션으로 실행
+        await API.openTmuxAgy(sessionName, item.folderPath, worktreePath, bypassPermissions);
+        showToast(`tmux + Antigravity${bypassPermissions ? ' ⚡' : ''} 실행 중 (${sessionName})`, 'success');
+      } else if (terminalApp === 'powershell') {
+        // powershell — Terminal.app fallback
+        await API.openTerminalAgy(item.folderPath, sessionName, worktreePath, bypassPermissions);
         showToast(`Antigravity${bypassPermissions ? ' ⚡' : ''} 실행 중`, 'success');
+      } else {
+        // terminal — tmux 세션으로 실행 (Claude와 동일한 패턴)
+        await API.openTmuxAgy(sessionName, item.folderPath, worktreePath, bypassPermissions);
+        showToast(`tmux + Antigravity${bypassPermissions ? ' ⚡' : ''} 실행 중 (${sessionName})`, 'success');
       }
     } catch (e: any) {
       const raw = typeof e === 'string' ? e : (e?.message ?? String(e));
@@ -4085,6 +4135,8 @@ function App() {
                 <button onClick={e=>{e.stopPropagation(); wt.path && API.openFolder(wt.path).catch(e=>showToast(`폴더 열기 실패: ${e.message}`, 'error'));}} style={miniBtn} title="Finder에서 열기"><FolderOpen style={{width:9,height:9}}/></button>
                 <button onClick={e=>{e.stopPropagation(); forceRestartCommand(portItem);}} style={{...miniBtn,color:'#e8a557',borderColor:'rgba(232,165,87,0.2)'}} title="강제 재실행"><RotateCw style={{width:9,height:9}}/></button>
                 <button onClick={e=>{e.stopPropagation(); wtClaudeBypass();}} style={{...miniBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}}><Zap style={{width:8,height:8,display:'inline',verticalAlign:'middle'}}/>{bypassPermissions?'Claude ⚡':'Claude'}</button>
+                <button onClick={e=>{e.stopPropagation(); openCodexMain({...portItem,folderPath:wt.path},wt.path);}} style={{...miniBtn,color:'#6ee7b7',borderColor:'rgba(110,231,183,0.25)'}} title={`Codex (${terminalApp})`}>Codex</button>
+                <button onClick={e=>{e.stopPropagation(); openAntigravityMain({...portItem,folderPath:wt.path},wt.path);}} style={{...miniBtn,color:'#fdba74',borderColor:'rgba(253,186,116,0.25)'}} title={`agy (${terminalApp})`}>agy</button>
                 <button onClick={e=>{e.stopPropagation(); setCommitModal({item:portItem,wt,msg:''});}} style={miniBtn}>커밋</button>
                 <button onClick={e=>{e.stopPropagation(); const baseUrl=isTauri()?'http://localhost:3001':''; fetch(`${baseUrl}/api/git-push`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({folderPath:portItem.folderPath})}).then(r=>r.json()).then(d=>{if(d.success)showToast('푸시 완료','success');else showToast(`푸시 실패: ${d.error}`,'error');}).catch(()=>showToast('푸시 실패','error'));}} style={miniBtn}>푸시</button>
               </> : <>
@@ -4096,6 +4148,8 @@ function App() {
                 <button onClick={e=>{e.stopPropagation(); if(wtPortEntry)forceRestartCommand(wtPortEntry);else forceRestartCommand({...portItem,id:`${portItem.id}_wt_${wtName}`,port:wtPort,folderPath:wt.path,worktreePath:wt.path,commandPath:undefined,terminalCommand:undefined});}} style={{...miniBtn,color:'#e8a557',borderColor:'rgba(232,165,87,0.2)'}} title="강제 재실행"><RotateCw style={{width:9,height:9}}/></button>
                 <button onClick={e=>{e.stopPropagation(); API.openFolder(wt.path).catch(()=>{});}} style={miniBtn} title="Finder에서 열기"><FolderOpen style={{width:9,height:9}}/></button>
                 <button onClick={e=>{e.stopPropagation(); wtClaudeBypass();}} style={{...miniBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}}><Zap style={{width:8,height:8,display:'inline',verticalAlign:'middle'}}/>{bypassPermissions?'Claude ⚡':'Claude'}</button>
+                <button onClick={e=>{e.stopPropagation(); openCodexMain({...portItem,folderPath:wt.path},wt.path);}} style={{...miniBtn,color:'#6ee7b7',borderColor:'rgba(110,231,183,0.25)'}} title={`Codex (${terminalApp})`}>Codex</button>
+                <button onClick={e=>{e.stopPropagation(); openAntigravityMain({...portItem,folderPath:wt.path},wt.path);}} style={{...miniBtn,color:'#fdba74',borderColor:'rgba(253,186,116,0.25)'}} title={`agy (${terminalApp})`}>agy</button>
                 <button onClick={e=>{e.stopPropagation(); setCommitModal({item:portItem,wt,msg:''});}} style={miniBtn}>커밋</button>
                 <button onClick={e=>{e.stopPropagation(); const baseUrl=isTauri()?'http://localhost:3001':''; fetch(`${baseUrl}/api/git-push`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({folderPath:wt.path})}).then(r=>r.json()).then(d=>{if(d.success)showToast(`푸시 완료: ${displayName}`,'success');else showToast(`푸시 실패: ${d.error}`,'error');}).catch(()=>showToast('푸시 실패','error'));}} style={miniBtn}>푸시</button>
                 <button onClick={e=>{e.stopPropagation(); handleWorktreeMerge(portItem,wt);}} style={{...miniBtn,color:'#e8a557',borderColor:'rgba(232,165,87,0.2)'}}>머지</button>
