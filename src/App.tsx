@@ -445,6 +445,36 @@ const API = {
     }
   },
 
+  async openTmuxCodex(sessionName: string, folderPath?: string, worktreePath?: string, bypass?: boolean): Promise<string> {
+    if (isTauri()) {
+      return invoke<string>('open_tmux_codex', { sessionName, folderPath: folderPath ?? null, worktreePath: worktreePath ?? null, bypass: bypass ?? false });
+    } else {
+      const response = await fetch('/api/open-tmux-codex', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionName, folderPath: folderPath ?? null, worktreePath: worktreePath ?? null, bypass: bypass ?? false })
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error);
+      return result.message;
+    }
+  },
+
+  async openTmuxAgy(sessionName: string, folderPath?: string, worktreePath?: string, bypass?: boolean): Promise<string> {
+    if (isTauri()) {
+      return invoke<string>('open_tmux_agy', { sessionName, folderPath: folderPath ?? null, worktreePath: worktreePath ?? null, bypass: bypass ?? false });
+    } else {
+      const response = await fetch('/api/open-tmux-agy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionName, folderPath: folderPath ?? null, worktreePath: worktreePath ?? null, bypass: bypass ?? false })
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error);
+      return result.message;
+    }
+  },
+
   async createFolder(folderPath: string): Promise<{ success: boolean; path: string }> {
     if (isTauri()) {
       try {
@@ -1835,14 +1865,24 @@ function App() {
     if (!item.folderPath) { showToast('폴더 경로가 없습니다.', 'error'); return; }
     if (bgMode) showToast('Codex는 bg 모드 미지원 — 일반 실행합니다', 'error');
     recordVisit(item.id);
+    const sessionName = getSessionName(item);
     try {
       if (terminalApp === 'cmux') {
         if (isWindows()) { cmuxMacOnlyToast(); return; }
-        const msg = await callCmux('open_cmux_codex', '/api/open-cmux-codex', { name: getSessionName(item), folderPath: item.folderPath, worktreePath, bypass: bypassPermissions });
+        const msg = await callCmux('open_cmux_codex', '/api/open-cmux-codex', { name: sessionName, folderPath: item.folderPath, worktreePath, bypass: bypassPermissions });
         showToast(msg, 'success');
-      } else {
-        await API.openTerminalCodex(item.folderPath, getSessionName(item), worktreePath, bypassPermissions);
+      } else if (terminalApp === 'iterm' || terminalApp === 'wsl') {
+        // iterm/wsl — tmux 세션으로 실행
+        await API.openTmuxCodex(sessionName, item.folderPath, worktreePath, bypassPermissions);
+        showToast(`tmux + Codex${bypassPermissions ? ' ⚡' : ''} 실행 중 (${sessionName})`, 'success');
+      } else if (terminalApp === 'powershell') {
+        // powershell — Terminal.app fallback
+        await API.openTerminalCodex(item.folderPath, sessionName, worktreePath, bypassPermissions);
         showToast(`Codex${bypassPermissions ? ' ⚡' : ''} 실행 중`, 'success');
+      } else {
+        // terminal — tmux 세션으로 실행 (Claude와 동일한 패턴)
+        await API.openTmuxCodex(sessionName, item.folderPath, worktreePath, bypassPermissions);
+        showToast(`tmux + Codex${bypassPermissions ? ' ⚡' : ''} 실행 중 (${sessionName})`, 'success');
       }
     } catch (e: any) {
       const raw = typeof e === 'string' ? e : (e?.message ?? String(e));
@@ -1854,14 +1894,24 @@ function App() {
     if (!item.folderPath) { showToast('폴더 경로가 없습니다.', 'error'); return; }
     if (bgMode) showToast('Antigravity는 bg 모드 미지원 — 일반 실행합니다', 'error');
     recordVisit(item.id);
+    const sessionName = getSessionName(item);
     try {
       if (terminalApp === 'cmux') {
         if (isWindows()) { cmuxMacOnlyToast(); return; }
-        const msg = await callCmux('open_cmux_agy', '/api/open-cmux-agy', { name: getSessionName(item), folderPath: item.folderPath, worktreePath, bypass: bypassPermissions });
+        const msg = await callCmux('open_cmux_agy', '/api/open-cmux-agy', { name: sessionName, folderPath: item.folderPath, worktreePath, bypass: bypassPermissions });
         showToast(msg, 'success');
-      } else {
-        await API.openTerminalAgy(item.folderPath, getSessionName(item), worktreePath, bypassPermissions);
+      } else if (terminalApp === 'iterm' || terminalApp === 'wsl') {
+        // iterm/wsl — tmux 세션으로 실행
+        await API.openTmuxAgy(sessionName, item.folderPath, worktreePath, bypassPermissions);
+        showToast(`tmux + Antigravity${bypassPermissions ? ' ⚡' : ''} 실행 중 (${sessionName})`, 'success');
+      } else if (terminalApp === 'powershell') {
+        // powershell — Terminal.app fallback
+        await API.openTerminalAgy(item.folderPath, sessionName, worktreePath, bypassPermissions);
         showToast(`Antigravity${bypassPermissions ? ' ⚡' : ''} 실행 중`, 'success');
+      } else {
+        // terminal — tmux 세션으로 실행 (Claude와 동일한 패턴)
+        await API.openTmuxAgy(sessionName, item.folderPath, worktreePath, bypassPermissions);
+        showToast(`tmux + Antigravity${bypassPermissions ? ' ⚡' : ''} 실행 중 (${sessionName})`, 'success');
       }
     } catch (e: any) {
       const raw = typeof e === 'string' ? e : (e?.message ?? String(e));

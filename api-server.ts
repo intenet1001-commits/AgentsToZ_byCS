@@ -1455,6 +1455,50 @@ end try`);
       }
     }
 
+    // tmux codex/agy endpoints — iterm/terminal 모드에서 tmux 세션으로 실행
+    if (url.pathname === "/api/open-tmux-codex" && req.method === "POST") {
+      try {
+        const { sessionName, folderPath, worktreePath, branch, bypass = false } = await req.json();
+        const codexCli = bypass ? 'codex --dangerously-bypass-approvals-and-sandbox' : 'codex';
+        const tags: string[] = bypass ? ['tmux', 'bypass'] : ['tmux'];
+        const title = buildWindowTitle(sessionName, worktreePath, tags, branch ?? null);
+        if (IS_WIN) {
+          // WSL에서는 codex 미지원 — Terminal.app fallback과 동일하게 처리
+          return new Response(JSON.stringify({ success: false, error: 'Codex는 WSL에서 지원되지 않습니다.' }), { status: 400, headers });
+        } else {
+          const esc = escapeSq(sessionName);
+          const winName = escapeSq(title);
+          const tmuxCmd = `tmux new-session -d -s '${esc}' -n '${winName}' 'zsh -l -c "${codexCli}"' 2>/dev/null; tmux set-option -g set-titles on 2>/dev/null; tmux set-option -g set-titles-string '#W' 2>/dev/null; tmux set-window-option -t '${esc}' automatic-rename off 2>/dev/null; tmux rename-window -t '${esc}' '${winName}' 2>/dev/null; tmux attach-session -t '${esc}'`;
+          const cdPath = worktreePath ? worktreePath.split(',')[0].trim() : (folderPath ?? null);
+          openTerminalWithCmd(tmuxCmd, cdPath, title);
+        }
+        return new Response(JSON.stringify({ success: true, message: `Codex${bypass ? ' ⚡' : ''} 실행 중 (세션: ${sessionName})` }), { headers });
+      } catch (error: any) {
+        return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers });
+      }
+    }
+
+    if (url.pathname === "/api/open-tmux-agy" && req.method === "POST") {
+      try {
+        const { sessionName, folderPath, worktreePath, branch, bypass = false } = await req.json();
+        const agyCli = bypass ? 'agy --dangerously-skip-permissions' : 'agy';
+        const tags: string[] = bypass ? ['tmux', 'bypass'] : ['tmux'];
+        const title = buildWindowTitle(sessionName, worktreePath, tags, branch ?? null);
+        if (IS_WIN) {
+          return new Response(JSON.stringify({ success: false, error: 'Antigravity는 WSL에서 지원되지 않습니다.' }), { status: 400, headers });
+        } else {
+          const esc = escapeSq(sessionName);
+          const winName = escapeSq(title);
+          const tmuxCmd = `tmux new-session -d -s '${esc}' -n '${winName}' 'zsh -l -c "${agyCli}"' 2>/dev/null; tmux set-option -g set-titles on 2>/dev/null; tmux set-option -g set-titles-string '#W' 2>/dev/null; tmux set-window-option -t '${esc}' automatic-rename off 2>/dev/null; tmux rename-window -t '${esc}' '${winName}' 2>/dev/null; tmux attach-session -t '${esc}'`;
+          const cdPath = worktreePath ? worktreePath.split(',')[0].trim() : (folderPath ?? null);
+          openTerminalWithCmd(tmuxCmd, cdPath, title);
+        }
+        return new Response(JSON.stringify({ success: true, message: `Antigravity${bypass ? ' ⚡' : ''} 실행 중 (세션: ${sessionName})` }), { headers });
+      } catch (error: any) {
+        return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers });
+      }
+    }
+
     if (url.pathname === "/api/open-cmux-claude-new" && req.method === "POST") {
       if (IS_WIN) return new Response(JSON.stringify({ error: 'cmux는 맥에서만 가능합니다' }), { status: 400, headers });
       try {
