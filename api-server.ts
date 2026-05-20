@@ -1413,6 +1413,48 @@ end try`);
       }
     }
 
+    if (url.pathname === "/api/open-cmux-codex" && req.method === "POST") {
+      if (IS_WIN) return new Response(JSON.stringify({ error: 'cmux는 맥에서만 가능합니다' }), { status: 400, headers });
+      try {
+        const { folderPath, worktreePath, name = '', bypass = false } = await req.json();
+        const cdPath = (worktreePath ? worktreePath.split(',')[0].trim() : null) || folderPath;
+        if (!cdPath) return new Response(JSON.stringify({ success: false, error: '프로젝트 경로가 없습니다.' }), { status: 400, headers });
+        const codexCmd = bypass ? 'codex --dangerously-bypass-approvals-and-sandbox' : 'codex';
+        const title = buildCmuxTitle(name || 'codex', worktreePath, bypass);
+        const cli = resolveCmuxCli();
+        if (!cli && !cmuxAppExists()) return new Response(JSON.stringify({ error: 'cmux가 설치되지 않았습니다.\n설치: brew tap manaflow-ai/cmux && brew install --cask cmux' }), { status: 400, headers });
+        if (cmuxAppExists()) nodeSpawnSync('open', ['-a', 'cmux'], { stdio: 'pipe' });
+        const cliPath = cli ?? 'cmux';
+        if (!(await waitCmuxReadyNode(cliPath))) return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp('cmux 소켓 준비 대기 시간 초과 (10초)') }), { status: 500, headers });
+        const ws = nodeCmuxRun(cliPath, ['new-workspace', '--cwd', cdPath, '--command', codexCmd, '--name', title]);
+        if (!ws.ok) return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp(`cmux new-workspace 실패: ${ws.stderr || 'unknown'}`) }), { status: 500, headers });
+        return new Response(JSON.stringify({ success: true, message: `cmux Codex${bypass ? ' ⚡' : ''} 실행 중` }), { headers });
+      } catch (error: any) {
+        return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers });
+      }
+    }
+
+    if (url.pathname === "/api/open-cmux-agy" && req.method === "POST") {
+      if (IS_WIN) return new Response(JSON.stringify({ error: 'cmux는 맥에서만 가능합니다' }), { status: 400, headers });
+      try {
+        const { folderPath, worktreePath, name = '', bypass = false } = await req.json();
+        const cdPath = (worktreePath ? worktreePath.split(',')[0].trim() : null) || folderPath;
+        if (!cdPath) return new Response(JSON.stringify({ success: false, error: '프로젝트 경로가 없습니다.' }), { status: 400, headers });
+        const agyCli = bypass ? 'agy --dangerously-skip-permissions' : 'agy';
+        const title = buildCmuxTitle(name || 'antigravity', worktreePath, bypass);
+        const cli = resolveCmuxCli();
+        if (!cli && !cmuxAppExists()) return new Response(JSON.stringify({ error: 'cmux가 설치되지 않았습니다.\n설치: brew tap manaflow-ai/cmux && brew install --cask cmux' }), { status: 400, headers });
+        if (cmuxAppExists()) nodeSpawnSync('open', ['-a', 'cmux'], { stdio: 'pipe' });
+        const cliPath = cli ?? 'cmux';
+        if (!(await waitCmuxReadyNode(cliPath))) return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp('cmux 소켓 준비 대기 시간 초과 (10초)') }), { status: 500, headers });
+        const ws = nodeCmuxRun(cliPath, ['new-workspace', '--cwd', cdPath, '--command', agyCli, '--name', title]);
+        if (!ws.ok) return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp(`cmux new-workspace 실패: ${ws.stderr || 'unknown'}`) }), { status: 500, headers });
+        return new Response(JSON.stringify({ success: true, message: `cmux Antigravity${bypass ? ' ⚡' : ''} 실행 중` }), { headers });
+      } catch (error: any) {
+        return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers });
+      }
+    }
+
     if (url.pathname === "/api/open-cmux-claude-new" && req.method === "POST") {
       if (IS_WIN) return new Response(JSON.stringify({ error: 'cmux는 맥에서만 가능합니다' }), { status: 400, headers });
       try {
@@ -1809,6 +1851,30 @@ end try`);
         const cdPath = worktreePath ? worktreePath.split(',')[0].trim() : (folderPath ?? null);
         openTerminalWithCmd('claude', cdPath, buildWindowTitle(name || 'Claude', worktreePath));
         return new Response(JSON.stringify({ success: true, message: 'Terminal에서 Claude 실행' }), { headers });
+      } catch (error: any) {
+        return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers });
+      }
+    }
+
+    if (url.pathname === "/api/open-terminal-codex" && req.method === "POST") {
+      try {
+        const { folderPath, name, worktreePath, bypass = false } = await req.json();
+        const cdPath = worktreePath ? worktreePath.split(',')[0].trim() : (folderPath ?? null);
+        const codexCmd = bypass ? 'codex --dangerously-bypass-approvals-and-sandbox' : 'codex';
+        openTerminalWithCmd(codexCmd, cdPath, buildWindowTitle(name || 'Codex', worktreePath, bypass ? 'bypass' : undefined));
+        return new Response(JSON.stringify({ success: true, message: `Terminal에서 Codex${bypass ? ' ⚡' : ''} 실행` }), { headers });
+      } catch (error: any) {
+        return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers });
+      }
+    }
+
+    if (url.pathname === "/api/open-terminal-agy" && req.method === "POST") {
+      try {
+        const { folderPath, name, worktreePath, bypass = false } = await req.json();
+        const cdPath = worktreePath ? worktreePath.split(',')[0].trim() : (folderPath ?? null);
+        const agyCli = bypass ? 'agy --dangerously-skip-permissions' : 'agy';
+        openTerminalWithCmd(agyCli, cdPath, buildWindowTitle(name || 'Antigravity', worktreePath, bypass ? 'bypass' : undefined));
+        return new Response(JSON.stringify({ success: true, message: `Terminal에서 Antigravity${bypass ? ' ⚡' : ''} 실행` }), { headers });
       } catch (error: any) {
         return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers });
       }

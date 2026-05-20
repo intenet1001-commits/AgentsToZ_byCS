@@ -415,6 +415,36 @@ const API = {
     }
   },
 
+  async openTerminalCodex(folderPath?: string, name?: string, worktreePath?: string, bypass?: boolean): Promise<string> {
+    if (isTauri()) {
+      return invoke<string>('open_terminal_codex', { folderPath: folderPath ?? null, name: name ?? null, worktreePath: worktreePath ?? null, bypass: bypass ?? false });
+    } else {
+      const response = await fetch('/api/open-terminal-codex', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderPath: folderPath ?? null, name: name ?? null, worktreePath: worktreePath ?? null, bypass: bypass ?? false })
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error);
+      return result.message;
+    }
+  },
+
+  async openTerminalAgy(folderPath?: string, name?: string, worktreePath?: string, bypass?: boolean): Promise<string> {
+    if (isTauri()) {
+      return invoke<string>('open_terminal_agy', { folderPath: folderPath ?? null, name: name ?? null, worktreePath: worktreePath ?? null, bypass: bypass ?? false });
+    } else {
+      const response = await fetch('/api/open-terminal-agy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderPath: folderPath ?? null, name: name ?? null, worktreePath: worktreePath ?? null, bypass: bypass ?? false })
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error);
+      return result.message;
+    }
+  },
+
   async createFolder(folderPath: string): Promise<{ success: boolean; path: string }> {
     if (isTauri()) {
       try {
@@ -1622,8 +1652,8 @@ function App() {
 
   // cmux invocation — Tauri uses Rust commands, browser falls back to api-server.
   const callCmux = async (
-    rustCmd: 'open_cmux_claude' | 'open_cmux_claude_new' | 'open_cmux_terminal' | 'open_cmux_localhost' | 'open_cmux_tmux' | 'open_cmux_agent_view' | 'open_cmux_project_agents' | 'open_claude_bg',
-    httpPath: '/api/open-cmux-claude' | '/api/open-cmux-claude-new' | '/api/open-cmux-terminal' | '/api/open-cmux-localhost' | '/api/open-cmux-tmux' | '/api/open-cmux-agent-view' | '/api/open-cmux-project-agents' | '/api/open-claude-bg',
+    rustCmd: 'open_cmux_claude' | 'open_cmux_claude_new' | 'open_cmux_codex' | 'open_cmux_agy' | 'open_cmux_terminal' | 'open_cmux_localhost' | 'open_cmux_tmux' | 'open_cmux_agent_view' | 'open_cmux_project_agents' | 'open_claude_bg',
+    httpPath: '/api/open-cmux-claude' | '/api/open-cmux-claude-new' | '/api/open-cmux-codex' | '/api/open-cmux-agy' | '/api/open-cmux-terminal' | '/api/open-cmux-localhost' | '/api/open-cmux-tmux' | '/api/open-cmux-agent-view' | '/api/open-cmux-project-agents' | '/api/open-claude-bg',
     body: { folderPath?: string; worktreePath?: string; bypass?: boolean; name?: string; port?: number; fresh?: boolean },
     { retry = 0 }: { retry?: number } = {}
   ): Promise<string> => {
@@ -1798,6 +1828,44 @@ function App() {
     } catch (e: any) {
       const raw = typeof e === 'string' ? e : (e?.message ?? String(e));
       showToast(`claude --bg 실패: ${raw}`, 'error');
+    }
+  };
+
+  const openCodexMain = async (item: PortInfo, worktreePath?: string) => {
+    if (!item.folderPath) { showToast('폴더 경로가 없습니다.', 'error'); return; }
+    if (bgMode) showToast('Codex는 bg 모드 미지원 — 일반 실행합니다', 'error');
+    recordVisit(item.id);
+    try {
+      if (terminalApp === 'cmux') {
+        if (isWindows()) { cmuxMacOnlyToast(); return; }
+        const msg = await callCmux('open_cmux_codex', '/api/open-cmux-codex', { name: getSessionName(item), folderPath: item.folderPath, worktreePath, bypass: bypassPermissions });
+        showToast(msg, 'success');
+      } else {
+        await API.openTerminalCodex(item.folderPath, getSessionName(item), worktreePath, bypassPermissions);
+        showToast(`Codex${bypassPermissions ? ' ⚡' : ''} 실행 중`, 'success');
+      }
+    } catch (e: any) {
+      const raw = typeof e === 'string' ? e : (e?.message ?? String(e));
+      showToast(`Codex 실행 실패: ${raw}`, 'error');
+    }
+  };
+
+  const openAntigravityMain = async (item: PortInfo, worktreePath?: string) => {
+    if (!item.folderPath) { showToast('폴더 경로가 없습니다.', 'error'); return; }
+    if (bgMode) showToast('Antigravity는 bg 모드 미지원 — 일반 실행합니다', 'error');
+    recordVisit(item.id);
+    try {
+      if (terminalApp === 'cmux') {
+        if (isWindows()) { cmuxMacOnlyToast(); return; }
+        const msg = await callCmux('open_cmux_agy', '/api/open-cmux-agy', { name: getSessionName(item), folderPath: item.folderPath, worktreePath, bypass: bypassPermissions });
+        showToast(msg, 'success');
+      } else {
+        await API.openTerminalAgy(item.folderPath, getSessionName(item), worktreePath, bypassPermissions);
+        showToast(`Antigravity${bypassPermissions ? ' ⚡' : ''} 실행 중`, 'success');
+      }
+    } catch (e: any) {
+      const raw = typeof e === 'string' ? e : (e?.message ?? String(e));
+      showToast(`Antigravity 실행 실패: ${raw}`, 'error');
     }
   };
 
@@ -2449,6 +2517,10 @@ function App() {
         const detected = await API.detectStartCommand(item.folderPath);
         if (detected) {
           runTarget = detected;
+          // 워크트리 실행 시: node_modules가 없어도 bunx로 Vite 직접 실행
+          if (item.port && item.worktreePath && /^(bun run (dev|start)|npm run (dev|start)|yarn dev|pnpm dev|vite)\b/.test(detected)) {
+            runTarget = `bunx vite --port ${item.port}`;
+          }
           showToast(`자동 감지: ${detected}`, 'success');
         }
       } catch {}
@@ -2508,7 +2580,19 @@ function App() {
   };
 
   const forceRestartCommand = async (item: PortInfo) => {
-    const runTarget = item.terminalCommand || item.commandPath;
+    let runTarget = item.terminalCommand || item.commandPath;
+    // commandPath/terminalCommand 없으면 folderPath에서 자동 감지 (워크트리 케이스)
+    if (!runTarget && item.folderPath) {
+      try {
+        const detected = await API.detectStartCommand(item.folderPath);
+        if (detected) {
+          runTarget = detected;
+          if (item.port && item.worktreePath && /^(bun run (dev|start)|npm run (dev|start)|yarn dev|pnpm dev|vite)\b/.test(detected)) {
+            runTarget = `bunx vite --port ${item.port}`;
+          }
+        }
+      } catch {}
+    }
     if (!runTarget) {
       showToast('실행할 파일 또는 터미널 명령어가 등록되지 않았습니다.', 'error');
       return;
@@ -3846,6 +3930,26 @@ function App() {
             <Terminal style={{width:8,height:8}}/>
             Claude
           </button>
+          {/* Codex button */}
+          <button onClick={e=>{e.stopPropagation();openCodexMain(item);}} style={{
+            padding:'4px 10px',borderRadius:4,
+            background:'rgba(16,185,129,0.12)',color:'#6ee7b7',
+            border:'none',fontSize:10,fontWeight:600,cursor:'pointer',
+            display:'flex',alignItems:'center',gap:3,fontFamily:'inherit',
+          }} title={`Codex (${terminalApp})`}>
+            <Terminal style={{width:8,height:8}}/>
+            Codex
+          </button>
+          {/* Antigravity button */}
+          <button onClick={e=>{e.stopPropagation();openAntigravityMain(item);}} style={{
+            padding:'4px 10px',borderRadius:4,
+            background:'rgba(251,146,60,0.12)',color:'#fdba74',
+            border:'none',fontSize:10,fontWeight:600,cursor:'pointer',
+            display:'flex',alignItems:'center',gap:3,fontFamily:'inherit',
+          }} title={`Antigravity agy (${terminalApp})`}>
+            <Terminal style={{width:8,height:8}}/>
+            AGY
+          </button>
           {/* Icon buttons - secondary actions */}
           {item.port && (
             <button data-help-key="card-chrome" aria-label={`localhost:${item.port}`} onClick={e=>{e.stopPropagation(); API.openInChrome(`http://localhost:${item.port}`).catch(()=>{});}} style={{...btnBase,padding:'4px 6px'}} title={`localhost:${item.port}`}>
@@ -3984,12 +4088,12 @@ function App() {
                 <button onClick={e=>{e.stopPropagation(); setCommitModal({item:portItem,wt,msg:''});}} style={miniBtn}>커밋</button>
                 <button onClick={e=>{e.stopPropagation(); const baseUrl=isTauri()?'http://localhost:3001':''; fetch(`${baseUrl}/api/git-push`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({folderPath:portItem.folderPath})}).then(r=>r.json()).then(d=>{if(d.success)showToast('푸시 완료','success');else showToast(`푸시 실패: ${d.error}`,'error');}).catch(()=>showToast('푸시 실패','error'));}} style={miniBtn}>푸시</button>
               </> : <>
-                <button onClick={e=>{e.stopPropagation(); if(wtPortEntry){isWtRunning?stopCommand(wtPortEntry):executeCommand(wtPortEntry);}else{executeCommand({...portItem,id:`${portItem.id}_wt_${wtName}`,port:wtPort,worktreePath:wt.path});}}} style={{...miniBtn,color:isWtRunning?'#c96a5a':'#8fb96e',borderColor:isWtRunning?'rgba(201,106,90,0.2)':'rgba(143,185,110,0.2)'}} title={isWtRunning?`포트 ${wtPort}`:undefined}>
+                <button onClick={e=>{e.stopPropagation(); if(wtPortEntry){isWtRunning?stopCommand(wtPortEntry):executeCommand(wtPortEntry);}else{executeCommand({...portItem,id:`${portItem.id}_wt_${wtName}`,port:wtPort,folderPath:wt.path,worktreePath:wt.path,commandPath:undefined,terminalCommand:undefined});}}} style={{...miniBtn,color:isWtRunning?'#c96a5a':'#8fb96e',borderColor:isWtRunning?'rgba(201,106,90,0.2)':'rgba(143,185,110,0.2)'}} title={isWtRunning?`포트 ${wtPort}`:undefined}>
                   {isWtRunning ? '중지' : `실행(${wtPort})`}
                 </button>
                 <button onClick={e=>{e.stopPropagation(); API.openInChrome(`http://localhost:${wtPort}`).catch(()=>{});}} style={miniBtn} title="브라우저에서 열기"><Globe style={{width:9,height:9}}/></button>
                 {!isWindows() && <button onClick={e=>{e.stopPropagation(); openCmuxLocalhost({...portItem,port:wtPort,worktreePath:wt.path});}} style={{...miniBtn,color:'#2dd4bf',borderColor:'rgba(45,212,191,0.2)'}} title={`cmux localhost:${wtPort}`}><Terminal style={{width:9,height:9}}/></button>}
-                <button onClick={e=>{e.stopPropagation(); if(wtPortEntry)forceRestartCommand(wtPortEntry);else forceRestartCommand({...portItem,id:`${portItem.id}_wt_${wtName}`,port:wtPort,worktreePath:wt.path});}} style={{...miniBtn,color:'#e8a557',borderColor:'rgba(232,165,87,0.2)'}} title="강제 재실행"><RotateCw style={{width:9,height:9}}/></button>
+                <button onClick={e=>{e.stopPropagation(); if(wtPortEntry)forceRestartCommand(wtPortEntry);else forceRestartCommand({...portItem,id:`${portItem.id}_wt_${wtName}`,port:wtPort,folderPath:wt.path,worktreePath:wt.path,commandPath:undefined,terminalCommand:undefined});}} style={{...miniBtn,color:'#e8a557',borderColor:'rgba(232,165,87,0.2)'}} title="강제 재실행"><RotateCw style={{width:9,height:9}}/></button>
                 <button onClick={e=>{e.stopPropagation(); API.openFolder(wt.path).catch(()=>{});}} style={miniBtn} title="Finder에서 열기"><FolderOpen style={{width:9,height:9}}/></button>
                 <button onClick={e=>{e.stopPropagation(); wtClaudeBypass();}} style={{...miniBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}}><Zap style={{width:8,height:8,display:'inline',verticalAlign:'middle'}}/>{bypassPermissions?'Claude ⚡':'Claude'}</button>
                 <button onClick={e=>{e.stopPropagation(); setCommitModal({item:portItem,wt,msg:''});}} style={miniBtn}>커밋</button>
@@ -4268,6 +4372,12 @@ function App() {
               </button>
               <button onClick={() => openClaudeMain(sel, true)} style={{...rowBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}} title="새 워크스페이스에서 Claude 열기">
                 새창
+              </button>
+              <button onClick={() => openCodexMain(sel)} style={{...rowBtn,color:'#6ee7b7',borderColor:'rgba(110,231,183,0.25)'}} title={`Codex 열기 (${terminalApp})`}>
+                Codex 열기
+              </button>
+              <button onClick={() => openAntigravityMain(sel)} style={{...rowBtn,color:'#fdba74',borderColor:'rgba(253,186,116,0.25)'}} title={`Antigravity agy 열기 (${terminalApp})`}>
+                AGY 열기
               </button>
             </div>
 
