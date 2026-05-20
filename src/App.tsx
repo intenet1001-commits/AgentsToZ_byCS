@@ -1509,9 +1509,9 @@ function App() {
     }
   }, [mergeConfirm, loadWorktrees]);
 
-  const openTmuxClaude = (item: PortInfo) => {
+  const openTmuxClaude = (item: PortInfo, worktreePath?: string) => {
     recordVisit(item.id);
-    _executeTmuxClaude(item, undefined);
+    _executeTmuxClaude(item, worktreePath);
   };
 
   const checkWslReady = async (): Promise<boolean> => {
@@ -1582,9 +1582,9 @@ function App() {
     }
   };
 
-  const openTerminalClaude = (item: PortInfo) => {
+  const openTerminalClaude = (item: PortInfo, worktreePath?: string) => {
     recordVisit(item.id);
-    _executeTerminalClaude(item, undefined);
+    _executeTerminalClaude(item, worktreePath);
   };
 
   const _executeTerminalClaude = async (item: PortInfo, worktreePath: string | undefined) => {
@@ -1609,11 +1609,11 @@ function App() {
   };
 
 
-  const openTmuxClaudeNew = async (item: PortInfo) => {
+  const openTmuxClaudeNew = async (item: PortInfo, worktreePath?: string) => {
     if (!await checkWslReady()) return;
     const sessionName = getSessionName(item);
     try {
-      await API.openTmuxClaudeFresh(sessionName, item.folderPath, undefined, bypassPermissions);
+      await API.openTmuxClaudeFresh(sessionName, item.folderPath, worktreePath, bypassPermissions);
       showToast(`tmux 새창${bypassPermissions ? ' ⚡' : ''} 시작 ↺`, 'success');
     } catch (e) {
       showToast(`tmux 새창 실패: ${e}`, 'error');
@@ -1785,12 +1785,12 @@ function App() {
   };
 
 
-  const openClaudeBg = async (item: PortInfo) => {
+  const openClaudeBg = async (item: PortInfo, worktreePath?: string) => {
     if (isWindows() && terminalApp !== 'wsl') { cmuxMacOnlyToast(); return; }
     recordVisit(item.id);
     try {
       const msg = await callCmux('open_claude_bg', '/api/open-claude-bg', {
-        folderPath: item.folderPath,
+        folderPath: worktreePath || item.folderPath,
         name: getSessionName(item),
         bypass: bypassPermissions,
       });
@@ -1802,20 +1802,20 @@ function App() {
   };
 
   // 통합 터미널 핸들러 — terminalApp / bgMode / tmuxMode / bypassPermissions 조합으로 라우팅
-  const openClaudeMain = async (item: PortInfo, isNew = false) => {
-    if (bgMode) { await openClaudeBg(item); return; }
+  const openClaudeMain = async (item: PortInfo, isNew = false, worktreePath?: string) => {
+    if (bgMode) { await openClaudeBg(item, worktreePath); return; }
     if (terminalApp === 'cmux') {
-      if (isNew) await openCmuxClaudeNew(item);
-      else await openCmuxClaude(item);
+      if (isNew) await openCmuxClaudeNew(item, worktreePath);
+      else await openCmuxClaude(item, worktreePath);
     } else if (terminalApp === 'iterm' || terminalApp === 'wsl') {
-      if (isNew) await openTmuxClaudeNew(item);
-      else await openTmuxClaude(item);
+      if (isNew) await openTmuxClaudeNew(item, worktreePath);
+      else await openTmuxClaude(item, worktreePath);
     } else if (terminalApp === 'powershell') {
-      await openTerminalClaude(item);
+      await openTerminalClaude(item, worktreePath);
     } else {
       // terminal — Terminal.app fallback
-      if (isNew) await openTmuxClaudeNew(item);
-      else await openTmuxClaude(item);
+      if (isNew) await openTmuxClaudeNew(item, worktreePath);
+      else await openTmuxClaude(item, worktreePath);
     }
   };
 
@@ -3961,15 +3961,8 @@ function App() {
           const wtPort = detectedPort ?? (wtPortEntry?.port ?? worktreePortFromPath(wt.path, usedPorts));
           const isWtRunning = detectedPort != null || (wtPortEntry?.isRunning ?? wtPortStatuses[wtPort] ?? false);
           const wtClaudeBypass = () => {
-            const branchName = wt.branch || wt.path.replace(/\/$/, '').split('/').pop()!;
-            const sessionName = `${portItem.name.replace(/\s+/g,'-')}-${branchName}`;
-            const baseUrl = isTauri() ? 'http://localhost:3001' : '';
-            fetch(`${baseUrl}/api/open-tmux-claude-bypass`, {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ sessionName, folderPath: portItem.folderPath, worktreePath: wt.path, branch: branchName, bypass: bypassPermissions }),
-            })
-              .then(() => showToast(`Claude${bypassPermissions ? ' ⚡' : ''} 실행: ${displayName}`, 'success'))
-              .catch(err => showToast(`Claude 실행 실패: ${err}`, 'error'));
+            // 상단 툴바 옵션(terminalApp, bgMode 등)을 반영하는 통합 핸들러 사용
+            openClaudeMain(portItem, false, wt.path);
           };
           return (
             <div key={wt.path} style={{padding:'5px 6px',borderRadius:5,background:wt.is_main?'rgba(232,165,87,0.04)':'rgba(255,240,220,0.02)',border:'1px solid rgba(255,240,220,0.05)',borderLeft:wt.is_main?'2px solid rgba(232,165,87,0.35)':'1px solid rgba(255,240,220,0.05)',display:'flex',flexDirection:'column',gap:4}}>
