@@ -1402,6 +1402,10 @@ function App() {
     try {
       const list = await API.listGitWorktrees(folderPath);
       setWorktreeLists(prev => ({ ...prev, [portId]: list }));
+      // 워크트리가 있으면 패널 자동 확장 (non-main 워크트리가 1개 이상)
+      if (list.some(wt => !wt.is_main)) {
+        setExpandedWorktreeIds(prev => { const next = new Set(prev); next.add(portId); return next; });
+      }
       // Check actual port status for each non-main worktree
       const usedPortsSnap = new Set(
         (JSON.parse(localStorage.getItem('ports_cache') || '[]') as {port?:number}[])
@@ -2240,6 +2244,15 @@ function App() {
   useEffect(() => { localStorage.setItem('portmanager-sortOrder', sortOrder); }, [sortOrder]);
   useEffect(() => { localStorage.setItem('portmanager-bypassPermissions', String(bypassPermissions)); }, [bypassPermissions]);
   useEffect(() => { isBuildingRef.current = isBuilding; }, [isBuilding]);
+
+  // 프로젝트 선택 시 워크트리 자동 로드 → non-main 워크트리 있으면 패널 자동 확장
+  useEffect(() => {
+    if (!v4SelectedId) return;
+    const sel = ports.find(p => p.id === v4SelectedId);
+    if (!sel?.folderPath) return;
+    if (worktreeLists[v4SelectedId] !== undefined) return; // 이미 로드됨
+    loadWorktrees(v4SelectedId, sel.folderPath);
+  }, [v4SelectedId]);
   useEffect(() => {
     if (buildLogContainerRef.current) {
       buildLogContainerRef.current.scrollTop = buildLogContainerRef.current.scrollHeight;

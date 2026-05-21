@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1778762709460,
+  "lastScanned": 1779403800581,
   "projectRoot": "/Users/gwanli/product_2026/portmanagement",
   "techStack": {
     "languages": [
@@ -47,8 +47,8 @@
     "runtime": null
   },
   "build": {
-    "buildCommand": "git stash && npx tsc --noEmit 2>&1 | grep \"api-server.ts\" | wc -l && git stash pop",
-    "testCommand": "python3 -c \"\ncontent = open('CLAUDE.md').read()\nold = '## API 엔드포인트'\nnew = '''## 테스트\n\nPlaywright 기반 E2E 테스트 파일이 \\`tests/\\` 디렉토리에 있습니다.\n\n\\`\\`\\`bash\n# bg 버튼 및 헤더 컨트롤 UI 검증 (localhost:5173 필요)\nbun tests/cs-test-bg-buttons.ts\n\n# 네트워크 에러 식별\nbun tests/cs-test-net-check.ts\n\\`\\`\\`\n\n- 결과물: \\`tests/results/cs-test-bg-report.json\\`, \\`tests/results/cs-test-screenshot.png\\`\n- 전제 조건: \\`./실행.command\\` 또는 \\`bun run dev\\`로 개발 서버 실행 중\n- \\`suggest-batch\\` API 500 에러는 Anthropic API 키 없는 테스트 환경에서 정상 — 치명적 에러 아님\n\n## API 엔드포인트'''\nif old in content:\n    open('CLAUDE.md', 'w').write(content.replace(old, new, 1))\n    print('OK')\nelse:\n    print('NOT FOUND')\n\"",
+    "buildCommand": "npm run build",
+    "testCommand": null,
     "lintCommand": null,
     "devCommand": "npm run dev",
     "scripts": {
@@ -95,42 +95,52 @@
       "path": "dist",
       "purpose": "Distribution/build output",
       "fileCount": 1,
-      "lastAccessed": 1778762709438,
+      "lastAccessed": 1779403800544,
       "keyFiles": [
         "index.html"
+      ]
+    },
+    "dist-portal": {
+      "path": "dist-portal",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1779403800544,
+      "keyFiles": [
+        "portal.html",
+        "setup.html"
       ]
     },
     "docs": {
       "path": "docs",
       "purpose": "Documentation",
-      "fileCount": 8,
-      "lastAccessed": 1778762709439,
+      "fileCount": 9,
+      "lastAccessed": 1779403800559,
       "keyFiles": [
         "DOGFOOD.md",
         "ERRORS.md",
+        "LEARNINGS.md",
         "PLAN.md",
-        "architecture.md",
-        "domain-analysis.md"
+        "architecture.md"
       ]
     },
     "src": {
       "path": "src",
       "purpose": "Source code",
-      "fileCount": 10,
-      "lastAccessed": 1778762709449,
+      "fileCount": 11,
+      "lastAccessed": 1779403800559,
       "keyFiles": [
         "App.tsx",
         "ErrorBoundary.tsx",
         "PortalManager.tsx",
         "SetupWizard.tsx",
-        "index.css"
+        "i18n.ts"
       ]
     },
     "src-tauri": {
       "path": "src-tauri",
       "purpose": null,
       "fileCount": 5,
-      "lastAccessed": 1778762709450,
+      "lastAccessed": 1779403800560,
       "keyFiles": [
         "Cargo.lock",
         "Cargo.toml",
@@ -142,7 +152,7 @@
       "path": "supabase",
       "purpose": null,
       "fileCount": 2,
-      "lastAccessed": 1778762709450,
+      "lastAccessed": 1779403800565,
       "keyFiles": [
         "config.toml"
       ]
@@ -150,41 +160,59 @@
     "tests": {
       "path": "tests",
       "purpose": "Test files",
-      "fileCount": 9,
-      "lastAccessed": 1778762709453,
+      "fileCount": 11,
+      "lastAccessed": 1779403800566,
       "keyFiles": [
+        "cs-test-bg-buttons.ts",
+        "cs-test-net-check.ts",
         "error-resilience-test.py",
         "functional-test.mjs",
-        "perf-measure.mjs",
-        "smoke.mjs",
-        "title-verify-test.mjs"
+        "perf-measure.mjs"
       ]
     },
     "uploaded-commands": {
       "path": "uploaded-commands",
       "purpose": null,
       "fileCount": 1,
-      "lastAccessed": 1778762709454,
+      "lastAccessed": 1779403800568,
       "keyFiles": [
         "실행.command"
       ]
+    },
+    "worktrees": {
+      "path": "worktrees",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1779403800569,
+      "keyFiles": []
     },
     "dist/assets": {
       "path": "dist/assets",
       "purpose": "Static assets",
       "fileCount": 5,
-      "lastAccessed": 1778762709455,
+      "lastAccessed": 1779403800569,
       "keyFiles": [
-        "index-D0dTOu5W.css",
-        "index-DZl3x3t9.js",
-        "index-DlK6GjkP.js"
+        "index-BcpBZXAU.js",
+        "index-C0U8obX-.js",
+        "index-CTc3Xt8-.css"
+      ]
+    },
+    "dist-portal/assets": {
+      "path": "dist-portal/assets",
+      "purpose": "Static assets",
+      "fileCount": 5,
+      "lastAccessed": 1779403800570,
+      "keyFiles": [
+        "index-CHsWdwW2.js",
+        "index-R23Okk4c.js",
+        "lucide-react-CTc3Xt8-.css"
       ]
     },
     "src/lib": {
       "path": "src/lib",
       "purpose": "Library code",
       "fileCount": 3,
-      "lastAccessed": 1778762709456,
+      "lastAccessed": 1779403800572,
       "keyFiles": [
         "env.ts",
         "supabaseClient.ts",
@@ -195,7 +223,7 @@
       "path": "src-tauri/src",
       "purpose": "Source code",
       "fileCount": 2,
-      "lastAccessed": 1778762709457,
+      "lastAccessed": 1779403800575,
       "keyFiles": [
         "lib.rs",
         "main.rs"
@@ -204,110 +232,14 @@
     "supabase/migrations": {
       "path": "supabase/migrations",
       "purpose": "Database migrations",
-      "fileCount": 1,
-      "lastAccessed": 1778762709459,
+      "fileCount": 2,
+      "lastAccessed": 1779403800576,
       "keyFiles": [
-        "20260501021736_add_favorite_to_ports.sql"
+        "20260501021736_add_favorite_to_ports.sql",
+        "20260516_portmgr_device_credentials.sql"
       ]
     }
   },
-  "hotPaths": [
-    {
-      "path": "src/App.tsx",
-      "accessCount": 28,
-      "lastAccessed": 1778801011559,
-      "type": "file"
-    },
-    {
-      "path": "api-server.ts",
-      "accessCount": 22,
-      "lastAccessed": 1778801009922,
-      "type": "file"
-    },
-    {
-      "path": "tests/cs-test-bg-buttons.ts",
-      "accessCount": 16,
-      "lastAccessed": 1778779885579,
-      "type": "file"
-    },
-    {
-      "path": "tests/cs-test-net-check.ts",
-      "accessCount": 4,
-      "lastAccessed": 1778779901837,
-      "type": "file"
-    },
-    {
-      "path": "CLAUDE.md",
-      "accessCount": 4,
-      "lastAccessed": 1778779969418,
-      "type": "file"
-    },
-    {
-      "path": "",
-      "accessCount": 3,
-      "lastAccessed": 1778779894444,
-      "type": "directory"
-    },
-    {
-      "path": "tests/results/cs-test-bg-report.json",
-      "accessCount": 3,
-      "lastAccessed": 1778779895092,
-      "type": "file"
-    },
-    {
-      "path": "src",
-      "accessCount": 3,
-      "lastAccessed": 1778779905503,
-      "type": "directory"
-    },
-    {
-      "path": "src-tauri/src/lib.rs",
-      "accessCount": 2,
-      "lastAccessed": 1778779912945,
-      "type": "file"
-    },
-    {
-      "path": "tests/results/cs-test-screenshot.png",
-      "accessCount": 1,
-      "lastAccessed": 1778779410268,
-      "type": "file"
-    },
-    {
-      "path": "tests",
-      "accessCount": 1,
-      "lastAccessed": 1778779883151,
-      "type": "directory"
-    },
-    {
-      "path": "tests/e2e/onboarding-1st.spec.ts",
-      "accessCount": 1,
-      "lastAccessed": 1778779886410,
-      "type": "file"
-    },
-    {
-      "path": "tests/results/REPORT.md",
-      "accessCount": 1,
-      "lastAccessed": 1778779886724,
-      "type": "file"
-    },
-    {
-      "path": "tests/e2e/onboarding-2nd-handoff.spec.ts",
-      "accessCount": 1,
-      "lastAccessed": 1778779892014,
-      "type": "file"
-    },
-    {
-      "path": "src-tauri",
-      "accessCount": 1,
-      "lastAccessed": 1778779904035,
-      "type": "directory"
-    },
-    {
-      "path": "src-tauri/tauri.conf.json",
-      "accessCount": 1,
-      "lastAccessed": 1778779914164,
-      "type": "file"
-    }
-  ],
+  "hotPaths": [],
   "userDirectives": []
 }
