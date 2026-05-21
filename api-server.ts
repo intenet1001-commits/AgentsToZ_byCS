@@ -1463,8 +1463,10 @@ end try`);
         const tags: string[] = bypass ? ['tmux', 'bypass'] : ['tmux'];
         const title = buildWindowTitle(sessionName, worktreePath, tags, branch ?? null);
         if (IS_WIN) {
-          // WSL에서는 codex 미지원 — Terminal.app fallback과 동일하게 처리
-          return new Response(JSON.stringify({ success: false, error: 'Codex는 WSL에서 지원되지 않습니다.' }), { status: 400, headers });
+          // WSL tmux 미지원 → openTerminalWithCmd()로 자동 폴백
+          const cdPath = worktreePath ? worktreePath.split(',')[0].trim() : (folderPath ?? null);
+          await openTerminalWithCmd(codexCli, cdPath, title);
+          return new Response(JSON.stringify({ success: true, message: `Codex${bypass ? ' ⚡' : ''} 실행 중 (Windows Terminal)` }), { headers });
         } else {
           const esc = escapeSq(sessionName);
           const winName = escapeSq(title);
@@ -1485,7 +1487,10 @@ end try`);
         const tags: string[] = bypass ? ['tmux', 'bypass'] : ['tmux'];
         const title = buildWindowTitle(sessionName, worktreePath, tags, branch ?? null);
         if (IS_WIN) {
-          return new Response(JSON.stringify({ success: false, error: 'Antigravity는 WSL에서 지원되지 않습니다.' }), { status: 400, headers });
+          // WSL tmux 미지원 → openTerminalWithCmd()로 자동 폴백
+          const cdPath = worktreePath ? worktreePath.split(',')[0].trim() : (folderPath ?? null);
+          await openTerminalWithCmd(agyCli, cdPath, title);
+          return new Response(JSON.stringify({ success: true, message: `Antigravity${bypass ? ' ⚡' : ''} 실행 중 (Windows Terminal)` }), { headers });
         } else {
           const esc = escapeSq(sessionName);
           const winName = escapeSq(title);

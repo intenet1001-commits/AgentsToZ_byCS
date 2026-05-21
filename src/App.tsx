@@ -971,8 +971,8 @@ function WslSetupModal({ status, onClose, onInstallTmux }: {
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-      <div className="bg-[#221f1b] border border-stone-700/50 rounded-xl p-6 w-[460px] shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={onClose}>
+      <div className="bg-[#221f1b] border border-stone-700/50 rounded-xl p-6 w-[460px] shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-white">
             {status === 'not_installed' ? '⚙️ WSL2 설치 필요' :
@@ -1116,8 +1116,8 @@ function App() {
     if (!isWindows()) return;
     const macOnly: TerminalApp[] = ['cmux', 'iterm', 'terminal'];
     if (macOnly.includes(terminalApp)) {
-      setTerminalApp('wsl');
-      localStorage.setItem('portmanager-terminalApp', 'wsl');
+      setTerminalApp('powershell');
+      localStorage.setItem('portmanager-terminalApp', 'powershell');
     }
   }, []);
 
@@ -1152,7 +1152,7 @@ function App() {
     () => {
       const saved = localStorage.getItem('portmanager-terminalApp') as TerminalApp | null;
       if (saved) return saved;
-      return isWindows() ? 'wsl' : 'cmux';
+      return isWindows() ? 'powershell' : 'cmux';
     }
   );
   const [bgMode, setBgMode] = useState(
@@ -2274,15 +2274,26 @@ function App() {
     return () => window.removeEventListener('resize', handler);
   }, []);
 
-  // Cmd+F: 검색 포커스 / Esc: 검색 초기화
+  // Cmd+F: 검색 포커스 / Esc: 검색 초기화 + 모달 닫기
+  const escapeHandlerRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    escapeHandlerRef.current = () => {
+      if (wslSetupStatus) { setWslSetupStatus(null); return; }
+      if (showPortsHistory) { setShowPortsHistory(false); return; }
+      if (showQuickAddModal) { closeQuickAddModal(); return; }
+      if (document.activeElement === searchInputRef.current) {
+        setSearchQuery('');
+        searchInputRef.current?.blur();
+      }
+    };
+  });
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
         e.preventDefault();
         searchInputRef.current?.focus();
-      } else if (e.key === 'Escape' && document.activeElement === searchInputRef.current) {
-        setSearchQuery('');
-        searchInputRef.current?.blur();
+      } else if (e.key === 'Escape') {
+        escapeHandlerRef.current?.();
       }
     };
     window.addEventListener('keydown', handler);
