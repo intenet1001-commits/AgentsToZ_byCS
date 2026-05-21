@@ -1863,7 +1863,6 @@ function App() {
 
   const openCodexMain = async (item: PortInfo, worktreePath?: string) => {
     if (!item.folderPath) { showToast('폴더 경로가 없습니다.', 'error'); return; }
-    if (bgMode) showToast('Codex는 bg 모드 미지원 — 일반 실행합니다', 'error');
     recordVisit(item.id);
     const sessionName = getSessionName(item);
     try {
@@ -1892,7 +1891,6 @@ function App() {
 
   const openAntigravityMain = async (item: PortInfo, worktreePath?: string) => {
     if (!item.folderPath) { showToast('폴더 경로가 없습니다.', 'error'); return; }
-    if (bgMode) showToast('Antigravity는 bg 모드 미지원 — 일반 실행합니다', 'error');
     recordVisit(item.id);
     const sessionName = getSessionName(item);
     try {
