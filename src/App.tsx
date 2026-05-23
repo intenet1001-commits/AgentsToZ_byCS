@@ -5070,8 +5070,8 @@ function App() {
         </div>
       )}
 
-      {/* 플로팅 배너 */}
-      <div className="fixed top-4 right-4 z-50 space-y-2">
+      {/* 플로팅 배너 — z-[10000]: 컨텍스트 메뉴(9999)·모달(9500) 위에 항상 표시 */}
+      <div className="fixed top-4 right-4 z-[10000] space-y-2">
         {toasts.map((toast) => (
           <div
             key={toast.id}
@@ -5091,8 +5091,8 @@ function App() {
               {toast.message}
             </div>
             <button
-              onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}
-              className="hover:bg-white/10 rounded-md p-1 transition-colors"
+              onClick={(e) => { e.stopPropagation(); setToasts(prev => prev.filter(t => t.id !== toast.id)); }}
+              className="hover:bg-white/10 rounded-md p-1 transition-colors flex-shrink-0"
             >
               <XIcon className="w-3.5 h-3.5" />
             </button>
