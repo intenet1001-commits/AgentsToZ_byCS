@@ -4200,16 +4200,19 @@ function App() {
       const active = item.id === v4SelectedId;
       return (
         <div key={item.id} onClick={() => setV4SelectedId(item.id)} style={{
-          display:'flex',alignItems:'center',gap:8,padding:'0 14px',height:38,cursor:'pointer',
+          display:'flex',alignItems:'center',gap:8,padding:'5px 14px',minHeight:38,cursor:'pointer',
           fontFamily:monoFont,fontSize:12,
           background:active ? 'rgba(232,165,87,0.08)' : 'transparent',
           borderLeft:`2px solid ${active ? '#e8a557' : 'transparent'}`,
           color:active ? '#ede7dd' : '#a39a8c',
           transition:'background .1s',
         }}>
-          <span style={{fontSize:7,color:item.isRunning ? '#8fb96e' : '#6b6459'}}>●</span>
-          <span style={{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.name}</span>
-          {item.port ? <span style={{color:'#e8a557',fontSize:11}}>:{item.port}</span> : <span style={{color:'#4b4540',fontSize:11}}>—</span>}
+          <span style={{fontSize:7,color:item.isRunning ? '#8fb96e' : '#6b6459',flexShrink:0}}>●</span>
+          <div style={{flex:1,overflow:'hidden',display:'flex',flexDirection:'column',gap:1}}>
+            <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.name}</span>
+            {item.aiName && <span style={{fontSize:10,color:'#6b6459',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.aiName}</span>}
+          </div>
+          {item.port ? <span style={{color:'#e8a557',fontSize:11,flexShrink:0}}>:{item.port}</span> : <span style={{color:'#4b4540',fontSize:11,flexShrink:0}}>—</span>}
         </div>
       );
     };
