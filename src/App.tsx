@@ -4245,17 +4245,6 @@ function App() {
                 <span style={{fontSize:9.5,fontFamily:'JetBrains Mono, monospace',opacity:0.7}}>{count}</span>
               </button>
             ))}
-            <button
-              onClick={() => setShowQuickAddModal(true)}
-              title="프로젝트 빠른 추가"
-              style={{
-                marginLeft:'auto',padding:'2px 8px',borderRadius:4,fontSize:11,cursor:'pointer',
-                fontFamily:'Inter Tight, system-ui, sans-serif',
-                background:'rgba(143,185,110,0.10)',color:'#8fb96e',
-                border:'1px solid rgba(143,185,110,0.25)',
-                display:'flex',alignItems:'center',gap:3,
-              }}
-            >+ 프로젝트</button>
           </div>
           <div style={{padding:'8px 12px 10px',borderBottom:'1px solid rgba(255,240,220,0.07)'}}>
             <div style={{position:'relative'}}>
