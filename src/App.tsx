@@ -2140,6 +2140,10 @@ function App() {
   useEffect(() => { portsRef.current = ports; }, [ports]);
   useEffect(() => {
     const interval = setInterval(async () => {
+      // 창이 숨김/최소화/백그라운드(다른 데스크톱·occluded)일 땐 폴링 작업을 건너뜀 —
+      // agent view 등 다른 작업 중 불필요한 lsof spawn·리렌더로 자원 소모 방지.
+      // 다시 포커스되면 focus 핸들러가 포트를 자동 reload하므로 즉시 최신 상태 복구됨.
+      if (typeof document !== 'undefined' && document.hidden) return;
       const withPorts = portsRef.current.filter(p => p.port);
       if (withPorts.length === 0) return;
       const results = await Promise.all(
