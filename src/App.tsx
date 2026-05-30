@@ -2412,10 +2412,15 @@ function App() {
 
     if (isTauri()) {
       let unlisten: (() => void) | undefined;
+      let cancelled = false;
       import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
-        getCurrentWindow().listen('tauri://focus', handleFocus).then(fn => { unlisten = fn; });
+        getCurrentWindow().listen('tauri://focus', handleFocus).then(fn => {
+          // 언마운트가 listen() 해소보다 먼저 일어난 경우에도 리스너를 즉시 제거
+          if (cancelled) fn();
+          else unlisten = fn;
+        });
       });
-      return () => { unlisten?.(); };
+      return () => { cancelled = true; unlisten?.(); };
     }
 
     window.addEventListener('focus', handleFocus);
