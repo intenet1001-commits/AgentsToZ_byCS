@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
 import { Server, Trash2, Plus, ExternalLink, Terminal, ArrowUpDown, Pencil, Check, X as XIcon, Play, Square, Rocket, FolderOpen, Upload, Download, Folder, FilePlus, Package, RefreshCw, FileText, RotateCw, Globe, Github, SquareTerminal, Info, Monitor, BookMarked, Cloud, CloudUpload, CloudDownload, Search, Sparkles, Settings, GitPullRequest, Copy, GitBranch, GitCommit, Star, BookOpen, ChevronDown, ChevronUp, StickyNote, Clock, Zap, History, Laptop, Keyboard, LayoutList, LayoutGrid, MoreHorizontal } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { getSupabaseClient } from './lib/supabaseClient';
 import PortalManager, { type PortalActions } from './PortalManager';
-import SetupWizard from './SetupWizard';
+// 코드 스플리팅: SetupWizard(~163KB)는 위저드를 열 때만 별도 청크로 로드 → 시작 시 메인 번들/힙에서 제외
+const SetupWizard = lazy(() => import('./SetupWizard'));
 import { savePushSnapshot, fetchPushHistory, fetchSnapshotRows, type PushSnapshot } from './pushHistory';
 import { isTauri, isDeployedWeb } from './lib/env';
 import { GuideOverlay } from './guide/GuideMode';
@@ -5745,6 +5746,7 @@ function App() {
         )}
 
         {showSetupWizard && (
+          <Suspense fallback={null}>
           <SetupWizard
             onComplete={async ({ supabaseUrl, supabaseAnonKey, deviceName, deviceId }) => {
               // portal.json에 저장. deviceId가 wizard에서 "이어받기" 옵션으로 넘어왔으면 그것을 사용.
@@ -5772,6 +5774,7 @@ function App() {
             }}
             onSkip={() => setShowSetupWizard(false)}
           />
+          </Suspense>
         )}
 
         {/* 포트 관리 탭 - V3 Sidebar */}
