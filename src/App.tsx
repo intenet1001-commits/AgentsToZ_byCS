@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
 import { Server, Trash2, Plus, ExternalLink, Terminal, ArrowUpDown, Pencil, Check, X as XIcon, Play, Square, Rocket, FolderOpen, Upload, Download, Folder, FilePlus, Package, RefreshCw, FileText, RotateCw, Globe, Github, SquareTerminal, Info, Monitor, BookMarked, Cloud, CloudUpload, CloudDownload, Search, Sparkles, Settings, GitPullRequest, Copy, GitBranch, GitCommit, Star, BookOpen, ChevronDown, ChevronUp, StickyNote, Clock, Zap, History, Laptop, Keyboard, LayoutList, LayoutGrid, MoreHorizontal } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { getSupabaseClient } from './lib/supabaseClient';
 import PortalManager, { type PortalActions } from './PortalManager';
-import SetupWizard from './SetupWizard';
+// 코드 스플리팅: SetupWizard(~163KB)는 위저드를 열 때만 별도 청크로 로드 → 시작 시 메인 번들/힙에서 제외
+const SetupWizard = lazy(() => import('./SetupWizard'));
 import { savePushSnapshot, fetchPushHistory, fetchSnapshotRows, type PushSnapshot } from './pushHistory';
 import { isTauri, isDeployedWeb } from './lib/env';
 import { GuideOverlay } from './guide/GuideMode';
@@ -2139,6 +2140,10 @@ function App() {
   useEffect(() => { portsRef.current = ports; }, [ports]);
   useEffect(() => {
     const interval = setInterval(async () => {
+      // 창이 숨김/최소화/백그라운드(다른 데스크톱·occluded)일 땐 폴링 작업을 건너뜀 —
+      // agent view 등 다른 작업 중 불필요한 lsof spawn·리렌더로 자원 소모 방지.
+      // 다시 포커스되면 focus 핸들러가 포트를 자동 reload하므로 즉시 최신 상태 복구됨.
+      if (typeof document !== 'undefined' && document.hidden) return;
       const withPorts = portsRef.current.filter(p => p.port);
       if (withPorts.length === 0) return;
       const results = await Promise.all(
@@ -2412,10 +2417,15 @@ function App() {
 
     if (isTauri()) {
       let unlisten: (() => void) | undefined;
+      let cancelled = false;
       import('@tauri-apps/api/window').then(({ getCurrentWindow }) => {
-        getCurrentWindow().listen('tauri://focus', handleFocus).then(fn => { unlisten = fn; });
+        getCurrentWindow().listen('tauri://focus', handleFocus).then(fn => {
+          // 언마운트가 listen() 해소보다 먼저 일어난 경우에도 리스너를 즉시 제거
+          if (cancelled) fn();
+          else unlisten = fn;
+        });
       });
-      return () => { unlisten?.(); };
+      return () => { cancelled = true; unlisten?.(); };
     }
 
     window.addEventListener('focus', handleFocus);
@@ -5740,6 +5750,7 @@ function App() {
         )}
 
         {showSetupWizard && (
+          <Suspense fallback={null}>
           <SetupWizard
             onComplete={async ({ supabaseUrl, supabaseAnonKey, deviceName, deviceId }) => {
               // portal.json에 저장. deviceId가 wizard에서 "이어받기" 옵션으로 넘어왔으면 그것을 사용.
@@ -5767,6 +5778,7 @@ function App() {
             }}
             onSkip={() => setShowSetupWizard(false)}
           />
+          </Suspense>
         )}
 
         {/* 포트 관리 탭 - V3 Sidebar */}

@@ -332,6 +332,16 @@ const executableProcesses = new Map<string, any>();
 let buildProcess: any = null;
 let buildStatus = { isBuilding: false, type: '', output: [] as string[], exitCode: null as number | null };
 
+// 빌드/배포 로그 버퍼 상한 — 장시간 빌드(최대 60분 Windows 빌드 등)에서 output 배열이
+// 무한히 커지는 것을 방지. 최근 N개 항목만 유지 (UI는 어차피 최근 로그만 표시).
+const MAX_LOG_BUFFER_ENTRIES = 2000;
+function pushLogBounded(arr: string[], text: string): void {
+  arr.push(text);
+  if (arr.length > MAX_LOG_BUFFER_ENTRIES) {
+    arr.splice(0, arr.length - MAX_LOG_BUFFER_ENTRIES);
+  }
+}
+
 let deployProcess: any = null;
 let deployStatus = {
   isDeploying: false,
@@ -1006,7 +1016,7 @@ const server = Bun.serve({
           const decoder = new TextDecoder();
           for await (const chunk of stream) {
             const text = decoder.decode(chunk);
-            buildStatus.output.push(text);
+            pushLogBounded(buildStatus.output, text);
             if (isStderr) {
               console.error(`[Build] ${text}`);
             } else {
@@ -1079,7 +1089,7 @@ const server = Bun.serve({
           const decoder = new TextDecoder();
           for await (const chunk of stream) {
             const text = decoder.decode(chunk);
-            deployStatus.output.push(text);
+            pushLogBounded(deployStatus.output, text);
             // URL 파싱: https://xxxxx.vercel.app
             const m = text.match(/https:\/\/[a-zA-Z0-9-]+\.vercel\.app/);
             if (m && !deployStatus.url) {
@@ -2389,7 +2399,7 @@ end try`);
       const readWinStream = async (stream: any) => {
         const decoder = new TextDecoder();
         for await (const chunk of stream) {
-          buildStatus.output.push(decoder.decode(chunk));
+          pushLogBounded(buildStatus.output, decoder.decode(chunk));
         }
       };
       const wo = readWinStream(buildProcess.stdout);
@@ -2417,7 +2427,7 @@ end try`);
       buildStatus = { isBuilding: true, type: 'install-prereqs', output: [], exitCode: null };
 
       (async () => {
-        const log = (s: string) => buildStatus.output.push(s + '\n');
+        const log = (s: string) => pushLogBounded(buildStatus.output, s + '\n');
         try {
           log('📦 Windows 빌드 사전 요구사항 자동 설치 시작');
           const tmpDir = 'C:/tmp';
