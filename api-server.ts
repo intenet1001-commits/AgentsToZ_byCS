@@ -1721,8 +1721,10 @@ end try`);
       try {
         const { folderPath, name = '', bypass = false } = await req.json();
         const rawPath = folderPath && String(folderPath).trim();
+        // ~ 확장: existsSync('~/.claude')는 false이므로 미리 절대경로로 치환
+        const expandedPath = rawPath?.startsWith('~/') ? `${homedir()}/${rawPath.slice(2)}` : rawPath === '~' ? homedir() : rawPath;
         // cwd가 없으면 posix_spawn이 binary ENOENT로 오해하는 Node.js quirk 방지
-        const cdPath = (rawPath && existsSync(rawPath)) ? rawPath : homedir();
+        const cdPath = (expandedPath && existsSync(expandedPath)) ? expandedPath : homedir();
         const claudeCli = CLAUDE_PATH ?? 'claude';
         const label = (name && String(name).trim()) || cdPath.split('/').filter(Boolean).pop() || 'project';
         const bgArgs = bypass

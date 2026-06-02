@@ -2237,7 +2237,15 @@ fn open_cmux_project_agents(folder_path: Option<String>, name: String) -> Result
 fn open_claude_bg(folder_path: Option<String>, name: String, bypass: Option<bool>) -> Result<String, String> {
     if cfg!(windows) { return Err("claude --bg는 맥에서만 가능합니다".into()); }
     let home = std::env::var("HOME").unwrap_or_else(|_| "/".into());
-    let cd_path = folder_path.filter(|s| !s.trim().is_empty()).unwrap_or_else(|| home.clone());
+    let raw_path = folder_path.filter(|s| !s.trim().is_empty()).unwrap_or_else(|| home.clone());
+    // 싱글 쿼트 안에서 ~ 는 확장되지 않으므로 미리 절대경로로 치환
+    let cd_path = if raw_path == "~" {
+        home.clone()
+    } else if raw_path.starts_with("~/") {
+        format!("{}/{}", home, &raw_path[2..])
+    } else {
+        raw_path
+    };
     let label = if !name.trim().is_empty() {
         name.clone()
     } else {
