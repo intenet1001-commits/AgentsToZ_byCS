@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "AgentsToZ_byCS",
-  "version": "99.0.0",
+  "version": "100.0.0",
   "identifier": "com.portmanager.portmanager",
   "build": {
     "frontendDist": "../dist",
