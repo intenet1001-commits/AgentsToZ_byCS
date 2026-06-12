@@ -275,9 +275,12 @@ CREATE INDEX IF NOT EXISTS idx_portmgr_ports_device_id ON portmgr_ports(device_i
 ## 개발 명령어
 
 ```bash
-# 개발 서버 시작 (Vite + API 서버 동시 실행)
+# 개발 서버 시작 (Vite + API 서버 동시 실행 — dev.ts 러너가 종료 시 api-server까지 정리)
 # ⚠️ vite 직접 호출 금지 — ./node_modules/.bin/vite 사용 (PATH 문제 방지)
 bun run dev
+
+# 타입 체크 (커밋 전 필수 — 0 에러 유지)
+bun run typecheck
 
 # API 서버만 시작 (--watch 없이 — watch 쓰면 파일 변경마다 재시작으로 헬스체크 실패)
 bun api-server.ts
