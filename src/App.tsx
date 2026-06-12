@@ -2018,8 +2018,9 @@ function App() {
           const retryDelays = [0, 800, 2000, 3500, 5000, 7000];
           for (let attempt = 0; attempt < retryDelays.length; attempt++) {
             try {
-              if (retryDelays[attempt] > 0) {
-                await new Promise(r => setTimeout(r, retryDelays[attempt]));
+              const retryDelay = retryDelays[attempt] ?? 0;
+              if (retryDelay > 0) {
+                await new Promise(r => setTimeout(r, retryDelay));
                 if (import.meta.env.DEV) console.log(`[App] Retrying port load (${attempt}/${retryDelays.length - 1})...`);
               }
               data = await API.loadPorts();
@@ -2681,7 +2682,7 @@ function App() {
     const html = !item.terminalCommand && isHtmlFile(item.commandPath);
     try {
       if (html) {
-        await API.openFolder(item.commandPath);
+        await API.openFolder(item.commandPath!);
         showToast(`${item.name} 파일을 열었습니다!`, 'success');
       } else {
         await API.executeCommand(item.id, runTarget, item.folderPath);
@@ -2748,7 +2749,7 @@ function App() {
     const html = !item.terminalCommand && isHtmlFile(item.commandPath);
     try {
       if (html) {
-        await API.openFolder(item.commandPath);
+        await API.openFolder(item.commandPath!);
         showToast(`${item.name} 파일을 열었습니다!`, 'success');
       } else {
         await API.forceRestartCommand(item.id, item.port ?? 0, runTarget, item.folderPath);
@@ -3125,7 +3126,7 @@ function App() {
         supabase.from('portmgr_devices').upsert(
           { id: deviceId, name: deviceNameVal, last_push_at: new Date().toISOString() },
           { onConflict: 'id' }
-        ).then(() => {}).catch(() => {});
+        ).then(() => {}, () => {});
       }
       // Fix P2: delete remote rows whose IDs are no longer in local list
       // Fix P2g: skip delete pass if auto-pull never succeeded — pull first before deleting
@@ -3260,7 +3261,7 @@ function App() {
               // 포트 번호도 자동 감지
               if (!updated.port) {
                 try {
-                  const detected = await API.detectPort(found[0]);
+                  const detected = await API.detectPort(found[0]!);
                   if (detected.port) updated.port = detected.port;
                 } catch {}
               }
@@ -3874,10 +3875,10 @@ function App() {
               let detectedPort: number | null = null;
               const localhostMatch = content.match(/localhost:(\d+)/);
               if (localhostMatch) {
-                detectedPort = parseInt(localhostMatch[1]);
+                detectedPort = parseInt(localhostMatch[1]!);
               } else {
                 const portMatch = content.match(/(?:PORT|port)\s*=\s*(\d+)/);
-                if (portMatch) detectedPort = parseInt(portMatch[1]);
+                if (portMatch) detectedPort = parseInt(portMatch[1]!);
               }
 
               const projectName = file.name.replace(/\.(command|sh|bat|cmd)$/i, '');

@@ -14,7 +14,7 @@ import { chromium } from 'playwright';
   const tabs = await p.locator('button').all();
   for (const t of tabs) {
     const txt = await t.textContent().catch(() => '');
-    if (txt.includes('포털')) { await t.click(); break; }
+    if (txt?.includes('포털')) { await t.click(); break; }
   }
   await p.waitForTimeout(1500);
   await b.close();

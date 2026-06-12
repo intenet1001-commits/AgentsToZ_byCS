@@ -46,7 +46,7 @@ function hasVsBuildTools(): boolean {
 /** Windows 경로를 WSL /mnt/... 경로로 변환 */
 function winToWslPath(winPath: string): string {
   if (winPath.length >= 2 && winPath[1] === ':') {
-    const drive = winPath[0].toLowerCase();
+    const drive = winPath.charAt(0).toLowerCase();
     const rest = winPath.slice(2).replace(/\\/g, '/');
     return `/mnt/${drive}${rest}`;
   }
@@ -158,8 +158,8 @@ function listWslDistros(): string[] {
     return [];
   }
   // reg output format: "    DistributionName    REG_SZ    <name>"
-  const distros = Array.from(stdout.matchAll(/DistributionName\s+REG_SZ\s+(.+)/g))
-    .map((m: RegExpMatchArray) => m[1].trim())
+  const distros = [...stdout.matchAll(/DistributionName\s+REG_SZ\s+(.+)/g)]
+    .map((m) => (m[1] ?? '').trim())
     .filter((n: string) => n && !n.toLowerCase().includes('docker'));
   devLog('[listWslDistros] found:', distros);
   _cachedDistros = distros;
@@ -289,17 +289,17 @@ function resolveClaudePath(): string | null {
   const isWin = process.platform === 'win32';
   if (isWin) {
     const r = Bun.spawnSync(['where', 'claude'], { env: { ...process.env } });
-    const p = r.stdout.toString().trim().split('\n')[0].trim();
+    const p = (r.stdout.toString().trim().split('\n')[0] ?? '').trim();
     if (p && existsSync(p)) return p;
     return null;
   }
   // zsh login shell로 탐색
   const zshR = Bun.spawnSync(['zsh', '-l', '-c', 'which claude'], { env: { ...process.env } });
-  const fromZsh = zshR.stdout.toString().trim().split('\n')[0].trim();
+  const fromZsh = (zshR.stdout.toString().trim().split('\n')[0] ?? '').trim();
   if (fromZsh && existsSync(fromZsh)) return fromZsh;
   // bash login shell fallback
   const bashR = Bun.spawnSync(['bash', '-l', '-c', 'which claude'], { env: { ...process.env } });
-  const fromBash = bashR.stdout.toString().trim().split('\n')[0].trim();
+  const fromBash = (bashR.stdout.toString().trim().split('\n')[0] ?? '').trim();
   if (fromBash && existsSync(fromBash)) return fromBash;
   // 알려진 고정 경로 탐색 (cmux 번들 포함)
   const home = process.env.HOME ?? '';
@@ -526,12 +526,12 @@ const server = Bun.serve({
         // localhost:포트 패턴 검색
         const localhostMatch = content.match(/localhost:(\d+)/);
         if (localhostMatch) {
-          detectedPort = parseInt(localhostMatch[1]);
+          detectedPort = parseInt(localhostMatch[1]!);
         } else {
           // PORT=포트 또는 port=포트 패턴 검색
           const portMatch = content.match(/(?:PORT|port)\s*=\s*(\d+)/);
           if (portMatch) {
-            detectedPort = parseInt(portMatch[1]);
+            detectedPort = parseInt(portMatch[1]!);
           }
         }
 
@@ -912,7 +912,7 @@ const server = Bun.serve({
           if (line.startsWith('p')) { curPid = line.slice(1); }
           else if (line.startsWith('n') && curPid) {
             const m = line.match(/:(\d+)$/);
-            if (m) pidPortPairs.push({ pid: curPid, port: parseInt(m[1]) });
+            if (m) pidPortPairs.push({ pid: curPid, port: parseInt(m[1]!) });
           }
         }
         // 2) 각 고유 PID의 CWD가 folderPath 와 일치하는지 확인
@@ -2757,7 +2757,7 @@ end try`);
             const gitContent = await Bun.file(`${existingPath}/.git`).text();
             const m = gitContent.match(/gitdir:\s*(.+)/);
             if (m) {
-              const mainRepo = m[1].trim().replace(/\/\.git\/worktrees\/[^/]+$/, '');
+              const mainRepo = m[1]!.trim().replace(/\/\.git\/worktrees\/[^/]+$/, '');
               const rmProc = Bun.spawn([GIT_PATH, "worktree", "remove", "--force", existingPath], { cwd: mainRepo, stdout: "pipe", stderr: "pipe" });
               await rmProc.exited;
             }
@@ -2825,7 +2825,7 @@ end try`);
           // content: "gitdir: <path>/.git/worktrees/<name>\n" — / 와 \ 혼재 가능
           const gitdirMatch = gitFile.match(/gitdir:\s*(.+)/);
           if (gitdirMatch) {
-            mainRepoDir = gitdirMatch[1].trim().replace(/[\\/]\.git[\\/]worktrees[\\/][^\\/]+[\\/]?$/, '');
+            mainRepoDir = gitdirMatch[1]!.trim().replace(/[\\/]\.git[\\/]worktrees[\\/][^\\/]+[\\/]?$/, '');
           } else {
             mainRepoDir = parentDir(worktreePath as string);
           }
@@ -3352,7 +3352,7 @@ Analyze this project and reply with JSON only (no markdown, no explanation):
             await w.exited;
             if (w.exitCode === 0) {
               const out = (await new Response(w.stdout).text()).trim();
-              cliPath = out.split(/\r?\n/)[0].trim(); // first line only
+              cliPath = (out.split(/\r?\n/)[0] ?? '').trim(); // first line only
             }
           } catch { /* ignore */ }
         }
@@ -3575,7 +3575,7 @@ END $$;
           const w = Bun.spawn(whichCmd, { stdout: "pipe", stderr: "pipe" });
           await w.exited;
           if (w.exitCode === 0) {
-            ghPath = (await new Response(w.stdout).text()).trim().split(/\r?\n/)[0];
+            ghPath = (await new Response(w.stdout).text()).trim().split(/\r?\n/)[0] ?? '';
             installed = true;
           }
         } catch {}
@@ -3736,7 +3736,7 @@ ${missing.includes("portmgr_device_credentials") ? `CREATE TABLE IF NOT EXISTS p
           const wg = Bun.spawn(whichGh, { stdout: "pipe", stderr: "pipe" });
           await wg.exited;
           if (wg.exitCode === 0) {
-            const ghPath = (await new Response(wg.stdout).text()).trim().split(/\r?\n/)[0];
+            const ghPath = (await new Response(wg.stdout).text()).trim().split(/\r?\n/)[0] ?? '';
             const gt = Bun.spawn([ghPath, "auth", "token"], { stdout: "pipe", stderr: "pipe" });
             await gt.exited;
             const ghToken = (await new Response(gt.stdout).text()).trim();
@@ -3869,7 +3869,7 @@ ${missing.includes("portmgr_device_credentials") ? `CREATE TABLE IF NOT EXISTS p
             const wg = Bun.spawn(whichGh, { stdout: "pipe", stderr: "pipe" });
             await wg.exited;
             if (wg.exitCode === 0) {
-              const ghPath = (await new Response(wg.stdout).text()).trim().split(/\r?\n/)[0];
+              const ghPath = (await new Response(wg.stdout).text()).trim().split(/\r?\n/)[0] ?? '';
               const p = Bun.spawn([ghPath, "auth", "login", "--with-token"], {
                 stdin: new TextEncoder().encode(token), stdout: "pipe", stderr: "pipe",
               });
@@ -3886,7 +3886,7 @@ ${missing.includes("portmgr_device_credentials") ? `CREATE TABLE IF NOT EXISTS p
             const vPaths = IS_WIN
               ? [`${process.env.APPDATA}\\com.vercel.cli\\auth.json`]
               : [`${homedir()}/.local/share/com.vercel.cli/auth.json`];
-            const vPath = vPaths[0];
+            const vPath = vPaths[0]!;
             const dir = vPath.substring(0, vPath.lastIndexOf(IS_WIN ? "\\" : "/"));
             Bun.spawn(["mkdir", "-p", dir], { stdout: "pipe", stderr: "pipe" });
             await Bun.write(vPath, JSON.stringify({ token }));

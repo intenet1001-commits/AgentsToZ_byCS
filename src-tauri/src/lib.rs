@@ -411,7 +411,28 @@ fn stop_command(
         }
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
+    {
+        let pids = win_pids_by_port(port);
+        if pids.is_empty() {
+            println!("[StopCommand] No processes found on port {}", port);
+        }
+        for pid in pids {
+            println!("[StopCommand] Killing PID: {} (taskkill)", pid);
+            win_kill_pid(pid);
+            killed_pids.push(pid);
+        }
+        // 포트로 못 찾았으면 추적 맵의 PID라도 종료
+        if killed_pids.is_empty() {
+            if let Some(pid) = pid_from_map {
+                println!("[StopCommand] Killing tracked PID: {} (taskkill)", pid);
+                win_kill_pid(pid);
+                killed_pids.push(pid);
+            }
+        }
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         if let Some(pid) = pid_from_map {
             let _ = Command::new("kill")
@@ -441,6 +462,7 @@ fn force_restart_command(
     port_id: String,
     port: u16,
     command_path: String,
+    folder_path: Option<String>,
     state: State<AppState>,
     app_handle: tauri::AppHandle,
 ) -> Result<String, String> {
@@ -498,6 +520,14 @@ fn force_restart_command(
         }
     }
 
+    #[cfg(target_os = "windows")]
+    {
+        for pid in win_pids_by_port(port) {
+            println!("[ForceRestart] Force killing PID: {} (taskkill)", pid);
+            win_kill_pid(pid);
+        }
+    }
+
     // HashMap에서도 제거
     let mut processes = state.processes.lock().unwrap_or_else(|e| e.into_inner());
     processes.remove(&port_id);
@@ -530,7 +560,7 @@ fn force_restart_command(
         port_id: &port_id,
         command_path: &command_path,
         is_file_path,
-        folder_path: None,
+        folder_path: folder_path.as_deref(),
         log_file: &log_file,
     })?;
 
@@ -564,8 +594,16 @@ fn check_port_status(port: u16) -> Result<bool, String> {
         }
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "windows")]
     {
+        let is_running = !win_pids_by_port(port).is_empty();
+        println!("[CheckPort] Port {} is {}", port, if is_running { "RUNNING" } else { "NOT running" });
+        Ok(is_running)
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        let _ = port;
         Ok(false)
     }
 }
@@ -862,6 +900,37 @@ fn escape_sq(s: &str) -> String {
     s.replace("'", "'\\''")
 }
 
+/// Windows: 포트를 점유 중인 고유 PID 목록 조회 (Get-NetTCPConnection)
+#[cfg(target_os = "windows")]
+fn win_pids_by_port(port: u16) -> Vec<u32> {
+    let out = Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-Command",
+            &format!("(Get-NetTCPConnection -LocalPort {} -ErrorAction SilentlyContinue).OwningProcess", port),
+        ])
+        .output();
+    let mut pids: Vec<u32> = Vec::new();
+    if let Ok(o) = out {
+        for line in String::from_utf8_lossy(&o.stdout).lines() {
+            if let Ok(pid) = line.trim().parse::<u32>() {
+                if pid != 0 && !pids.contains(&pid) {
+                    pids.push(pid);
+                }
+            }
+        }
+    }
+    pids
+}
+
+/// Windows: taskkill /F /PID 로 프로세스 강제 종료
+#[cfg(target_os = "windows")]
+fn win_kill_pid(pid: u32) {
+    let _ = Command::new("taskkill")
+        .args(["/F", "/PID", &pid.to_string()])
+        .output();
+}
+
 #[cfg(target_os = "windows")]
 fn win_to_wsl_path(path: &str) -> String {
     let bytes = path.as_bytes();
@@ -875,6 +944,7 @@ fn win_to_wsl_path(path: &str) -> String {
 }
 
 // Windows 레지스트리에서 WSL distro 목록 조회 (WSL 서비스 불필요 — 즉시 응답)
+#[cfg(target_os = "windows")]
 fn find_wsl_distro() -> Option<String> {
     let out = Command::new("powershell")
         .args(["-NoProfile", "-Command",
@@ -889,6 +959,7 @@ fn find_wsl_distro() -> Option<String> {
     None
 }
 
+#[cfg(target_os = "windows")]
 fn spawn_wt_wsl(bash_cmd: &str, title: Option<&str>) -> Result<(), String> {
     let distro = find_wsl_distro().ok_or_else(|| "WSL Ubuntu distro를 찾을 수 없습니다.".to_string())?;
     let has_wt = Command::new("where")
@@ -1016,7 +1087,8 @@ fn open_iterm_with_script(cmd: &str) -> Result<(), String> {
     use std::time::{SystemTime, UNIX_EPOCH};
     let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
     let script_path = format!("/tmp/portmanager_{}.sh", ts);
-    fs::write(&script_path, format!("#!/bin/zsh -l\n{}\n", cmd))
+    // rm -f "$0": zsh가 파일을 fd로 연 채 실행하므로 첫 줄에서 자기 자신을 삭제해도 안전.
+    fs::write(&script_path, format!("#!/bin/zsh -l\nrm -f \"$0\"\n{}\n", cmd))
         .map_err(|e| format!("Failed to write script: {}", e))?;
     let _ = Command::new("chmod").args(["+x", &script_path]).output();
     let sq_path = script_path.replace('\'', "'\\''");
@@ -1040,7 +1112,6 @@ fn open_tmux_claude(session_name: String, folder_path: Option<String>, worktree_
         let esc_display = escape_sq(&session_name);
         let title = build_window_title(&session_name, worktree_path.as_deref(), true, false, false);
         let esc_title_sq = escape_sq(&title);
-        let escaped_title = title.replace('\\', "\\\\").replace('"', "\\\"");
         let cd_target = worktree_path.as_ref()
             .and_then(|wt| wt.split(',').next().map(|p| p.trim().to_string()))
             .filter(|p| p.starts_with('/'))
@@ -1079,7 +1150,6 @@ fn open_tmux_claude_fresh(session_name: String, folder_path: Option<String>, wor
         let esc_display = escape_sq(&session_name);
         let title = build_window_title(&session_name, worktree_path.as_deref(), true, bypass, true);
         let esc_title_sq = escape_sq(&title);
-        let escaped_title = title.replace('\\', "\\\\").replace('"', "\\\"");
         let kill_cmd = format!("tmux kill-session -t '{}' 2>/dev/null || true", esc_session);
         let cd_target = worktree_path.as_ref()
             .and_then(|wt| wt.split(',').next().map(|p| p.trim().to_string()))
@@ -1121,7 +1191,6 @@ fn open_tmux_claude_bypass(session_name: String, folder_path: Option<String>, wo
         let esc_display = escape_sq(&session_name);
         let title = build_window_title(&session_name, worktree_path.as_deref(), true, true, false);
         let esc_title_sq = escape_sq(&title);
-        let escaped_title = title.replace('\\', "\\\\").replace('"', "\\\"");
         let cd_target = worktree_path.as_ref()
             .and_then(|wt| wt.split(',').next().map(|p| p.trim().to_string()))
             .filter(|p| p.starts_with('/'))
@@ -1185,7 +1254,6 @@ fn open_terminal_claude_bypass(folder_path: Option<String>, name: Option<String>
     {
         let title = build_window_title(name.as_deref().unwrap_or("Claude"), worktree_path.as_deref(), false, true, false);
         let esc_title_sq = escape_sq(&title);
-        let escaped_name = title.replace('\\', "\\\\").replace('"', "\\\"");
         let cd_target = worktree_path.as_ref()
             .and_then(|wt| wt.split(',').next().map(|p| p.trim().to_string()))
             .filter(|p| p.starts_with('/'))
@@ -1216,7 +1284,6 @@ fn open_terminal_claude(folder_path: Option<String>, name: Option<String>, workt
     {
         let title = build_window_title(name.as_deref().unwrap_or("Claude"), worktree_path.as_deref(), false, false, false);
         let esc_title_sq = escape_sq(&title);
-        let escaped_name = title.replace('\\', "\\\\").replace('"', "\\\"");
         let cd_target = worktree_path.as_ref()
             .and_then(|wt| wt.split(',').next().map(|p| p.trim().to_string()))
             .filter(|p| p.starts_with('/'))
@@ -1241,35 +1308,131 @@ fn open_terminal_claude(folder_path: Option<String>, name: Option<String>, workt
     Ok("Claude 실행".to_string())
 }
 
+/// 공통: iTerm/wt 창에서 agent CLI(codex/agy 등) 실행 — open_terminal_claude 미러
+fn open_terminal_agent(
+    folder_path: Option<String>,
+    name: Option<String>,
+    worktree_path: Option<String>,
+    bypass: bool,
+    agent_cli: &str,
+    default_name: &str,
+    label: &str,
+) -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let title = build_window_title(name.as_deref().unwrap_or(default_name), worktree_path.as_deref(), false, bypass, false);
+        let esc_title_sq = escape_sq(&title);
+        let cd_target = worktree_path.as_ref()
+            .and_then(|wt| wt.split(',').next().map(|p| p.trim().to_string()))
+            .filter(|p| p.starts_with('/'))
+            .or_else(|| folder_path.clone());
+        let cmd = if let Some(ref cd) = cd_target {
+            format!("cd '{}' && printf '\\033]0;{}\\007' && {}", escape_sq(cd), esc_title_sq, agent_cli)
+        } else {
+            format!("printf '\\033]0;{}\\007' && {}", esc_title_sq, agent_cli)
+        };
+        open_iterm_with_script(&cmd)?;
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let wt_first = worktree_path.as_ref()
+            .and_then(|wt| wt.split(',').next().map(|p| p.trim().to_string()))
+            .filter(|p| !p.is_empty() && is_absolute_path(p));
+        let work_dir = wt_first.or_else(|| folder_path.clone());
+        let title = build_window_title(name.as_deref().unwrap_or(default_name), worktree_path.as_deref(), false, bypass, false);
+        spawn_wt_cmd(agent_cli, work_dir.as_deref(), &title)?;
+    }
+    Ok(format!("{}{} 실행", label, if bypass { " (bypass)" } else { "" }))
+}
+
+#[tauri::command]
+fn open_terminal_codex(folder_path: Option<String>, name: Option<String>, worktree_path: Option<String>, bypass: Option<bool>) -> Result<String, String> {
+    let bypass = bypass.unwrap_or(false);
+    let agent_cli = if bypass { "codex --dangerously-bypass-approvals-and-sandbox" } else { "codex" };
+    open_terminal_agent(folder_path, name, worktree_path, bypass, agent_cli, "Codex", "Codex")
+}
+
+#[tauri::command]
+fn open_terminal_agy(folder_path: Option<String>, name: Option<String>, worktree_path: Option<String>, bypass: Option<bool>) -> Result<String, String> {
+    let bypass = bypass.unwrap_or(false);
+    let agent_cli = if bypass { "agy --dangerously-skip-permissions" } else { "agy" };
+    open_terminal_agent(folder_path, name, worktree_path, bypass, agent_cli, "Antigravity", "Antigravity")
+}
+
+/// 공통: tmux 세션에서 agent CLI(codex/agy 등) 실행 — open_tmux_claude 미러
+fn open_tmux_agent(
+    session_name: String,
+    folder_path: Option<String>,
+    worktree_path: Option<String>,
+    bypass: bool,
+    agent_cli: &str,
+    label: &str,
+) -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let esc_session = escape_sq(&session_name);
+        let esc_display = escape_sq(&session_name);
+        let title = build_window_title(&session_name, worktree_path.as_deref(), true, bypass, false);
+        let esc_title_sq = escape_sq(&title);
+        let cd_target = worktree_path.as_ref()
+            .and_then(|wt| wt.split(',').next().map(|p| p.trim().to_string()))
+            .filter(|p| p.starts_with('/'))
+            .or_else(|| folder_path.clone());
+        let cmd = if let Some(ref cd) = cd_target {
+            format!("cd '{}' && printf '\\033]0;{}\\007'; tmux new-session -d -s '{}' -n '{}' \"zsh -l -c '{}'\" 2>/dev/null || true; tmux set-option -g set-titles on 2>/dev/null; tmux set-option -g set-titles-string '#W' 2>/dev/null; tmux set-window-option -t '{}' automatic-rename off 2>/dev/null; tmux rename-window -t '{}' '{}' 2>/dev/null; tmux attach-session -t '{}'", escape_sq(cd), esc_title_sq, esc_session, esc_display, agent_cli, esc_session, esc_session, esc_display, esc_session)
+        } else {
+            format!("printf '\\033]0;{}\\007'; tmux new-session -d -s '{}' -n '{}' \"zsh -l -c '{}'\" 2>/dev/null || true; tmux set-option -g set-titles on 2>/dev/null; tmux set-option -g set-titles-string '#W' 2>/dev/null; tmux set-window-option -t '{}' automatic-rename off 2>/dev/null; tmux rename-window -t '{}' '{}' 2>/dev/null; tmux attach-session -t '{}'", esc_title_sq, esc_session, esc_display, agent_cli, esc_session, esc_session, esc_display, esc_session)
+        };
+        open_iterm_with_script(&cmd)?;
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let cd_path = worktree_path.as_ref()
+            .and_then(|wt| wt.split(',').next().map(|p| p.trim().to_string()))
+            .or_else(|| folder_path.clone())
+            .map(|p| win_to_wsl_path(&p));
+        let cd_part = cd_path.map(|p| format!("cd '{}' && ", escape_sq(&p))).unwrap_or_default();
+        let bash_cmd = format!("{}tmux new-session -A -s '{}' '{} || bash -l'", cd_part, escape_sq(&session_name), agent_cli);
+        let title = build_window_title(&session_name, worktree_path.as_deref(), true, bypass, false);
+        spawn_wt_wsl(&bash_cmd, Some(&title))?;
+    }
+
+    Ok(format!("tmux + {} 실행 중 (세션: {})", label, session_name))
+}
+
+#[tauri::command]
+fn open_tmux_codex(session_name: String, folder_path: Option<String>, worktree_path: Option<String>, bypass: Option<bool>) -> Result<String, String> {
+    let bypass = bypass.unwrap_or(false);
+    let agent_cli = if bypass { "codex --dangerously-bypass-approvals-and-sandbox" } else { "codex" };
+    open_tmux_agent(session_name, folder_path, worktree_path, bypass, agent_cli, "Codex")
+}
+
+#[tauri::command]
+fn open_tmux_agy(session_name: String, folder_path: Option<String>, worktree_path: Option<String>, bypass: Option<bool>) -> Result<String, String> {
+    let bypass = bypass.unwrap_or(false);
+    let agent_cli = if bypass { "agy --dangerously-skip-permissions" } else { "agy" };
+    open_tmux_agent(session_name, folder_path, worktree_path, bypass, agent_cli, "Antigravity")
+}
+
 #[tauri::command]
 fn run_claude_with_prompt(folder_path: Option<String>, prompt: String) -> Result<String, String> {
     #[cfg(target_os = "macos")]
     {
-        // Escape for shell single-quoted string
+        // 프롬프트를 CLI 인자로 직접 전달 — keystroke 주입(delay 후 write text) 방식은
+        // claude가 늦게 뜨거나 없으면 프롬프트 텍스트가 셸 명령으로 실행되는 위험이 있음
         let cd_part = folder_path
             .as_deref()
             .map(|fp| format!("cd '{}' && ", escape_sq(fp)))
             .unwrap_or_default();
-        let cmd = format!("{}claude", cd_part);
-        let escaped_cmd = cmd.replace('\\', "\\\\").replace('"', "\\\"");
-        // Prompt: collapse newlines → spaces, escape for AppleScript
-        let escaped_prompt = prompt
-            .replace('\\', "\\\\")
-            .replace('"', "\\\"")
-            .replace('\n', " ");
-        let script = format!(
-            "tell application \"iTerm\"\n  activate\n  set newWindow to create window with default profile\n  tell current session of newWindow\n    write text \"{}\"\n    delay 4\n    write text \"{}\"\n  end tell\nend tell",
-            escaped_cmd, escaped_prompt
-        );
-        Command::new("osascript")
-            .arg("-e")
-            .arg(&script)
-            .spawn()
-            .map_err(|e| format!("Failed to open iTerm: {}", e))?;
-        Ok("iTerm에서 Claude 실행 + 프롬프트 전송".to_string())
+        let cmd = format!("{}claude '{}'", cd_part, escape_sq(&prompt));
+        open_iterm_with_script(&cmd)?;
+        Ok("iTerm에서 Claude 실행 (프롬프트 인자 전달)".to_string())
     }
     #[cfg(not(target_os = "macos"))]
     {
+        let _ = (folder_path, prompt);
         Err("macOS 전용 기능입니다".to_string())
     }
 }
@@ -1416,7 +1579,6 @@ fn git_worktree_add(folder_path: String, branch_name: String, worktree_path: Opt
     let dir_safe_branch = if dir_safe_branch.is_empty() {
         format!("wt{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs() % 1000000)
     } else { dir_safe_branch };
-    let is_icloud = folder_path.contains("com~apple~CloudDocs") || folder_path.contains("Mobile Documents");
     // Windows: HOME 미설정 시 USERPROFILE 사용
     let home = std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
@@ -1847,19 +2009,6 @@ fn ensure_cmux_window(cli: &str) {
     }
 }
 
-fn cmux_send_with_retry(cli: &str, payload: &str) -> Result<(), String> {
-    let mut last_err = String::new();
-    for attempt in 0..3 {
-        let out = Command::new(cli).args(["send", payload]).output()
-            .map_err(|e| format!("cmux send spawn 실패: {}", e))?;
-        if out.status.success() { return Ok(()); }
-        last_err = String::from_utf8_lossy(&out.stderr).trim().to_string();
-        if !last_err.contains("Broken pipe") && !last_err.contains("errno 32") { break; }
-        if attempt < 2 { std::thread::sleep(std::time::Duration::from_millis(300)); }
-    }
-    Err(format!("cmux send 실패: {}", if last_err.is_empty() { "unknown".into() } else { last_err }))
-}
-
 fn cmux_install_error() -> String {
     "cmux가 설치되지 않았습니다.\n설치: brew tap manaflow-ai/cmux && brew install --cask cmux".to_string()
 }
@@ -1941,6 +2090,54 @@ fn open_cmux_claude_new(name: String, folder_path: Option<String>, worktree_path
     Ok(format!("cmux 새창{} 시작 ↺", if bypass { " bypass" } else { "" }))
 }
 
+/// 공통: cmux workspace에서 agent CLI(codex/agy 등) 실행 — open_cmux_claude 미러
+fn open_cmux_agent(
+    name: String,
+    folder_path: Option<String>,
+    worktree_path: Option<String>,
+    bypass: bool,
+    agent_cli: &str,
+    label: &str,
+) -> Result<String, String> {
+    if cfg!(windows) { return Err("cmux는 맥에서만 가능합니다".into()); }
+
+    let cd_path = first_worktree(&worktree_path)
+        .or(folder_path)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| "프로젝트 경로가 없습니다.".to_string())?;
+
+    let cli = resolve_cmux_cli().ok_or_else(cmux_install_error)?;
+    let _ = Command::new("open").args(["-a", "cmux"]).status();
+
+    if !wait_cmux_ready(&cli, std::time::Duration::from_secs(5)) {
+        return Err(cmux_access_help_msg("cmux 소켓 준비 대기 시간 초과 (5초)"));
+    }
+    ensure_cmux_window(&cli);
+
+    let title = build_window_title(&name, worktree_path.as_deref(), true, bypass, false);
+    let out = Command::new(&cli)
+        .args(["new-workspace", "--cwd", &cd_path, "--command", agent_cli, "--name", &title])
+        .output()
+        .map_err(|e| format!("cmux new-workspace 실행 실패: {}", e))?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        return Err(cmux_access_help_msg(&format!("cmux new-workspace 실패: {}", stderr)));
+    }
+    Ok(format!("cmux {}{} 실행 중", label, if bypass { " bypass" } else { "" }))
+}
+
+#[tauri::command]
+fn open_cmux_codex(name: String, folder_path: Option<String>, worktree_path: Option<String>, bypass: bool) -> Result<String, String> {
+    let agent_cli = if bypass { "codex --dangerously-bypass-approvals-and-sandbox" } else { "codex" };
+    open_cmux_agent(name, folder_path, worktree_path, bypass, agent_cli, "Codex")
+}
+
+#[tauri::command]
+fn open_cmux_agy(name: String, folder_path: Option<String>, worktree_path: Option<String>, bypass: bool) -> Result<String, String> {
+    let agent_cli = if bypass { "agy --dangerously-skip-permissions" } else { "agy" };
+    open_cmux_agent(name, folder_path, worktree_path, bypass, agent_cli, "Antigravity")
+}
+
 #[tauri::command]
 fn open_cmux_terminal(name: String, folder_path: Option<String>) -> Result<String, String> {
     if cfg!(windows) { return Err("cmux는 맥에서만 가능합니다".into()); }
@@ -2017,7 +2214,7 @@ fn open_cmux_localhost(port: u16, name: String) -> Result<String, String> {
         return Err(cmux_access_help_msg("cmux 소켓 준비 대기 시간 초과 (5초)"));
     }
     let out = Command::new(&cli)
-        .args(["new-pane", "--type", "browser", "--url", &url, "--focus", "true"])
+        .args(["new-pane", "--type", "browser", "--url", &url, "--name", &name, "--focus", "true"])
         .output()
         .map_err(|e| format!("cmux browser 실행 실패: {}", e))?;
     if !out.status.success() {
@@ -2244,6 +2441,10 @@ pub fn run() {
         open_tmux_claude_bypass,
         open_terminal_claude,
         open_terminal_claude_bypass,
+        open_terminal_codex,
+        open_terminal_agy,
+        open_tmux_codex,
+        open_tmux_agy,
         run_claude_with_prompt,
         export_dmg,
         git_worktree_add,
@@ -2256,6 +2457,8 @@ pub fn run() {
         suggest_names_batch,
         open_cmux_claude,
         open_cmux_claude_new,
+        open_cmux_codex,
+        open_cmux_agy,
         open_cmux_terminal,
         open_cmux_tmux,
         open_cmux_localhost,
@@ -2275,7 +2478,7 @@ pub fn run() {
         .with_handler(move |app_handle, _shortcut, event| {
           if event.state() == ShortcutState::Pressed {
             if let Some(window) = app_handle.get_webview_window("main") {
-              let mut vis = vis_shortcut.lock().unwrap();
+              let mut vis = vis_shortcut.lock().unwrap_or_else(|e| e.into_inner());
               if *vis {
                 let _ = window.hide();
                 *vis = false;
@@ -2305,7 +2508,7 @@ pub fn run() {
           if let tauri::WindowEvent::CloseRequested { api, .. } = event {
             api.prevent_close();
             let _ = win.hide();
-            *vis_close.lock().unwrap() = false;
+            *vis_close.lock().unwrap_or_else(|e| e.into_inner()) = false;
           }
         });
       }

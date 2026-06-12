@@ -700,7 +700,7 @@ vercel --prod
           </div>
           {/* Step content */}
           <div className="p-3 text-xs">
-            {steps[step].content}
+            {steps[step]?.content}
             <div className="flex gap-2 mt-3">
               {step > 0 && (
                 <button onClick={() => setStep(s => s - 1)} className="flex-1 py-1 text-[10px] bg-[#221f1b] hover:bg-[#2a2520] text-zinc-400 rounded border border-stone-700/50 transition-all">← 이전</button>
@@ -771,8 +771,8 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
       setData(loaded);
       const envUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? '';
       const envKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? '';
-      setSbUrl(envUrl || loaded.supabaseUrl);
-      setSbKey(envKey || loaded.supabaseAnonKey);
+      setSbUrl(envUrl || loaded.supabaseUrl || '');
+      setSbKey(envKey || loaded.supabaseAnonKey || '');
       // env var이 있으면 항상 우선 사용 (Google OAuth 세션과 동일 프로젝트 보장)
       if (envUrl) loaded.supabaseUrl = envUrl;
       if (envKey) loaded.supabaseAnonKey = envKey;
@@ -1158,7 +1158,7 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
       supabase.from('portmgr_devices').upsert(
         { id: deviceId, name: finalDeviceName, last_push_at: new Date().toISOString() },
         { onConflict: 'id' }
-      ).then(() => {}).catch(() => {});
+      ).then(() => {}, () => {});
 
       const nextData: PortalData = { ...data, supabaseUrl: sbUrl, supabaseAnonKey: sbKey, deviceId, deviceName: finalDeviceName ?? undefined, lastSynced: new Date().toISOString() };
       await persist(nextData);

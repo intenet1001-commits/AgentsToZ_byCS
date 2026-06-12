@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
-import PortalManager, { PortalActions } from './PortalManager';
+import PortalManager, { type PortalActions } from './PortalManager';
 import {
   BookMarked, Settings, CloudUpload, CloudDownload,
   ExternalLink, Github, RefreshCw, Clock, Monitor, Smartphone,
@@ -900,7 +900,7 @@ function App() {
       if ((!selectedDeviceId || !knownInList) && list.length > 0) {
         // Auto-select if only one candidate with ports (most recent push)
         if (list.length === 1) {
-          selectDevice(list[0].id, list[0].name ?? undefined);
+          selectDevice(list[0]!.id, list[0]!.name ?? undefined);
         } else {
           setShowDevicePicker(true);
         }

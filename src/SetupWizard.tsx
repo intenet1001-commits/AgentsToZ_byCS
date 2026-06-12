@@ -534,7 +534,7 @@ npm install -g supabase`;
     // 5: API Key
     <div key={5} className="space-y-4">
       <p className="text-zinc-400 text-sm">CLI로 API 키를 가져옵니다.</p>
-      <CliAutoFill onFill={(url, key) => { setSupabaseUrl(url); setSupabaseAnonKey(key); if (!refId) { const m = url.match(/https:\/\/(.+)\.supabase\.co/); if (m) setRefId(m[1]); } }} />
+      <CliAutoFill onFill={(url, key) => { setSupabaseUrl(url); setSupabaseAnonKey(key); if (!refId) { const m = url.match(/https:\/\/(.+)\.supabase\.co/); if (m) setRefId(m[1]!); } }} />
       {refId
         ? <CodeBlock label="(참고) 수동 조회 명령" code={`supabase projects api-keys --project-ref ${refId}`} />
         : <InfoBox color="amber"><p className="text-xs">이전 단계에서 Project Ref를 입력하거나 위 자동 입력을 사용하세요.</p></InfoBox>
@@ -635,7 +635,7 @@ npm install -g supabase`;
       {deviceName && testResult === 'ok' && (
         <InfoBox color="green">
           <p className="font-semibold mb-1">✅ 모든 설정 완료!</p>
-          <p className="text-xs text-zinc-300">기기: <span className="text-white">{deviceName}</span> · Supabase: {supabaseUrl.split('.')[0].replace('https://', '')}…</p>
+          <p className="text-xs text-zinc-300">기기: <span className="text-white">{deviceName}</span> · Supabase: {supabaseUrl.split('.')[0]?.replace('https://', '')}…</p>
         </InfoBox>
       )}
     </div>,
@@ -1165,8 +1165,8 @@ function WindowsEnvWizard({ onBack }: { onBack: () => void }) {
         <StepDots total={totalSteps} current={step} />
       </div>
       <div className="flex-1 overflow-y-auto">
-        <h3 className="text-sm font-semibold text-zinc-300 mb-4">{step + 1}. {steps[step].title}</h3>
-        {steps[step].content}
+        <h3 className="text-sm font-semibold text-zinc-300 mb-4">{step + 1}. {steps[step]?.title}</h3>
+        {steps[step]?.content}
       </div>
       <div className="flex gap-3 mt-4 md:mt-6 pt-4 border-t border-zinc-800">
         {step > 0 && (
@@ -1322,8 +1322,8 @@ function MacEnvWizard({ onBack }: { onBack: () => void }) {
         <StepDots total={totalSteps} current={step} />
       </div>
       <div className="flex-1 overflow-y-auto">
-        <h3 className="text-sm font-semibold text-zinc-300 mb-4">{step + 1}. {steps[step].title}</h3>
-        {steps[step].content}
+        <h3 className="text-sm font-semibold text-zinc-300 mb-4">{step + 1}. {steps[step]?.title}</h3>
+        {steps[step]?.content}
       </div>
       <div className="flex gap-3 mt-4 md:mt-6 pt-4 border-t border-zinc-800">
         {step > 0 && (
@@ -1777,7 +1777,7 @@ function WizardLayout({
       {/* Mobile step indicator */}
       <div className="flex md:hidden items-center justify-between px-4 py-2 border-b border-zinc-800 shrink-0">
         <button onClick={onBack} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">← 뒤로</button>
-        <span className="text-xs text-zinc-500">{steps[step].title}</span>
+        <span className="text-xs text-zinc-500">{steps[step]?.title}</span>
         <span className="text-xs text-zinc-600">{step + 1}/{steps.length}</span>
       </div>
 
@@ -1786,7 +1786,7 @@ function WizardLayout({
         <div className="flex-1 overflow-y-auto px-4 py-4 md:p-8">
           <div className="max-w-lg">
             <div className="hidden md:flex items-center justify-between mb-1">
-              <h2 className="text-xl font-semibold text-white">{steps[step].title}</h2>
+              <h2 className="text-xl font-semibold text-white">{steps[step]?.title}</h2>
               <span className="text-xs text-zinc-600">{step + 1} / {steps.length}</span>
             </div>
             <div className="w-full bg-zinc-800 rounded-full h-1 mb-4 md:mb-6">
@@ -2371,8 +2371,8 @@ function OneClickWizard({ onBack, onComplete }: { onBack: () => void; onComplete
         // 프로젝트가 1개면 자동 선택
         const pList = projects.length > 0 ? projects : [];
         if (pList.length === 1 && !selectedRef) {
-          setSelectedRef(pList[0].ref);
-          updateStep(id, { status: 'done', detail: `자동 선택: ${pList[0].name}` });
+          setSelectedRef(pList[0]!.ref);
+          updateStep(id, { status: 'done', detail: `자동 선택: ${pList[0]!.name}` });
         } else if (selectedRef) {
           const proj = pList.find(p => p.ref === selectedRef);
           updateStep(id, { status: 'done', detail: `선택됨: ${proj?.name ?? selectedRef}` });
