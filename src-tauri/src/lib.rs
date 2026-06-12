@@ -42,17 +42,93 @@ struct AppState {
     processes: Mutex<HashMap<String, u32>>,
 }
 
+struct SpawnArgs<'a> {
+    port_id: &'a str,
+    command_path: &'a str,
+    is_file_path: bool,
+    folder_path: Option<&'a str>,
+    log_file: &'a std::path::Path,
+}
+
+fn build_path_env() -> String {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let additions = [
+        format!("{}/.cargo/bin", home),
+        format!("{}/.bun/bin", home),
+        format!("{}/bin", home),
+        "/usr/local/bin".to_string(),
+        "/usr/bin".to_string(),
+        "/bin".to_string(),
+        "/usr/sbin".to_string(),
+        "/sbin".to_string(),
+        "/opt/homebrew/bin".to_string(),
+        "/usr/local/go/bin".to_string(),
+    ];
+    let existing = std::env::var("PATH").unwrap_or_default();
+    if existing.is_empty() {
+        additions.join(":")
+    } else {
+        format!("{}:{}", additions.join(":"), existing)
+    }
+}
+
+fn spawn_process(args: SpawnArgs) -> Result<u32, String> {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let new_path = build_path_env();
+
+    if args.is_file_path {
+        let _ = Command::new("chmod").arg("+x").arg(args.command_path).output();
+    }
+
+    let log_out = fs::OpenOptions::new()
+        .create(true).append(true).open(args.log_file)
+        .map_err(|e| format!("Failed to open log file: {}", e))?;
+    let log_err = fs::OpenOptions::new()
+        .create(true).append(true).open(args.log_file)
+        .map_err(|e| format!("Failed to open log file: {}", e))?;
+
+    let mut cmd = if args.is_file_path {
+        let mut c = Command::new("bash");
+        c.arg(args.command_path);
+        c
+    } else {
+        let mut c = Command::new("bash");
+        c.arg("-c").arg(args.command_path);
+        if let Some(fp) = args.folder_path {
+            if !fp.is_empty() { c.current_dir(fp); }
+        }
+        c
+    };
+    cmd.stdout(log_out).stderr(log_err)
+        .env("PATH", &new_path)
+        .env("HOME", &home);
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        unsafe { cmd.pre_exec(|| { libc::setsid(); Ok(()) }); }
+    }
+
+    let pid = cmd.spawn()
+        .map_err(|e| format!("Failed to spawn process: {}", e))?
+        .id();
+    println!("[spawn_process] port={} pid={} cmd={}", args.port_id, pid, args.command_path);
+    Ok(pid)
+}
+
+fn ensure_app_data_dir(app_handle: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    let data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?;
+    fs::create_dir_all(&data_dir).map_err(|e| format!("Failed to create app data directory: {}", e))?;
+
+    Ok(data_dir)
+}
+
 #[tauri::command]
 fn load_ports(app_handle: tauri::AppHandle) -> Result<Vec<PortInfo>, String> {
-    // Tauri app data 디렉토리 사용
-    let app_data_dir = app_handle.path().app_data_dir()
-        .map_err(|e| e.to_string())?;
-
-    // 디렉토리가 없으면 생성
-    if !app_data_dir.exists() {
-        fs::create_dir_all(&app_data_dir)
-            .map_err(|e| format!("Failed to create app data directory: {}", e))?;
-    }
+    let app_data_dir = ensure_app_data_dir(&app_handle)?;
 
     let ports_file = app_data_dir.join("ports.json");
 
@@ -69,16 +145,7 @@ fn load_ports(app_handle: tauri::AppHandle) -> Result<Vec<PortInfo>, String> {
 
 #[tauri::command]
 fn save_ports(app_handle: tauri::AppHandle, ports: Vec<PortInfo>) -> Result<(), String> {
-    // Tauri app data 디렉토리 사용
-    let app_data_dir = app_handle.path().app_data_dir()
-        .map_err(|e| e.to_string())?;
-
-    // 디렉토리가 없으면 생성
-    if !app_data_dir.exists() {
-        fs::create_dir_all(&app_data_dir)
-            .map_err(|e| format!("Failed to create app data directory: {}", e))?;
-    }
-
+    let app_data_dir = ensure_app_data_dir(&app_handle)?;
     let ports_file = app_data_dir.join("ports.json");
     println!("[SavePorts] Saving {} ports to: {:?}", ports.len(), ports_file);
 
@@ -114,10 +181,7 @@ fn scan_command_files(folder_path: String) -> Result<Vec<String>, String> {
 
 #[tauri::command]
 fn open_app_data_dir(app_handle: tauri::AppHandle) -> Result<(), String> {
-    let app_data_dir = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    if !app_data_dir.exists() {
-        fs::create_dir_all(&app_data_dir).map_err(|e| e.to_string())?;
-    }
+    let app_data_dir = ensure_app_data_dir(&app_handle)?;
     std::process::Command::new("open")
         .arg(&app_data_dir)
         .spawn()
@@ -127,10 +191,7 @@ fn open_app_data_dir(app_handle: tauri::AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn load_portal(app_handle: tauri::AppHandle) -> Result<serde_json::Value, String> {
-    let app_data_dir = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    if !app_data_dir.exists() {
-        fs::create_dir_all(&app_data_dir).map_err(|e| e.to_string())?;
-    }
+    let app_data_dir = ensure_app_data_dir(&app_handle)?;
     let file = app_data_dir.join("portal.json");
     if file.exists() {
         let content = fs::read_to_string(&file).map_err(|e| e.to_string())?;
@@ -142,10 +203,7 @@ fn load_portal(app_handle: tauri::AppHandle) -> Result<serde_json::Value, String
 
 #[tauri::command]
 fn save_portal(app_handle: tauri::AppHandle, data: serde_json::Value) -> Result<(), String> {
-    let app_data_dir = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    if !app_data_dir.exists() {
-        fs::create_dir_all(&app_data_dir).map_err(|e| e.to_string())?;
-    }
+    let app_data_dir = ensure_app_data_dir(&app_handle)?;
     let file = app_data_dir.join("portal.json");
     let content = serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?;
     fs::write(&file, content).map_err(|e| e.to_string())?;
@@ -154,10 +212,7 @@ fn save_portal(app_handle: tauri::AppHandle, data: serde_json::Value) -> Result<
 
 #[tauri::command]
 fn load_workspace_roots(app_handle: tauri::AppHandle) -> Result<serde_json::Value, String> {
-    let app_data_dir = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    if !app_data_dir.exists() {
-        fs::create_dir_all(&app_data_dir).map_err(|e| e.to_string())?;
-    }
+    let app_data_dir = ensure_app_data_dir(&app_handle)?;
     let file = app_data_dir.join("workspace-roots.json");
     if file.exists() {
         let content = fs::read_to_string(&file).map_err(|e| e.to_string())?;
@@ -169,10 +224,7 @@ fn load_workspace_roots(app_handle: tauri::AppHandle) -> Result<serde_json::Valu
 
 #[tauri::command]
 fn save_workspace_roots(app_handle: tauri::AppHandle, roots: serde_json::Value) -> Result<(), String> {
-    let app_data_dir = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    if !app_data_dir.exists() {
-        fs::create_dir_all(&app_data_dir).map_err(|e| e.to_string())?;
-    }
+    let app_data_dir = ensure_app_data_dir(&app_handle)?;
     let file = app_data_dir.join("workspace-roots.json");
     let content = serde_json::to_string_pretty(&roots).map_err(|e| e.to_string())?;
     fs::write(&file, content).map_err(|e| e.to_string())?;
@@ -236,126 +288,22 @@ fn execute_command(
     }
 
     // 로그 파일 경로 생성
-    let app_data_dir = app_handle.path().app_data_dir()
-        .map_err(|e| e.to_string())?;
-
-    let logs_dir = app_data_dir.join("logs");
-
-    // logs 디렉토리가 없으면 생성
-    if !logs_dir.exists() {
-        fs::create_dir_all(&logs_dir)
-            .map_err(|e| format!("Failed to create logs directory: {}", e))?;
-    }
+    let logs_dir = ensure_app_data_dir(&app_handle)?.join("logs");
+    fs::create_dir_all(&logs_dir)
+        .map_err(|e| format!("Failed to create logs directory: {}", e))?;
 
     let log_file = logs_dir.join(format!("{}.log", port_id));
     println!("[ExecuteCommand] Log file: {:?}", log_file);
 
-    // 로그 파일 열기 (append 모드)
-    let log_out = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&log_file)
-        .map_err(|e| format!("Failed to open log file: {}", e))?;
+    let pid = spawn_process(SpawnArgs {
+        port_id: &port_id,
+        command_path: &command_path,
+        is_file_path,
+        folder_path: folder_path.as_deref(),
+        log_file: &log_file,
+    })?;
 
-    let log_err = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&log_file)
-        .map_err(|e| format!("Failed to open log file: {}", e))?;
-
-    // .command 파일에 실행 권한 부여 (파일 경로인 경우만)
-    if is_file_path {
-        let chmod_result = Command::new("chmod")
-            .arg("+x")
-            .arg(&command_path)
-            .output();
-
-        match chmod_result {
-            Ok(out) => {
-                if out.status.success() {
-                    println!("[ExecuteCommand] Successfully set execute permission");
-                } else {
-                    println!("[ExecuteCommand] Warning: chmod failed: {}", String::from_utf8_lossy(&out.stderr));
-                }
-            }
-            Err(e) => {
-                println!("[ExecuteCommand] Warning: chmod error: {}", e);
-            }
-        }
-    }
-
-    // 환경변수 설정 (GUI 앱에서 터미널 환경변수 상속)
-    let home = std::env::var("HOME").unwrap_or_default();
-
-    // PATH 환경변수에 일반적인 경로들 추가
-    let path_additions = vec![
-        format!("{}/.cargo/bin", home),
-        format!("{}/.bun/bin", home),
-        format!("{}/bin", home),
-        "/usr/local/bin".to_string(),
-        "/usr/bin".to_string(),
-        "/bin".to_string(),
-        "/usr/sbin".to_string(),
-        "/sbin".to_string(),
-        "/opt/homebrew/bin".to_string(),
-        "/usr/local/go/bin".to_string(),
-    ];
-
-    let existing_path = std::env::var("PATH").unwrap_or_default();
-    let new_path = if existing_path.is_empty() {
-        path_additions.join(":")
-    } else {
-        format!("{}:{}", path_additions.join(":"), existing_path)
-    };
-
-    // 프로세스 실행 시 stdout, stderr를 로그 파일로 리다이렉트
-    // setsid를 사용하여 새로운 세션으로 실행 (백그라운드 프로세스)
-    if is_file_path {
-        println!("[ExecuteCommand] Executing: bash {}", command_path);
-    } else {
-        println!("[ExecuteCommand] Executing: bash -c {}", command_path);
-    }
-    println!("[ExecuteCommand] PATH: {}", new_path);
-
-    let mut cmd = Command::new("bash");
-    if is_file_path {
-        cmd.arg(&command_path);
-    } else {
-        cmd.arg("-c").arg(&command_path);
-    }
-    // raw 커맨드(terminalCommand)는 folderPath를 cwd로 설정
-    if !is_file_path {
-        if let Some(ref fp) = folder_path {
-            if !fp.is_empty() {
-                cmd.current_dir(fp);
-            }
-        }
-    }
-    cmd
-        .stdout(log_out)
-        .stderr(log_err)
-        .env("PATH", &new_path)
-        .env("HOME", &home);
-
-    // 새로운 프로세스 그룹으로 실행 (백그라운드 데몬화) — Unix 전용
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        unsafe {
-            cmd.pre_exec(|| {
-                // 새로운 세션 리더가 되어 부모와 독립적으로 실행
-                libc::setsid();
-                Ok(())
-            });
-        }
-    }
-
-    let child = cmd.spawn()
-        .map_err(|e| format!("Failed to spawn process: {}", e))?;
-
-    let pid = child.id();
-
-    let mut processes = state.processes.lock().unwrap();
+    let mut processes = state.processes.lock().unwrap_or_else(|e| e.into_inner());
     processes.insert(port_id.clone(), pid);
 
     println!("[ExecuteCommand] Started process with PID: {}", pid);
@@ -371,7 +319,7 @@ fn stop_command(
 ) -> Result<String, String> {
     println!("[StopCommand] Starting stop for port_id: {}, port: {}", port_id, port);
 
-    let mut processes = state.processes.lock().unwrap();
+    let mut processes = state.processes.lock().unwrap_or_else(|e| e.into_inner());
 
     // HashMap에서 PID 제거
     let pid_from_map = processes.remove(&port_id);
@@ -551,7 +499,7 @@ fn force_restart_command(
     }
 
     // HashMap에서도 제거
-    let mut processes = state.processes.lock().unwrap();
+    let mut processes = state.processes.lock().unwrap_or_else(|e| e.into_inner());
     processes.remove(&port_id);
     drop(processes); // lock 해제
 
@@ -571,116 +519,22 @@ fn force_restart_command(
         println!("[ForceRestart] Raw shell command: {}", command_path);
     }
 
-    let app_data_dir = app_handle.path().app_data_dir()
-        .map_err(|e| e.to_string())?;
-
-    let logs_dir = app_data_dir.join("logs");
-
-    // logs 디렉토리가 없으면 생성
-    if !logs_dir.exists() {
-        fs::create_dir_all(&logs_dir)
-            .map_err(|e| format!("Failed to create logs directory: {}", e))?;
-    }
+    let logs_dir = ensure_app_data_dir(&app_handle)?.join("logs");
+    fs::create_dir_all(&logs_dir)
+        .map_err(|e| format!("Failed to create logs directory: {}", e))?;
 
     let log_file = logs_dir.join(format!("{}.log", port_id));
     println!("[ForceRestart] Log file: {:?}", log_file);
 
-    // 로그 파일 열기 (append 모드)
-    let log_out = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&log_file)
-        .map_err(|e| format!("Failed to open log file: {}", e))?;
+    let new_pid = spawn_process(SpawnArgs {
+        port_id: &port_id,
+        command_path: &command_path,
+        is_file_path,
+        folder_path: None,
+        log_file: &log_file,
+    })?;
 
-    let log_err = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&log_file)
-        .map_err(|e| format!("Failed to open log file: {}", e))?;
-
-    // .command 파일에 실행 권한 부여
-    let chmod_result = Command::new("chmod")
-        .arg("+x")
-        .arg(&command_path)
-        .output();
-
-    match chmod_result {
-        Ok(out) => {
-            if out.status.success() {
-                println!("[ForceRestart] Successfully set execute permission");
-            } else {
-                println!("[ForceRestart] Warning: chmod failed: {}", String::from_utf8_lossy(&out.stderr));
-            }
-        }
-        Err(e) => {
-            println!("[ForceRestart] Warning: chmod error: {}", e);
-        }
-    }
-
-    // 환경변수 설정 (GUI 앱에서 터미널 환경변수 상속)
-    let home = std::env::var("HOME").unwrap_or_default();
-
-    // PATH 환경변수에 일반적인 경로들 추가
-    let path_additions = vec![
-        format!("{}/.cargo/bin", home),
-        format!("{}/.bun/bin", home),
-        format!("{}/bin", home),
-        "/usr/local/bin".to_string(),
-        "/usr/bin".to_string(),
-        "/bin".to_string(),
-        "/usr/sbin".to_string(),
-        "/sbin".to_string(),
-        "/opt/homebrew/bin".to_string(),
-        "/usr/local/go/bin".to_string(),
-    ];
-
-    let existing_path = std::env::var("PATH").unwrap_or_default();
-    let new_path = if existing_path.is_empty() {
-        path_additions.join(":")
-    } else {
-        format!("{}:{}", path_additions.join(":"), existing_path)
-    };
-
-    // 프로세스 실행 시 stdout, stderr를 로그 파일로 리다이렉트
-    // setsid를 사용하여 새로운 세션으로 실행 (백그라운드 프로세스)
-    if is_file_path {
-        println!("[ForceRestart] Executing: bash {}", command_path);
-    } else {
-        println!("[ForceRestart] Executing: bash -c {}", command_path);
-    }
-    println!("[ForceRestart] PATH: {}", new_path);
-
-    let mut cmd = Command::new("bash");
-    if is_file_path {
-        cmd.arg(&command_path);
-    } else {
-        cmd.arg("-c").arg(&command_path);
-    }
-    cmd
-        .stdout(log_out)
-        .stderr(log_err)
-        .env("PATH", &new_path)
-        .env("HOME", &home);
-
-    // 새로운 프로세스 그룹으로 실행 (백그라운드 데몬화) — Unix 전용
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        unsafe {
-            cmd.pre_exec(|| {
-                // 새로운 세션 리더가 되어 부모와 독립적으로 실행
-                libc::setsid();
-                Ok(())
-            });
-        }
-    }
-
-    let child = cmd.spawn()
-        .map_err(|e| format!("Failed to spawn process: {}", e))?;
-
-    let new_pid = child.id();
-
-    let mut processes = state.processes.lock().unwrap();
+    let mut processes = state.processes.lock().unwrap_or_else(|e| e.into_inner());
     processes.insert(port_id.clone(), new_pid);
 
     println!("[ForceRestart] Successfully restarted with new PID: {}", new_pid);
@@ -904,16 +758,9 @@ fn open_folder(folder_path: String) -> Result<String, String> {
 #[tauri::command]
 fn open_log(port_id: String, app_handle: tauri::AppHandle) -> Result<String, String> {
     // 로그 파일 경로 생성
-    let app_data_dir = app_handle.path().app_data_dir()
-        .map_err(|e| e.to_string())?;
-
-    let logs_dir = app_data_dir.join("logs");
-
-    // logs 디렉토리가 없으면 생성
-    if !logs_dir.exists() {
-        fs::create_dir_all(&logs_dir)
-            .map_err(|e| format!("Failed to create logs directory: {}", e))?;
-    }
+    let logs_dir = ensure_app_data_dir(&app_handle)?.join("logs");
+    fs::create_dir_all(&logs_dir)
+        .map_err(|e| format!("Failed to create logs directory: {}", e))?;
 
     let log_file = logs_dir.join(format!("{}.log", port_id));
 
@@ -978,10 +825,7 @@ fn open_log(port_id: String, app_handle: tauri::AppHandle) -> Result<String, Str
 
 #[tauri::command]
 fn read_log_content(port_id: String, offset: usize, app_handle: tauri::AppHandle) -> Result<serde_json::Value, String> {
-    let app_data_dir = app_handle.path().app_data_dir()
-        .map_err(|e| e.to_string())?;
-
-    let logs_dir = app_data_dir.join("logs");
+    let logs_dir = ensure_app_data_dir(&app_handle)?.join("logs");
     let log_file = logs_dir.join(format!("{}.log", port_id));
 
     if !log_file.exists() {
@@ -1509,8 +1353,7 @@ fn install_app_to_applications() -> Result<String, String> {
 
 #[tauri::command]
 async fn build_app(build_type: String, app_handle: tauri::AppHandle) -> Result<String, String> {
-    let app_dir = app_handle.path().app_data_dir()
-        .map_err(|e| e.to_string())?
+    let app_dir = ensure_app_data_dir(&app_handle)?
         .parent()
         .ok_or("Cannot get parent directory")?
         .parent()
@@ -2499,4 +2342,22 @@ pub fn run() {
         let _ = (app_handle, event); // Windows/Linux 미사용 인자 경고 억제
       }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+    use std::collections::HashMap;
+
+    #[test]
+    fn poisoned_mutex_recovers() {
+        let m = Mutex::new(HashMap::<String, u32>::new());
+        let _ = std::panic::catch_unwind(|| {
+            let _g = m.lock().unwrap();
+            panic!("intentional poison");
+        });
+        // must not panic — recovers inner value
+        let guard = m.lock().unwrap_or_else(|e| e.into_inner());
+        assert!(guard.is_empty());
+    }
 }
