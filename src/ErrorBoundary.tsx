@@ -4,17 +4,17 @@ interface Props { children: React.ReactNode; }
 interface State { hasError: boolean; error: Error | null; }
 
 export class ErrorBoundary extends React.Component<Props, State> {
-  state: State = { hasError: false, error: null };
+  override state: State = { hasError: false, error: null };
 
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, info: React.ErrorInfo) {
+  override componentDidCatch(error: Error, info: React.ErrorInfo) {
     if (import.meta.env.DEV) console.error('[ErrorBoundary]', error, info);
   }
 
-  render() {
+  override render() {
     if (this.state.hasError) {
       return (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0a0a0b', color: '#ede7dd', fontFamily: 'sans-serif', gap: 12 }}>

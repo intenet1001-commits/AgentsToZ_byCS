@@ -240,17 +240,20 @@ function spawnWslTmux(bashCmd: string, title?: string): void {
 
 /** 포트를 사용 중인 PID 목록 반환 (Windows/macOS 공용) */
 async function getPidsByPort(port: number): Promise<string[]> {
+  // 포트 값 검증 — Supabase 동기화 등 외부 데이터가 들어올 수 있으므로 인젝션 방지
+  const p = Number(port);
+  if (!Number.isInteger(p) || p < 1 || p > 65535) return [];
   if (IS_WIN) {
     const proc = spawn({
       cmd: ['powershell', '-NoProfile', '-NonInteractive', '-Command',
-        `(Get-NetTCPConnection -LocalPort ${port} -ErrorAction SilentlyContinue).OwningProcess | Select-Object -Unique`],
+        `(Get-NetTCPConnection -LocalPort ${p} -ErrorAction SilentlyContinue).OwningProcess | Select-Object -Unique`],
       stdout: 'pipe', stderr: 'pipe',
     });
     await proc.exited;
     const out = await new Response(proc.stdout).text();
     return out.trim().split('\n').map(p => p.trim()).filter(p => /^\d+$/.test(p));
   } else {
-    const proc = spawn({ cmd: ['/usr/sbin/lsof', '-ti', `:${port}`], stdout: 'pipe', stderr: 'pipe' });
+    const proc = spawn({ cmd: ['/usr/sbin/lsof', '-ti', `:${p}`], stdout: 'pipe', stderr: 'pipe' });
     await proc.exited;
     const out = await new Response(proc.stdout).text();
     return out.trim().split('\n').filter(p => p.length > 0);
@@ -314,19 +317,6 @@ function resolveClaudePath(): string | null {
   return null;
 }
 const CLAUDE_PATH = resolveClaudePath();
-
-// Resolve git binary path once at startup
-function resolveGitPath(): string {
-  if (!IS_WIN) {
-    if (existsSync('/opt/homebrew/bin/git')) return '/opt/homebrew/bin/git';
-    if (existsSync('/usr/bin/git')) return '/usr/bin/git';
-  }
-  const finder = IS_WIN ? ['where', 'git'] : ['which', 'git'];
-  const result = Bun.spawnSync(finder, { env: { ...process.env } });
-  const resolved = result.stdout.toString().trim().split('\n')[0].trim();
-  return resolved || 'git';
-}
-// GIT_PATH already declared at line 27
 
 const executableProcesses = new Map<string, any>();
 let buildProcess: any = null;
@@ -671,7 +661,8 @@ const server = Bun.serve({
         // 프로세스 종료 시 처리
         proc.exited.then((code) => {
           devLog(`[Execute] Process for portId ${portId} exited with code: ${code}`);
-          executableProcesses.delete(portId);
+          // 재시작으로 새 프로세스가 등록된 경우 기존 핸들러가 지우지 않도록 가드
+          if (executableProcesses.get(portId) === proc) executableProcesses.delete(portId);
         });
 
         return new Response(
@@ -819,6 +810,13 @@ const server = Bun.serve({
         const isFilePath = IS_WIN
           ? /^([A-Za-z]:[\\\/]|\\\\|~)/.test(commandPath)
           : commandPath.startsWith('/') || commandPath.startsWith('~');
+        // 파일 경로인 경우 존재 여부 확인
+        if (isFilePath && !existsSync(commandPath)) {
+          return new Response(
+            JSON.stringify({ error: `파일을 찾을 수 없습니다: ${commandPath}` }),
+            { status: 400, headers }
+          );
+        }
         const restartCmd = IS_WIN
           ? ['cmd', '/c', commandPath]
           : (isFilePath ? ['/bin/bash', commandPath] : ['/bin/bash', '-c', commandPath]);
@@ -838,7 +836,8 @@ const server = Bun.serve({
         // 프로세스 종료 시 처리
         newProc.exited.then((code) => {
           devLog(`[ForceRestart] Process for portId ${portId} exited with code: ${code}`);
-          executableProcesses.delete(portId);
+          // 재시작으로 새 프로세스가 등록된 경우 기존 핸들러가 지우지 않도록 가드
+          if (executableProcesses.get(portId) === newProc) executableProcesses.delete(portId);
         });
 
         return new Response(
@@ -1015,7 +1014,7 @@ const server = Bun.serve({
         const readStream = async (stream: any, isStderr = false) => {
           const decoder = new TextDecoder();
           for await (const chunk of stream) {
-            const text = decoder.decode(chunk);
+            const text = decoder.decode(chunk, { stream: true });
             pushLogBounded(buildStatus.output, text);
             if (isStderr) {
               console.error(`[Build] ${text}`);
@@ -1088,7 +1087,7 @@ const server = Bun.serve({
         const readStream = async (stream: any, isStderr = false) => {
           const decoder = new TextDecoder();
           for await (const chunk of stream) {
-            const text = decoder.decode(chunk);
+            const text = decoder.decode(chunk, { stream: true });
             pushLogBounded(deployStatus.output, text);
             // URL 파싱: https://xxxxx.vercel.app
             const m = text.match(/https:\/\/[a-zA-Z0-9-]+\.vercel\.app/);
@@ -2180,22 +2179,43 @@ end try`);
 
         devLog(`[InstallApp] Installing from: ${appPath} to: ${destPath}`);
 
+        // 빌드 결과물 존재 확인
+        if (!existsSync(appPath)) {
+          return new Response(
+            JSON.stringify({ success: false, error: `빌드된 앱을 찾을 수 없습니다: ${appPath}` }),
+            { status: 400, headers }
+          );
+        }
+
         // 기존 앱이 있으면 삭제
         if (existsSync(destPath)) {
-          spawn({
+          const rmProc = spawn({
             cmd: ["rm", "-rf", destPath],
             stdout: "inherit",
             stderr: "inherit",
           });
-          await new Promise(resolve => setTimeout(resolve, 500));
+          const rmCode = await rmProc.exited;
+          if (rmCode !== 0) {
+            return new Response(
+              JSON.stringify({ success: false, error: `기존 앱 삭제 실패 (exit code: ${rmCode})` }),
+              { status: 500, headers }
+            );
+          }
         }
 
         // 앱 복사
-        spawn({
+        const cpProc = spawn({
           cmd: ["cp", "-R", appPath, destPath],
           stdout: "inherit",
           stderr: "inherit",
         });
+        const cpCode = await cpProc.exited;
+        if (cpCode !== 0) {
+          return new Response(
+            JSON.stringify({ success: false, error: `앱 복사 실패 (exit code: ${cpCode})` }),
+            { status: 500, headers }
+          );
+        }
 
         return new Response(
           JSON.stringify({
@@ -2401,7 +2421,7 @@ end try`);
       const readWinStream = async (stream: any) => {
         const decoder = new TextDecoder();
         for await (const chunk of stream) {
-          pushLogBounded(buildStatus.output, decoder.decode(chunk));
+          pushLogBounded(buildStatus.output, decoder.decode(chunk, { stream: true }));
         }
       };
       const wo = readWinStream(buildProcess.stdout);
@@ -2454,11 +2474,11 @@ end try`);
             });
             const readPromise = (async () => {
               const decoder = new TextDecoder();
-              for await (const chunk of install1.stdout) log(decoder.decode(chunk).trim());
+              for await (const chunk of install1.stdout) log(decoder.decode(chunk, { stream: true }).trim());
             })();
             const readErr = (async () => {
               const decoder = new TextDecoder();
-              for await (const chunk of install1.stderr) log(decoder.decode(chunk).trim());
+              for await (const chunk of install1.stderr) log(decoder.decode(chunk, { stream: true }).trim());
             })();
             const code1 = await install1.exited;
             await Promise.all([readPromise, readErr]);
@@ -2507,8 +2527,9 @@ end try`);
     }
 
     if (url.pathname === "/api/git-pull" && req.method === "POST") {
+      let folderPath: string | undefined;
       try {
-        const { folderPath } = await req.json() as { folderPath: string };
+        ({ folderPath } = await req.json() as { folderPath: string });
         if (!folderPath) return new Response(JSON.stringify({ success: false, error: "folderPath 필요" }), { headers });
 
         const branchProc = Bun.spawn([GIT_PATH, "rev-parse", "--abbrev-ref", "HEAD"], {
@@ -2538,8 +2559,9 @@ end try`);
     }
 
     if (url.pathname === "/api/git-push" && req.method === "POST") {
+      let folderPath: string | undefined;
       try {
-        const { folderPath } = await req.json() as { folderPath: string };
+        ({ folderPath } = await req.json() as { folderPath: string });
         if (!folderPath) return new Response(JSON.stringify({ success: false, error: "folderPath 필요" }), { headers });
 
         const branchProc = Bun.spawn([GIT_PATH, "rev-parse", "--abbrev-ref", "HEAD"], {
@@ -3022,8 +3044,10 @@ end try`);
     }
 
     if (url.pathname === "/api/git-merge-branch" && req.method === "POST") {
+      let folderPath: string | undefined;
       try {
-        const { folderPath, branchName } = await req.json();
+        let branchName: string | undefined;
+        ({ folderPath, branchName } = await req.json());
         if (!folderPath || !branchName) {
           return new Response(JSON.stringify({ error: "folderPath and branchName required" }), { status: 400, headers });
         }
@@ -3192,24 +3216,32 @@ ${summaries}`;
 
     // AI: suggest-category (legacy, kept for backward compat)
     if (url.pathname === "/api/suggest-category" && req.method === "POST") {
-      const { folderPath, name } = await req.json();
-      const res = await fetch(`http://localhost:${server.port}/api/suggest-name-and-category`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folderPath, name }),
-      });
-      const d = await res.json() as any;
-      return new Response(JSON.stringify({ category: d.category ?? null }), { headers });
+      try {
+        const { folderPath, name } = await req.json();
+        const res = await fetch(`http://localhost:${server.port}/api/suggest-name-and-category`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folderPath, name }),
+        });
+        const d = await res.json() as any;
+        return new Response(JSON.stringify({ category: d.category ?? null }), { headers });
+      } catch (e: any) {
+        return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
+      }
     }
 
     // AI: suggest-name (legacy, kept for backward compat)
     if (url.pathname === "/api/suggest-name" && req.method === "POST") {
-      const { folderPath } = await req.json();
-      const res = await fetch(`http://localhost:${server.port}/api/suggest-name-and-category`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folderPath }),
-      });
-      const d = await res.json() as any;
-      return new Response(JSON.stringify({ suggestions: d.name ? [d.name] : [] }), { headers });
+      try {
+        const { folderPath } = await req.json();
+        const res = await fetch(`http://localhost:${server.port}/api/suggest-name-and-category`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folderPath }),
+        });
+        const d = await res.json() as any;
+        return new Response(JSON.stringify({ suggestions: d.name ? [d.name] : [] }), { headers });
+      } catch (e: any) {
+        return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
+      }
     }
 
     // AI: name + category in ONE claude call (fast path)

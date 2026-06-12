@@ -6,11 +6,12 @@
  */
 
 import { join } from "node:path";
+import { homedir } from "os";
 import { existsSync, readdirSync, copyFileSync, mkdirSync, statSync } from "node:fs";
 
 const PROJECT_DIR = import.meta.dir;
 // .cargo/config.toml의 target-dir 설정과 동일한 경로 (iCloud 밖)
-const CARGO_TARGET_DIR = join(process.env.HOME || "", "cargo-targets/portmanager");
+const CARGO_TARGET_DIR = process.env.CARGO_TARGET_DIR ?? join(homedir(), "cargo-targets", "portmanager");
 const MACOS_DIR = join(CARGO_TARGET_DIR, "release/bundle/macos");
 const DMG_DIR = join(CARGO_TARGET_DIR, "release/bundle/dmg");
 // CARGO_TARGET_DIR 미설정 시 fallback (기본 src-tauri/target)
@@ -50,8 +51,8 @@ async function fixDmg() {
       const files = readdirSync(MACOS_DIR);
       const tempDmgFiles = files.filter(f => f.startsWith("rw.") && f.endsWith(".dmg"));
 
-      if (tempDmgFiles.length > 0) {
-        const latestTempDmg = tempDmgFiles.sort().reverse()[0];
+      const latestTempDmg = tempDmgFiles.sort().reverse()[0];
+      if (latestTempDmg) {
         const tempDmgPath = join(MACOS_DIR, latestTempDmg);
         const finalDmgName = latestTempDmg.replace(/^rw\.\d+\./, "");
         const finalDmgPath = join(DMG_DIR, finalDmgName);
@@ -66,10 +67,11 @@ async function fixDmg() {
 
     if (existsSync(FALLBACK_DMG_DIR)) {
       const fallbackFiles = readdirSync(FALLBACK_DMG_DIR).filter(f => f.endsWith(".dmg") && !f.startsWith("rw."));
-      if (fallbackFiles.length > 0) {
-        const latest = fallbackFiles
-          .map(f => ({ name: f, mtime: statSync(join(FALLBACK_DMG_DIR, f)).mtime.getTime() }))
-          .sort((a, b) => b.mtime - a.mtime)[0].name;
+      const latestFallback = fallbackFiles
+        .map(f => ({ name: f, mtime: statSync(join(FALLBACK_DMG_DIR, f)).mtime.getTime() }))
+        .sort((a, b) => b.mtime - a.mtime)[0];
+      if (latestFallback) {
+        const latest = latestFallback.name;
         const dest = join(DMG_DIR, latest);
         if (!existsSync(dest)) {
           const src = join(FALLBACK_DMG_DIR, latest);

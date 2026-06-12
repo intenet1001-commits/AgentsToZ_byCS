@@ -63,7 +63,7 @@ if (isDmg) {
 // 4. 버전 파일 git commit (push는 수동)
 const gitAdd = await $`git add build-number.json src-tauri/tauri.conf.json src-tauri/icons/`.nothrow();
 if (gitAdd.exitCode === 0) {
-  const gitCommit = await $`git commit -m "chore: bump to v${newVersion}"`.nothrow();
+  const gitCommit = await $`git commit -m "chore: bump to v${newVersion}" -- build-number.json src-tauri/tauri.conf.json src-tauri/icons/`.nothrow();
   if (gitCommit.exitCode === 0) {
     console.log(`\n📦 버전 v${newVersion} commit 완료 — git push로 GitHub에 반영하세요`);
   } else {

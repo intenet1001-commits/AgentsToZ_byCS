@@ -82,14 +82,14 @@ const API = {
     }
   },
 
-  async forceRestartCommand(portId: string, port: number, commandPath: string): Promise<void> {
+  async forceRestartCommand(portId: string, port: number, commandPath: string, folderPath?: string): Promise<void> {
     if (isTauri()) {
-      return invoke('force_restart_command', { portId, port, commandPath });
+      return invoke('force_restart_command', { portId, port, commandPath, folderPath: folderPath ?? null });
     } else {
       const response = await fetch('/api/force-restart-command', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ portId, port, commandPath })
+        body: JSON.stringify({ portId, port, commandPath, folderPath })
       });
       const result = await response.json();
       if (!result.success) throw new Error(result.error);
@@ -552,6 +552,13 @@ const API = {
   },
 
   async suggestNameAndCategory(folderPath: string, name: string): Promise<{ name: string | null; category: string | null }> {
+    if (isTauri()) {
+      // Tauri: Rust 커맨드 사용 (이름 후보 배열 반환, 카테고리는 미지원 → null)
+      try {
+        const suggestions = await invoke<string[]>('suggest_name', { folderPath });
+        return { name: suggestions[0] ?? null, category: null };
+      } catch { return { name: null, category: null }; }
+    }
     try {
       const res = await fetch('/api/suggest-name-and-category', {
         method: 'POST',
@@ -564,6 +571,15 @@ const API = {
   },
 
   async suggestBatch(ports: Array<{ id: string; folderPath: string; name: string; aiName?: string }>): Promise<Array<{ id: string; name: string | null; category: string | null }>> {
+    if (isTauri()) {
+      // Tauri: Rust 커맨드 사용 (id→이름 매핑 객체 반환, 카테고리는 미지원 → null)
+      try {
+        const result = await invoke<Record<string, unknown>>('suggest_names_batch', { ports });
+        return Object.entries(result ?? {}).map(([id, name]) => ({
+          id, name: typeof name === 'string' ? name : null, category: null,
+        }));
+      } catch { return []; }
+    }
     try {
       const res = await fetch('/api/suggest-batch', {
         method: 'POST',
@@ -778,6 +794,8 @@ const mergePorts = (local: PortInfo[], remote: PortInfo[]): PortInfo[] => {
       ...p, ...r,
       isRunning: p.isRunning,
       aiName: r.aiName ?? p.aiName,
+      category: p.category ?? r.category,
+      terminalCommand: p.terminalCommand ?? r.terminalCommand,
       folderPath: p.folderPath ?? r.folderPath,
       commandPath: p.commandPath ?? r.commandPath,
       worktreePath: p.worktreePath ?? r.worktreePath,
@@ -817,9 +835,11 @@ const dedupeFolderRows = (rows: PortInfo[]): PortInfo[] => {
 
 // 다른 기기 Pull 전용 병합: name 기준으로 매칭, 새 항목만 새 ID로 추가
 // 경로(folderPath, commandPath)는 기기마다 다르므로 기존 로컬 것 유지
-const mergePortsFromOtherDevice = (local: PortInfo[], remote: PortInfo[]): PortInfo[] => {
+// idMap: 원격 row id → 로컬 id (메모 등 id 기반 데이터 재매핑용)
+const mergePortsFromOtherDevice = (local: PortInfo[], remote: PortInfo[]): { merged: PortInfo[]; idMap: Map<string, string> } => {
   const result = new Map(local.map(p => [p.id, p]));
   const localByName = new Map(local.map(p => [p.name?.toLowerCase(), p.id]));
+  const idMap = new Map<string, string>();
 
   for (const r of remote) {
     const key = r.name?.toLowerCase();
@@ -836,21 +856,35 @@ const mergePortsFromOtherDevice = (local: PortInfo[], remote: PortInfo[]): PortI
         description: r.description ?? existing.description,
         category: r.category ?? existing.category,
       });
+      idMap.set(r.id, existingId);
     } else {
-      // 새 프로젝트 → 새 ID 발급, 경로는 비워둠 (이 기기에서 직접 설정 필요)
+      // 새 프로젝트 → 새 ID 발급, 경로/명령은 비워둠 (이 기기에서 직접 설정 필요)
       const newId = crypto.randomUUID();
       const newPort: PortInfo = {
         ...r,
         id: newId,
         folderPath: undefined,
         commandPath: undefined,
+        terminalCommand: undefined,
         isRunning: false,
       };
       result.set(newId, newPort);
       localByName.set(key, newId);
+      idMap.set(r.id, newId);
     }
   }
-  return Array.from(result.values());
+  return { merged: Array.from(result.values()), idMap };
+};
+
+// 현재 플랫폼 경로 여부 판별 (다른 OS 경로의 포트는 화면에서 숨기되 파일에는 보존)
+const isWinPath = (p: string) => /^[A-Za-z]:[/\\]/.test(p);
+const isMacPath = (p: string) => /^\/Users\/|^\/home\//.test(p);
+const isCurrentPlatformPath = (port: PortInfo) => {
+  const paths = [port.folderPath, port.commandPath].filter(Boolean) as string[];
+  if (paths.length === 0) return true;
+  const isWin = (typeof process !== 'undefined' && process.platform === 'win32') || /Win/.test(navigator.platform ?? '');
+  if (isWin) return paths.every(p => !isMacPath(p));
+  return paths.every(p => !isWinPath(p));
 };
 
 
@@ -959,10 +993,11 @@ function MemoAccordionItem({ portId, memo, onSave }: {
 }
 
 // WSL 설치/설정 안내 모달
-function WslSetupModal({ status, onClose, onInstallTmux }: {
+function WslSetupModal({ status, onClose, onInstallTmux, showToast }: {
   status: string;
   onClose: () => void;
   onInstallTmux: () => void;
+  showToast: (message: string, type?: 'success' | 'error', duration?: number) => void;
 }) {
   const Step = ({ n, text }: { n: number; text: React.ReactNode }) => (
     <li className="flex gap-2">
@@ -1135,7 +1170,15 @@ function App() {
   const [wslSetupStatus, setWslSetupStatus] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteRootConfirmId, setDeleteRootConfirmId] = useState<string | null>(null);
-  const [memos, setMemos] = useState<Record<string, { content: string; updatedAt: string }>>({});
+  const [memos, setMemos] = useState<Record<string, { content: string; updatedAt: string }>>(() => {
+    // localStorage 미러에서 복원 (Supabase 없이도 재시작 후 메모 유지)
+    try { return JSON.parse(localStorage.getItem('portmanager-memos') || '{}'); } catch { return {}; }
+  });
+  const memosRef = useRef(memos);
+  useEffect(() => {
+    memosRef.current = memos;
+    try { localStorage.setItem('portmanager-memos', JSON.stringify(memos)); } catch {}
+  }, [memos]);
   const [sortBy, setSortBy] = useState<SortType>(
     () => (localStorage.getItem('portmanager-sortBy') as SortType) || 'recent'
   );
@@ -1254,6 +1297,13 @@ function App() {
   const [buildType, setBuildType] = useState<'app' | 'dmg' | 'windows'>('app');
   const lastLogIndexRef = useRef<number>(0);
   const isBuildingRef = useRef(false);
+  const buildSeqRef = useRef(0); // 빌드 세대 — 이전 빌드의 타임아웃이 새 빌드를 오판하지 않도록
+  const buildPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const buildTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (buildPollRef.current) clearInterval(buildPollRef.current);
+    if (buildTimeoutRef.current) clearTimeout(buildTimeoutRef.current);
+  }, []);
   const buildLogContainerRef = useRef<HTMLDivElement>(null);
   // Port log viewer modal state
   const [showPortLog, setShowPortLog] = useState(false);
@@ -1285,6 +1335,9 @@ function App() {
   // (otherwise local state has only this Mac's rows and would delete other Macs' remote data)
   const autopullSucceeded = useRef(false);
   const autopushReady = useRef(false); // Supabase 푸시 전용 게이트 (pull 완료 후 true)
+  // 다른 OS 경로의 포트 — 화면/Push에서는 제외하되 파일 저장 시 보존
+  const otherPlatformPortsRef = useRef<PortInfo[]>([]);
+  const toastSeqRef = useRef(0);
   const appLogRef = useRef<string[]>([]);
   const [logCopied, setLogCopied] = useState(false);
 
@@ -1306,8 +1359,10 @@ function App() {
   useEffect(() => {
     if (isTauri()) return;
     let timerId: ReturnType<typeof setTimeout>;
+    let cancelled = false;
 
     const check = async () => {
+      if (cancelled) return;
       let online = false;
       try {
         const res = await Promise.race([
@@ -1318,12 +1373,13 @@ function App() {
       } catch {
         online = false;
       }
+      if (cancelled) return; // cleanup이 await 중에 실행된 경우 재스케줄 금지
       setApiServerOnline(online);
       timerId = setTimeout(check, online ? 30_000 : 2_000);
     };
 
     check();
-    return () => clearTimeout(timerId);
+    return () => { cancelled = true; clearTimeout(timerId); };
   }, []);
 
   // API 서버가 온라인으로 전환될 때 포트 재로드 (초기 로드 실패 복구)
@@ -1375,7 +1431,8 @@ function App() {
 
   // 토스트 배너 표시 함수
   const showToast = (message: string, type: 'success' | 'error' = 'success', duration = type === 'error' ? 8000 : 3000): number => {
-    const id = Date.now();
+    const id = ++toastSeqRef.current; // Date.now()는 같은 ms 내 충돌 가능
+
     setToasts(prev => [...prev, { id, message, type }]);
     if (duration > 0) {
       setTimeout(() => {
@@ -1976,15 +2033,8 @@ function App() {
         }
 
         // commandPath가 있는데 folderPath가 없는 경우 자동으로 추출
-        const isWinPath = (p: string) => /^[A-Za-z]:[/\\]/.test(p);
-        const isMacPath = (p: string) => /^\/Users\/|^\/home\//.test(p);
-        const isCurrentPlatformPath = (port: PortInfo) => {
-          const paths = [port.folderPath, port.commandPath].filter(Boolean) as string[];
-          if (paths.length === 0) return true;
-          const isWin = (typeof process !== 'undefined' && process.platform === 'win32') || /Win/.test(navigator.platform ?? '');
-          if (isWin) return paths.every(p => !isMacPath(p));
-          return paths.every(p => !isWinPath(p));
-        };
+        // 다른 OS 경로의 포트는 화면에서 제외하되 ref에 보관 → 파일 저장 시 다시 합쳐 영구 삭제 방지
+        otherPlatformPortsRef.current = data.filter((port: PortInfo) => !isCurrentPlatformPath(port));
         const updatedData = data
           .filter(isCurrentPlatformPath)
           .map((port: PortInfo) => {
@@ -2046,11 +2096,25 @@ function App() {
                 remoteData.forEach((row: any) => {
                   if (row.memo != null) pulledMemos[row.id] = { content: row.memo, updatedAt: row.memo_updated_at ?? '' };
                 });
-                if (Object.keys(pulledMemos).length > 0) setMemos(prev => ({ ...prev, ...pulledMemos }));
+                // 로컬/원격 중 updatedAt이 최신인 메모 유지
+                if (Object.keys(pulledMemos).length > 0) {
+                  setMemos(prev => {
+                    const next = { ...prev };
+                    for (const [mid, m] of Object.entries(pulledMemos)) {
+                      const localMemo = next[mid];
+                      if (!localMemo || (m.updatedAt ?? '') >= (localMemo.updatedAt ?? '')) next[mid] = m;
+                    }
+                    return next;
+                  });
+                }
               }
 
               autopushReady.current = true;      // Supabase push 허용 (pull 완료)
-              autopullSucceeded.current = true;  // Fix P2g: mark pull succeeded → delete pass is now safe
+              if (!error) {
+                autopullSucceeded.current = true;  // Fix P2g: pull 성공 시에만 delete pass 허용
+              } else {
+                console.warn('[App] Auto-pull query error:', (error as any)?.message ?? error);
+              }
 
               // workspace_roots 자동 Pull (빈 결과면 로컬 덮어쓰기 방지)
               const deviceId = portalData.deviceId;
@@ -2345,8 +2409,8 @@ function App() {
           favorite: p.favorite ?? false,
           device_id: deviceId,
           device_name: deviceNameVal,
-          memo: memos[p.id]?.content ?? null,
-          memo_updated_at: memos[p.id]?.updatedAt ?? null,
+          memo: memosRef.current[p.id]?.content ?? null,
+          memo_updated_at: memosRef.current[p.id]?.updatedAt ?? null,
         }));
         let upsertErr = (await supabase.from('portmgr_ports').upsert(rows, { onConflict: 'id' })).error;
         if (upsertErr?.message?.includes('device_id') || upsertErr?.message?.includes('device_name')) {
@@ -2356,11 +2420,10 @@ function App() {
         if (upsertErr) throw new Error(upsertErr.message);
         // Fix P2: delete remote rows whose IDs are no longer in local list
         // Fix P2g: skip delete pass if auto-pull never succeeded — local state may be incomplete
-        // Step 4: scope stale-delete to this device only to avoid clobbering other devices
-        if (autopullSucceeded.current) {
+        // Step 4: scope stale-delete to this device only — deviceId 없으면 전 기기 삭제 위험이라 skip
+        if (autopullSucceeded.current && deviceId) {
           const localIds = ownedPorts.map(p => p.id);
-          let remoteQuery = supabase.from('portmgr_ports').select('id');
-          if (deviceId) remoteQuery = remoteQuery.eq('device_id', deviceId);
+          const remoteQuery = supabase.from('portmgr_ports').select('id').eq('device_id', deviceId);
           const { data: remoteRows } = await remoteQuery;
           const staleIds = (remoteRows ?? []).map((r: any) => r.id).filter((id: string) => !localIds.includes(id));
           if (staleIds.length > 0) {
@@ -2389,7 +2452,8 @@ function App() {
       if (import.meta.env.DEV) console.log('[App] Saving ports, count:', ports.length);
       const savePortsData = async () => {
         try {
-          await API.savePorts(ports);
+          // 파일에는 다른 OS 경로 항목도 함께 보존 (화면/Push 목록은 ports만 사용)
+          await API.savePorts([...ports, ...otherPlatformPortsRef.current]);
           if (import.meta.env.DEV) console.log('[App] Ports saved successfully');
         } catch (error) {
           console.error('[App] Failed to save ports:', error);
@@ -2406,7 +2470,8 @@ function App() {
       try {
         const data = await API.loadPorts();
         skipNextSave.current = true; // 파일에서 읽어온 데이터는 다시 저장하지 않음
-        setPorts(data);
+        otherPlatformPortsRef.current = data.filter((p: PortInfo) => !isCurrentPlatformPath(p));
+        setPorts(data.filter(isCurrentPlatformPath));
         if (!hasInitiallyLoaded.current) {
           hasInitiallyLoaded.current = true;
         }
@@ -2620,7 +2685,7 @@ function App() {
         showToast(`${item.name} 파일을 열었습니다!`, 'success');
       } else {
         await API.executeCommand(item.id, runTarget, item.folderPath);
-        setPorts(ports.map(p =>
+        setPorts(prev => prev.map(p =>
           p.id === item.id ? { ...p, isRunning: true } : p
         ));
         showToast(`${item.name} 서버가 시작되었습니다!`, 'success');
@@ -2642,7 +2707,7 @@ function App() {
   const stopCommand = async (item: PortInfo) => {
     try {
       await API.stopCommand(item.id, item.port ?? 0);
-      setPorts(ports.map(p =>
+      setPorts(prev => prev.map(p =>
         p.id === item.id ? { ...p, isRunning: false } : p
       ));
       showToast(`${item.name} 서버가 중지되었습니다!`, 'success');
@@ -2686,8 +2751,8 @@ function App() {
         await API.openFolder(item.commandPath);
         showToast(`${item.name} 파일을 열었습니다!`, 'success');
       } else {
-        await API.forceRestartCommand(item.id, item.port ?? 0, runTarget);
-        setPorts(ports.map(p =>
+        await API.forceRestartCommand(item.id, item.port ?? 0, runTarget, item.folderPath);
+        setPorts(prev => prev.map(p =>
           p.id === item.id ? { ...p, isRunning: true } : p
         ));
         showToast(`${item.name} 서버가 강제 재실행되었습니다!`, 'success');
@@ -2892,18 +2957,36 @@ function App() {
 
       // 다른 기기 Pull → name 기준 병합 + 새 ID 발급 (ID 충돌 방지)
       // 내 기기 Pull → ID 기준 병합 (기존 동작 유지)
-      const merged = isOtherDevice
-        ? mergePortsFromOtherDevice(ports, remoteRows)
-        : mergePorts(ports, remoteRows);
+      let idMap: Map<string, string> | null = null;
+      let merged: PortInfo[];
+      if (isOtherDevice) {
+        const result = mergePortsFromOtherDevice(ports, remoteRows);
+        merged = result.merged;
+        idMap = result.idMap;
+      } else {
+        merged = mergePorts(ports, remoteRows);
+      }
       setPorts(merged);
       await API.savePorts(merged);
 
-      // 메모 복원
+      // 메모 복원 — 다른 기기 Pull 시 원격 row id를 새 로컬 id로 재매핑
       const pulledMemos: Record<string, { content: string; updatedAt: string }> = {};
       (data ?? []).forEach((row: any) => {
-        if (row.memo != null) pulledMemos[row.id] = { content: row.memo, updatedAt: row.memo_updated_at ?? '' };
+        if (row.memo != null) {
+          const memoKey = idMap?.get(row.id) ?? row.id;
+          pulledMemos[memoKey] = { content: row.memo, updatedAt: row.memo_updated_at ?? '' };
+        }
       });
-      if (Object.keys(pulledMemos).length > 0) setMemos(prev => ({ ...prev, ...pulledMemos }));
+      if (Object.keys(pulledMemos).length > 0) {
+        setMemos(prev => {
+          const next = { ...prev };
+          for (const [mid, m] of Object.entries(pulledMemos)) {
+            const localMemo = next[mid];
+            if (!localMemo || (m.updatedAt ?? '') >= (localMemo.updatedAt ?? '')) next[mid] = m;
+          }
+          return next;
+        });
+      }
 
       let rootsMsg = '';
       // 다른 기기 Pull 시 작업루트는 건드리지 않음 (경로가 기기마다 다름)
@@ -3046,11 +3129,10 @@ function App() {
       }
       // Fix P2: delete remote rows whose IDs are no longer in local list
       // Fix P2g: skip delete pass if auto-pull never succeeded — pull first before deleting
-      // Step 4: scope stale-delete to this device only to avoid clobbering other devices
-      if (autopullSucceeded.current) {
+      // Step 4: scope stale-delete to this device only — deviceId 없으면 전 기기 삭제 위험이라 skip
+      if (autopullSucceeded.current && deviceId) {
         const localIds = ownedPorts.map(p => p.id);
-        let remoteQuery = supabase.from('portmgr_ports').select('id');
-        if (deviceId) remoteQuery = remoteQuery.eq('device_id', deviceId);
+        const remoteQuery = supabase.from('portmgr_ports').select('id').eq('device_id', deviceId);
         const { data: remoteRows } = await remoteQuery;
         const staleIds = (remoteRows ?? []).map((r: any) => r.id).filter((id: string) => !localIds.includes(id));
         if (staleIds.length > 0) {
@@ -3324,6 +3406,10 @@ function App() {
     setShowBuildLog(true);
     setIsBuilding(true);
 
+    const seq = ++buildSeqRef.current; // 이전 빌드 타이머 무효화
+    if (buildPollRef.current) clearInterval(buildPollRef.current);
+    if (buildTimeoutRef.current) clearTimeout(buildTimeoutRef.current);
+
     try {
       const message = await API.buildApp('app');
       setBuildLogs(prev => [...prev, message]);
@@ -3345,6 +3431,7 @@ function App() {
 
           if (!status.isBuilding) {
             clearInterval(pollInterval);
+            if (buildTimeoutRef.current) clearTimeout(buildTimeoutRef.current);
             setIsBuilding(false);
             if (status.exitCode === 0) {
               setBuildLogs(prev => [...prev, '✅ 빌드가 완료되었습니다!']);
@@ -3356,9 +3443,11 @@ function App() {
           console.error('Failed to poll build status:', e);
         }
       }, 1000);
+      buildPollRef.current = pollInterval;
 
-      // 10분 후 타임아웃
-      setTimeout(() => {
+      // 10분 후 타임아웃 (이후 시작된 빌드에는 적용 안 함)
+      buildTimeoutRef.current = setTimeout(() => {
+        if (seq !== buildSeqRef.current) return;
         clearInterval(pollInterval);
         if (isBuildingRef.current) {
           setIsBuilding(false);
@@ -3366,6 +3455,7 @@ function App() {
         }
       }, 600000);
     } catch (error) {
+      if (buildTimeoutRef.current) clearTimeout(buildTimeoutRef.current);
       setBuildLogs(prev => [...prev, '❌ App 빌드 실패: ' + error]);
       setIsBuilding(false);
     }
@@ -3379,6 +3469,10 @@ function App() {
     lastLogIndexRef.current = 0;
     setShowBuildLog(true);
     setIsBuilding(true);
+
+    const seq = ++buildSeqRef.current; // 이전 빌드 타이머 무효화
+    if (buildPollRef.current) clearInterval(buildPollRef.current);
+    if (buildTimeoutRef.current) clearTimeout(buildTimeoutRef.current);
 
     try {
       const message = await API.buildDmg();
@@ -3401,6 +3495,7 @@ function App() {
 
           if (!status.isBuilding) {
             clearInterval(pollInterval);
+            if (buildTimeoutRef.current) clearTimeout(buildTimeoutRef.current);
             setIsBuilding(false);
             if (status.exitCode === 0) {
               setBuildLogs(prev => [...prev, '✅ 빌드가 완료되었습니다!']);
@@ -3412,9 +3507,11 @@ function App() {
           console.error('Failed to poll build status:', e);
         }
       }, 1000);
+      buildPollRef.current = pollInterval;
 
-      // 10분 후 타임아웃
-      setTimeout(() => {
+      // 10분 후 타임아웃 (이후 시작된 빌드에는 적용 안 함)
+      buildTimeoutRef.current = setTimeout(() => {
+        if (seq !== buildSeqRef.current) return;
         clearInterval(pollInterval);
         if (isBuildingRef.current) {
           setIsBuilding(false);
@@ -3422,6 +3519,7 @@ function App() {
         }
       }, 600000);
     } catch (error) {
+      if (buildTimeoutRef.current) clearTimeout(buildTimeoutRef.current);
       setBuildLogs(prev => [...prev, '❌ DMG 빌드 실패: ' + error]);
       setIsBuilding(false);
     }
@@ -5746,6 +5844,7 @@ function App() {
             status={wslSetupStatus}
             onClose={() => setWslSetupStatus(null)}
             onInstallTmux={handleInstallWslTmux}
+            showToast={showToast}
           />
         )}
 

@@ -42,14 +42,14 @@ async function detectPort(filePath: string): Promise<number | null> {
 
     // localhost:포트 패턴 검색
     const localhostMatch = content.match(/localhost:(\d+)/);
-    if (localhostMatch) {
-      return parseInt(localhostMatch[1]);
+    if (localhostMatch?.[1]) {
+      return parseInt(localhostMatch[1], 10);
     }
 
     // PORT=포트 또는 port=포트 패턴 검색
     const portMatch = content.match(/(?:PORT|port)\s*=\s*(\d+)/);
-    if (portMatch) {
-      return parseInt(portMatch[1]);
+    if (portMatch?.[1]) {
+      return parseInt(portMatch[1], 10);
     }
 
     return null;
@@ -61,8 +61,9 @@ async function detectPort(filePath: string): Promise<number | null> {
 
 async function main() {
   const args = process.argv.slice(2);
+  const filePath = args[0];
 
-  if (args.length === 0) {
+  if (!filePath) {
     console.log(`
 📦 포트 관리 프로그램 - 명령어 파일 추가 도구
 
@@ -76,17 +77,12 @@ async function main() {
 또는 드래그앤드롭으로 사용하려면:
   .command 파일을 이 스크립트 위에 드래그하세요!
     `);
-    process.exit(0);
+    process.exit(1);
   }
-
-  const filePath = args[0];
-  let projectName = args[1];
 
   // 파일 경로에서 프로젝트 이름 추출 (제공되지 않은 경우)
-  if (!projectName) {
-    const fileName = filePath.split('/').pop()?.replace('.command', '') || 'Unknown';
-    projectName = fileName;
-  }
+  const projectName: string =
+    args[1] ?? (filePath.split('/').pop()?.replace('.command', '') || 'Unknown');
 
   console.log(`\n📁 파일: ${filePath}`);
   console.log(`📝 프로젝트: ${projectName}\n`);
