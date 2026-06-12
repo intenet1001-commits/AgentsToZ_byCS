@@ -42,17 +42,18 @@ struct AppState {
     processes: Mutex<HashMap<String, u32>>,
 }
 
+fn ensure_app_data_dir(app_handle: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    let data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?;
+    fs::create_dir_all(&data_dir).map_err(|e| format!("Failed to create app data directory: {}", e))?;
+    Ok(data_dir)
+}
+
 #[tauri::command]
 fn load_ports(app_handle: tauri::AppHandle) -> Result<Vec<PortInfo>, String> {
-    // Tauri app data 디렉토리 사용
-    let app_data_dir = app_handle.path().app_data_dir()
-        .map_err(|e| e.to_string())?;
-
-    // 디렉토리가 없으면 생성
-    if !app_data_dir.exists() {
-        fs::create_dir_all(&app_data_dir)
-            .map_err(|e| format!("Failed to create app data directory: {}", e))?;
-    }
+    let app_data_dir = ensure_app_data_dir(&app_handle)?;
 
     let ports_file = app_data_dir.join("ports.json");
 
@@ -69,16 +70,7 @@ fn load_ports(app_handle: tauri::AppHandle) -> Result<Vec<PortInfo>, String> {
 
 #[tauri::command]
 fn save_ports(app_handle: tauri::AppHandle, ports: Vec<PortInfo>) -> Result<(), String> {
-    // Tauri app data 디렉토리 사용
-    let app_data_dir = app_handle.path().app_data_dir()
-        .map_err(|e| e.to_string())?;
-
-    // 디렉토리가 없으면 생성
-    if !app_data_dir.exists() {
-        fs::create_dir_all(&app_data_dir)
-            .map_err(|e| format!("Failed to create app data directory: {}", e))?;
-    }
-
+    let app_data_dir = ensure_app_data_dir(&app_handle)?;
     let ports_file = app_data_dir.join("ports.json");
     println!("[SavePorts] Saving {} ports to: {:?}", ports.len(), ports_file);
 
@@ -114,10 +106,7 @@ fn scan_command_files(folder_path: String) -> Result<Vec<String>, String> {
 
 #[tauri::command]
 fn open_app_data_dir(app_handle: tauri::AppHandle) -> Result<(), String> {
-    let app_data_dir = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    if !app_data_dir.exists() {
-        fs::create_dir_all(&app_data_dir).map_err(|e| e.to_string())?;
-    }
+    let app_data_dir = ensure_app_data_dir(&app_handle)?;
     std::process::Command::new("open")
         .arg(&app_data_dir)
         .spawn()
@@ -127,10 +116,7 @@ fn open_app_data_dir(app_handle: tauri::AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn load_portal(app_handle: tauri::AppHandle) -> Result<serde_json::Value, String> {
-    let app_data_dir = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    if !app_data_dir.exists() {
-        fs::create_dir_all(&app_data_dir).map_err(|e| e.to_string())?;
-    }
+    let app_data_dir = ensure_app_data_dir(&app_handle)?;
     let file = app_data_dir.join("portal.json");
     if file.exists() {
         let content = fs::read_to_string(&file).map_err(|e| e.to_string())?;
@@ -142,10 +128,7 @@ fn load_portal(app_handle: tauri::AppHandle) -> Result<serde_json::Value, String
 
 #[tauri::command]
 fn save_portal(app_handle: tauri::AppHandle, data: serde_json::Value) -> Result<(), String> {
-    let app_data_dir = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    if !app_data_dir.exists() {
-        fs::create_dir_all(&app_data_dir).map_err(|e| e.to_string())?;
-    }
+    let app_data_dir = ensure_app_data_dir(&app_handle)?;
     let file = app_data_dir.join("portal.json");
     let content = serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?;
     fs::write(&file, content).map_err(|e| e.to_string())?;
@@ -154,10 +137,7 @@ fn save_portal(app_handle: tauri::AppHandle, data: serde_json::Value) -> Result<
 
 #[tauri::command]
 fn load_workspace_roots(app_handle: tauri::AppHandle) -> Result<serde_json::Value, String> {
-    let app_data_dir = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    if !app_data_dir.exists() {
-        fs::create_dir_all(&app_data_dir).map_err(|e| e.to_string())?;
-    }
+    let app_data_dir = ensure_app_data_dir(&app_handle)?;
     let file = app_data_dir.join("workspace-roots.json");
     if file.exists() {
         let content = fs::read_to_string(&file).map_err(|e| e.to_string())?;
@@ -169,10 +149,7 @@ fn load_workspace_roots(app_handle: tauri::AppHandle) -> Result<serde_json::Valu
 
 #[tauri::command]
 fn save_workspace_roots(app_handle: tauri::AppHandle, roots: serde_json::Value) -> Result<(), String> {
-    let app_data_dir = app_handle.path().app_data_dir().map_err(|e| e.to_string())?;
-    if !app_data_dir.exists() {
-        fs::create_dir_all(&app_data_dir).map_err(|e| e.to_string())?;
-    }
+    let app_data_dir = ensure_app_data_dir(&app_handle)?;
     let file = app_data_dir.join("workspace-roots.json");
     let content = serde_json::to_string_pretty(&roots).map_err(|e| e.to_string())?;
     fs::write(&file, content).map_err(|e| e.to_string())?;
@@ -236,16 +213,9 @@ fn execute_command(
     }
 
     // 로그 파일 경로 생성
-    let app_data_dir = app_handle.path().app_data_dir()
-        .map_err(|e| e.to_string())?;
-
-    let logs_dir = app_data_dir.join("logs");
-
-    // logs 디렉토리가 없으면 생성
-    if !logs_dir.exists() {
-        fs::create_dir_all(&logs_dir)
-            .map_err(|e| format!("Failed to create logs directory: {}", e))?;
-    }
+    let logs_dir = ensure_app_data_dir(&app_handle)?.join("logs");
+    fs::create_dir_all(&logs_dir)
+        .map_err(|e| format!("Failed to create logs directory: {}", e))?;
 
     let log_file = logs_dir.join(format!("{}.log", port_id));
     println!("[ExecuteCommand] Log file: {:?}", log_file);
@@ -355,7 +325,7 @@ fn execute_command(
 
     let pid = child.id();
 
-    let mut processes = state.processes.lock().unwrap();
+    let mut processes = state.processes.lock().unwrap_or_else(|e| e.into_inner());
     processes.insert(port_id.clone(), pid);
 
     println!("[ExecuteCommand] Started process with PID: {}", pid);
@@ -371,7 +341,7 @@ fn stop_command(
 ) -> Result<String, String> {
     println!("[StopCommand] Starting stop for port_id: {}, port: {}", port_id, port);
 
-    let mut processes = state.processes.lock().unwrap();
+    let mut processes = state.processes.lock().unwrap_or_else(|e| e.into_inner());
 
     // HashMap에서 PID 제거
     let pid_from_map = processes.remove(&port_id);
@@ -551,7 +521,7 @@ fn force_restart_command(
     }
 
     // HashMap에서도 제거
-    let mut processes = state.processes.lock().unwrap();
+    let mut processes = state.processes.lock().unwrap_or_else(|e| e.into_inner());
     processes.remove(&port_id);
     drop(processes); // lock 해제
 
@@ -571,16 +541,9 @@ fn force_restart_command(
         println!("[ForceRestart] Raw shell command: {}", command_path);
     }
 
-    let app_data_dir = app_handle.path().app_data_dir()
-        .map_err(|e| e.to_string())?;
-
-    let logs_dir = app_data_dir.join("logs");
-
-    // logs 디렉토리가 없으면 생성
-    if !logs_dir.exists() {
-        fs::create_dir_all(&logs_dir)
-            .map_err(|e| format!("Failed to create logs directory: {}", e))?;
-    }
+    let logs_dir = ensure_app_data_dir(&app_handle)?.join("logs");
+    fs::create_dir_all(&logs_dir)
+        .map_err(|e| format!("Failed to create logs directory: {}", e))?;
 
     let log_file = logs_dir.join(format!("{}.log", port_id));
     println!("[ForceRestart] Log file: {:?}", log_file);
@@ -680,7 +643,7 @@ fn force_restart_command(
 
     let new_pid = child.id();
 
-    let mut processes = state.processes.lock().unwrap();
+    let mut processes = state.processes.lock().unwrap_or_else(|e| e.into_inner());
     processes.insert(port_id.clone(), new_pid);
 
     println!("[ForceRestart] Successfully restarted with new PID: {}", new_pid);
@@ -904,16 +867,9 @@ fn open_folder(folder_path: String) -> Result<String, String> {
 #[tauri::command]
 fn open_log(port_id: String, app_handle: tauri::AppHandle) -> Result<String, String> {
     // 로그 파일 경로 생성
-    let app_data_dir = app_handle.path().app_data_dir()
-        .map_err(|e| e.to_string())?;
-
-    let logs_dir = app_data_dir.join("logs");
-
-    // logs 디렉토리가 없으면 생성
-    if !logs_dir.exists() {
-        fs::create_dir_all(&logs_dir)
-            .map_err(|e| format!("Failed to create logs directory: {}", e))?;
-    }
+    let logs_dir = ensure_app_data_dir(&app_handle)?.join("logs");
+    fs::create_dir_all(&logs_dir)
+        .map_err(|e| format!("Failed to create logs directory: {}", e))?;
 
     let log_file = logs_dir.join(format!("{}.log", port_id));
 
@@ -978,10 +934,7 @@ fn open_log(port_id: String, app_handle: tauri::AppHandle) -> Result<String, Str
 
 #[tauri::command]
 fn read_log_content(port_id: String, offset: usize, app_handle: tauri::AppHandle) -> Result<serde_json::Value, String> {
-    let app_data_dir = app_handle.path().app_data_dir()
-        .map_err(|e| e.to_string())?;
-
-    let logs_dir = app_data_dir.join("logs");
+    let logs_dir = ensure_app_data_dir(&app_handle)?.join("logs");
     let log_file = logs_dir.join(format!("{}.log", port_id));
 
     if !log_file.exists() {
@@ -1509,8 +1462,7 @@ fn install_app_to_applications() -> Result<String, String> {
 
 #[tauri::command]
 async fn build_app(build_type: String, app_handle: tauri::AppHandle) -> Result<String, String> {
-    let app_dir = app_handle.path().app_data_dir()
-        .map_err(|e| e.to_string())?
+    let app_dir = ensure_app_data_dir(&app_handle)?
         .parent()
         .ok_or("Cannot get parent directory")?
         .parent()
@@ -2499,4 +2451,22 @@ pub fn run() {
         let _ = (app_handle, event); // Windows/Linux 미사용 인자 경고 억제
       }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+    use std::collections::HashMap;
+
+    #[test]
+    fn poisoned_mutex_recovers() {
+        let m = Mutex::new(HashMap::<String, u32>::new());
+        let _ = std::panic::catch_unwind(|| {
+            let _g = m.lock().unwrap();
+            panic!("intentional poison");
+        });
+        // must not panic — recovers inner value
+        let guard = m.lock().unwrap_or_else(|e| e.into_inner());
+        assert!(guard.is_empty());
+    }
 }
