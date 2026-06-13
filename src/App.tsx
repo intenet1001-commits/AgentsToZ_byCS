@@ -1291,7 +1291,6 @@ function App() {
   const [remappingPaths, setRemappingPaths] = useState<Record<string, string>>({});
   const [isBuilding, setIsBuilding] = useState(false);
   const [showBuildLog, setShowBuildLog] = useState(false);
-  const [updateInfo, setUpdateInfo] = useState<{ version: string; body?: string | null } | null>(null);
   const [canAutoInstall, setCanAutoInstall] = useState(false);
   const [buildLogs, setBuildLogs] = useState<string[]>([]);
   const [buildType, setBuildType] = useState<'app' | 'dmg' | 'windows'>('app');
@@ -1340,20 +1339,6 @@ function App() {
   const toastSeqRef = useRef(0);
   const appLogRef = useRef<string[]>([]);
   const [logCopied, setLogCopied] = useState(false);
-
-  // 자동 업데이트 체크 (Tauri 전용)
-  useEffect(() => {
-    if (!isTauri()) return;
-    (async () => {
-      try {
-        const { check } = await import('@tauri-apps/plugin-updater');
-        const update = await check();
-        if (update) setUpdateInfo({ version: update.version, body: update.body });
-      } catch {
-        // 업데이트 서버 미설정 또는 네트워크 오류 — 무시
-      }
-    })();
-  }, []);
 
   // API 서버 헬스 체크 (웹 모드 전용) — 오프라인 시 2초, 온라인 시 30초 간격
   useEffect(() => {
@@ -4577,22 +4562,6 @@ function App() {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden" style={{background:'#15120f'}}>
-      {updateInfo && (
-        <div className="fixed top-0 left-0 right-0 z-50 bg-blue-600/95 text-white text-sm px-4 py-2 flex items-center justify-between">
-          <span>🆕 새 버전 <strong>{updateInfo.version}</strong>이 있습니다</span>
-          <div className="flex items-center gap-2">
-            <button onClick={async () => {
-              try {
-                const { check } = await import('@tauri-apps/plugin-updater');
-                const { relaunch } = await import('@tauri-apps/plugin-process');
-                const update = await check();
-                if (update) { await update.downloadAndInstall(); await relaunch(); }
-              } catch (e) { showToast(`업데이트 실패: ${String(e)}`, 'error'); }
-            }} className="px-3 py-0.5 bg-white/20 rounded hover:bg-white/30 text-xs font-medium">지금 업데이트</button>
-            <button onClick={() => setUpdateInfo(null)} className="px-2 py-0.5 bg-white/10 rounded hover:bg-white/20 text-xs">나중에</button>
-          </div>
-        </div>
-      )}
       {!isTauri() && apiServerOnline === false && (
         <div className="fixed top-0 left-0 right-0 z-50 bg-amber-500/90 text-black text-sm px-4 py-2 flex items-center justify-between">
           <span>⚠️ API 서버가 꺼져 있습니다. <code className="bg-black/10 px-1 rounded">bun run start</code> 로 실행하세요. Supabase는 캐시된 인증 정보로 동작합니다.</span>
