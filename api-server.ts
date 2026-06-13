@@ -1,6 +1,6 @@
 import { spawn } from "bun";
 import { basename, isAbsolute, join } from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, openSync, closeSync } from "node:fs";
 import { homedir } from "node:os";
 
 /** Escape single quotes for use inside single-quoted shell strings: ' → '\'' */
@@ -264,6 +264,43 @@ async function getPidsByPort(port: number): Promise<string[]> {
   }
 }
 
+/** LISTEN 중인 모든 TCP 포트를 단 1회 spawn으로 수집 (Windows/macOS 공용).
+ * 배경: 프론트의 10초 폴링이 포트당 lsof를 1회씩 spawn(~35개 = 틱당 ~35 spawn)
+ * 하면서 장시간 실행 시 메모리/프로세스 압박 — 스냅샷 1회로 전부 응답한다. */
+async function getListeningPortsSnapshot(): Promise<Set<number>> {
+  const listening = new Set<number>();
+  try {
+    if (IS_WIN) {
+      const proc = spawn({
+        cmd: ['powershell', '-NoProfile', '-NonInteractive', '-Command',
+          '(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue).LocalPort | Select-Object -Unique'],
+        stdout: 'pipe', stderr: 'pipe',
+      });
+      await proc.exited;
+      const out = await new Response(proc.stdout).text();
+      for (const line of out.split('\n')) {
+        const n = Number(line.trim());
+        if (Number.isInteger(n) && n >= 1 && n <= 65535) listening.add(n);
+      }
+    } else {
+      const proc = spawn({ cmd: ['/usr/sbin/lsof', '-nP', '-iTCP', '-sTCP:LISTEN'], stdout: 'pipe', stderr: 'pipe' });
+      await proc.exited;
+      const out = await new Response(proc.stdout).text();
+      for (const line of out.split('\n')) {
+        // NAME 컬럼: *:3001 / 127.0.0.1:5173 / [::1]:8080 (LISTEN) — 마지막 콜론 뒤가 포트
+        const m = line.match(/:(\d+)\s+\(LISTEN\)\s*$/);
+        if (m) {
+          const n = Number(m[1]);
+          if (n >= 1 && n <= 65535) listening.add(n);
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[CheckPortsBatch] listening snapshot failed:', e);
+  }
+  return listening;
+}
+
 /** PID 종료 (Windows/macOS 공용) */
 async function killPid(pid: string, force = false): Promise<void> {
   if (IS_WIN) {
@@ -408,6 +445,47 @@ const APP_DATA_DIR = process.platform === 'win32'
 const PORTS_DATA_FILE = join(APP_DATA_DIR, "ports.json");
 const WORKSPACE_ROOTS_FILE = join(APP_DATA_DIR, "workspace-roots.json");
 const PORTAL_DATA_FILE = join(APP_DATA_DIR, "portal.json");
+
+// ──────────────── 포트 로그 회전 + append fd ────────────────
+const LOG_ROTATE_MAX_BYTES = 10 * 1024 * 1024; // 10MB 초과 시 회전
+const LOG_ROTATE_KEEP_BYTES = 1024 * 1024;     // 마지막 ~1MB만 유지
+
+/** portId를 파일명으로 쓰기 안전한지 검증 (경로 탈출 방지) */
+const isSafeLogId = (id: string): boolean => /^[A-Za-z0-9._-]+$/.test(id);
+
+/** logs/{portId}.log가 10MB 초과면 마지막 ~1MB만 남기고 truncate.
+ * Rust 측(execute_command)의 동일 가드 미러 — 무한 append로 디스크/메모리
+ * (read-log 폴링이 파일을 읽음)가 폭주하지 않도록 spawn 전에 호출한다. */
+async function rotateLogIfNeeded(portId: string): Promise<void> {
+  try {
+    if (!isSafeLogId(portId)) return;
+    const logFile = join(APP_DATA_DIR, 'logs', `${portId}.log`);
+    const f = Bun.file(logFile);
+    if (!(await f.exists())) return;
+    const size = f.size;
+    if (size <= LOG_ROTATE_MAX_BYTES) return;
+    // tail 부분만 읽어 재작성 — 전체 파일을 메모리에 올리지 않음
+    const tail = await f.slice(size - LOG_ROTATE_KEEP_BYTES).arrayBuffer();
+    await Bun.write(logFile, tail);
+    devLog(`[LogRotate] ${portId}.log: ${size} bytes → kept last ${tail.byteLength} bytes`);
+  } catch (e) {
+    console.error('[LogRotate] rotation failed:', e);
+  }
+}
+
+/** logs/{portId}.log를 append 모드로 열어 fd 반환 (spawn stdout/stderr 리다이렉트용).
+ * 실패 시 null — 호출부는 'inherit'로 폴백. spawn 직후 parent 쪽 fd는 닫을 것. */
+function openLogAppendFd(portId: string): number | null {
+  try {
+    if (!isSafeLogId(portId)) return null;
+    const logsDir = join(APP_DATA_DIR, 'logs');
+    if (!existsSync(logsDir)) mkdirSync(logsDir, { recursive: true });
+    return openSync(join(logsDir, `${portId}.log`), 'a');
+  } catch (e) {
+    console.error('[LogRotate] failed to open log fd:', e);
+    return null;
+  }
+}
 
 // 다른 기기에서 동기된 경로를 현재 기기 경로로 자동 수정
 function remapPathsToCurrentUser(ports: any[]): { ports: any[]; changed: boolean } {
@@ -702,13 +780,20 @@ const server = Bun.serve({
           : (isFilePath ? ['/bin/bash', commandPath] : ['/bin/bash', '-c', commandPath]);
         devLog(`[Execute] Starting process: ${cmd.join(' ')}`);
 
+        // 자식 출력을 logs/{portId}.log로 리다이렉트 (Rust 측과 동일 경로).
+        // append 전에 10MB 초과 시 tail ~1MB만 남기고 회전 — 무한 append 방지.
+        await rotateLogIfNeeded(portId);
+        const logFd = openLogAppendFd(portId);
+
         const proc = spawn({
           cmd,
           cwd: (!isFilePath && folderPath) ? folderPath : undefined,
-          stdout: "inherit",
-          stderr: "inherit",
+          stdout: logFd ?? "inherit",
+          stderr: logFd ?? "inherit",
           stdin: "ignore",
         });
+        // 자식이 fd를 상속받았으므로 parent 쪽 복사본은 즉시 닫는다 (fd 누수 방지)
+        if (logFd !== null) { try { closeSync(logFd); } catch { /* already closed */ } }
 
         executableProcesses.set(portId, proc);
 
@@ -879,12 +964,17 @@ const server = Bun.serve({
           : (isFilePath ? ['/bin/bash', commandPath] : ['/bin/bash', '-c', commandPath]);
         devLog(`[ForceRestart] Starting new process: ${restartCmd.join(' ')}`);
 
+        // execute-command와 동일: 로그 회전 후 logs/{portId}.log로 append 리다이렉트
+        await rotateLogIfNeeded(portId);
+        const restartLogFd = openLogAppendFd(portId);
+
         const newProc = spawn({
           cmd: restartCmd,
-          stdout: "inherit",
-          stderr: "inherit",
+          stdout: restartLogFd ?? "inherit",
+          stderr: restartLogFd ?? "inherit",
           stdin: "ignore",
         });
+        if (restartLogFd !== null) { try { closeSync(restartLogFd); } catch { /* already closed */ } }
 
         executableProcesses.set(portId, newProc);
 
@@ -948,6 +1038,31 @@ const server = Bun.serve({
             success: false,
             error: error.message,
           }),
+          { status: 500, headers }
+        );
+      }
+    }
+
+    // 일괄 포트 상태 확인 — lsof 1회 스냅샷으로 N개 포트를 모두 응답.
+    // 10초 폴링이 포트당 /api/check-port-status를 호출하던 spawn 폭주의 대체 경로.
+    // (기존 per-port 엔드포인트는 legacy shim 규칙에 따라 유지)
+    if (url.pathname === "/api/check-ports-batch" && req.method === "POST") {
+      try {
+        const { ports } = await req.json();
+        if (!Array.isArray(ports) || ports.length > 500 ||
+            !ports.every((p: unknown) => Number.isInteger(p) && (p as number) >= 1 && (p as number) <= 65535)) {
+          return new Response(
+            JSON.stringify({ success: false, error: "ports must be an array of integers 1-65535 (max 500)" }),
+            { status: 400, headers }
+          );
+        }
+        const listening = await getListeningPortsSnapshot();
+        const results = (ports as number[]).map((port) => ({ port, isRunning: listening.has(port) }));
+        return new Response(JSON.stringify({ success: true, results }), { headers });
+      } catch (error: any) {
+        console.error(`[CheckPortsBatch] Error:`, error);
+        return new Response(
+          JSON.stringify({ success: false, error: error.message }),
           { status: 500, headers }
         );
       }
@@ -3989,3 +4104,26 @@ ${missing.includes("portmgr_device_credentials") ? `CREATE TABLE IF NOT EXISTS p
 
 // 시작 배너는 항상 출력 (devLog 게이트 무관)
 console.log(`🚀 API Server running at http://localhost:${server.port}`);
+
+// ──────────────── RSS self-watchdog ────────────────
+// 장시간 실행 중 메모리 폭주(수십 GB) 최후 방어선. supervisor가 없으므로
+// 자동 종료(exit)는 하지 않는다 — 경고 + 강제 GC만 수행. 경고는 5분에 1회.
+const RSS_WARN_BYTES = 1.5 * 1024 * 1024 * 1024;
+const RSS_CRITICAL_BYTES = 2.5 * 1024 * 1024 * 1024;
+const gb = (n: number) => (n / 1024 ** 3).toFixed(2);
+let lastRssWarnAt = 0;
+setInterval(() => {
+  try {
+    const rss = process.memoryUsage().rss;
+    if (rss <= RSS_WARN_BYTES) return;
+    const now = Date.now();
+    if (now - lastRssWarnAt < 5 * 60 * 1000) return;
+    lastRssWarnAt = now;
+    console.error(`[MemWatchdog] RSS ${gb(rss)}GB > ${gb(RSS_WARN_BYTES)}GB — running Bun.gc(true)`);
+    Bun.gc(true);
+    const after = process.memoryUsage().rss;
+    if (after > RSS_CRITICAL_BYTES) {
+      console.error(`[MemWatchdog] CRITICAL: RSS still ${gb(after)}GB after GC — server is in an abnormal state. restart via 실행.command`);
+    }
+  } catch { /* watchdog must never crash the server */ }
+}, 60_000);

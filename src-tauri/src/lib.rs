@@ -660,6 +660,99 @@ fn check_port_status(port: u16) -> Result<bool, String> {
     }
 }
 
+#[derive(Debug, Serialize)]
+struct PortStatusResult {
+    port: u16,
+    #[serde(rename = "isRunning")]
+    is_running: bool,
+}
+
+/// 모든 LISTEN 포트를 단일 lsof/netstat 호출로 수집 → 요청된 포트들의 상태를 일괄 응답.
+/// 프론트엔드 10초 폴링이 포트당 1회 spawn하던 것을 틱당 1회로 줄임.
+#[tauri::command]
+fn check_ports_status_batch(ports: Vec<u16>) -> Vec<PortStatusResult> {
+    use std::collections::HashSet;
+
+    const MAX_PORTS: usize = 500;
+    let ports: Vec<u16> = ports.into_iter().take(MAX_PORTS).collect();
+
+    let mut listening: HashSet<u16> = HashSet::new();
+
+    #[cfg(target_os = "macos")]
+    {
+        // 단일 lsof 호출로 모든 LISTEN 소켓 조회
+        let output = Command::new("lsof")
+            .arg("-nP")
+            .arg("-iTCP")
+            .arg("-sTCP:LISTEN")
+            .output();
+
+        match output {
+            Ok(out) => {
+                let text = String::from_utf8_lossy(&out.stdout);
+                for line in text.lines() {
+                    // NAME 컬럼(마지막 필드)의 마지막 콜론 뒤가 포트 번호
+                    // 예: "*:5173 (LISTEN)" 또는 "127.0.0.1:3001 (LISTEN)"
+                    if let Some(name) = line.split_whitespace().rev().find(|f| f.contains(':')) {
+                        if let Some(idx) = name.rfind(':') {
+                            if let Ok(p) = name[idx + 1..].parse::<u16>() {
+                                listening.insert(p);
+                            }
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                println!("[CheckPortsBatch] Error running lsof: {}", e);
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        // 단일 netstat 호출로 모든 LISTENING 소켓 조회
+        let output = Command::new("netstat")
+            .args(["-ano", "-p", "tcp"])
+            .output();
+
+        match output {
+            Ok(out) => {
+                let text = String::from_utf8_lossy(&out.stdout);
+                for line in text.lines() {
+                    if !line.contains("LISTENING") {
+                        continue;
+                    }
+                    // 형식: "  TCP    0.0.0.0:5173    0.0.0.0:0    LISTENING    1234"
+                    if let Some(local) = line.split_whitespace().nth(1) {
+                        if let Some(idx) = local.rfind(':') {
+                            if let Ok(p) = local[idx + 1..].parse::<u16>() {
+                                listening.insert(p);
+                            }
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                println!("[CheckPortsBatch] Error running netstat: {}", e);
+            }
+        }
+    }
+
+    println!(
+        "[CheckPortsBatch] Checked {} ports, {} listening sockets found",
+        ports.len(),
+        listening.len()
+    );
+
+    ports
+        .into_iter()
+        .map(|port| PortStatusResult {
+            port,
+            is_running: listening.contains(&port),
+        })
+        .collect()
+}
+
 #[tauri::command]
 fn detect_port(file_path: String) -> Result<Option<u16>, String> {
     let content = fs::read_to_string(&file_path)
@@ -2518,6 +2611,7 @@ pub fn run() {
         force_restart_command,
         detect_port,
         check_port_status,
+        check_ports_status_batch,
         build_app,
         install_app_to_applications,
         open_build_folder,

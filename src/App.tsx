@@ -301,6 +301,24 @@ const API = {
     }
   },
 
+  // 여러 포트 상태를 단일 호출로 일괄 확인 (포트당 lsof/HTTP 1회 → 전체 1회)
+  async checkPortsStatusBatch(ports: number[]): Promise<{ port: number; isRunning: boolean }[]> {
+    if (ports.length === 0) return [];
+    if (isTauri()) {
+      return invoke<{ port: number; isRunning: boolean }[]>('check_ports_status_batch', { ports });
+    } else {
+      const response = await fetch('/api/check-ports-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ports }),
+        signal: AbortSignal.timeout(8000),
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error);
+      return result.results;
+    }
+  },
+
   async openLog(portId: string): Promise<void> {
     if (isTauri()) {
       return invoke('open_log', { portId });
@@ -2136,23 +2154,21 @@ function App() {
           autopushReady.current = true; // portal 로드 실패해도 push 허용
         }
 
-        // 앱 시작 시 포트 상태 자동 확인 (병렬)
+        // 앱 시작 시 포트 상태 자동 확인 (배치 — 단일 호출)
         const withPorts = updatedData.filter((p: PortInfo) => p.port);
         if (withPorts.length > 0) {
-          const statusChecks = withPorts.map(async (port: PortInfo) => {
-            try {
-              const isRunning = await API.checkPortStatus(port.port!);
-              return { id: port.id, isRunning };
-            } catch {
-              return { id: port.id, isRunning: false };
-            }
-          });
-          const results = await Promise.all(statusChecks);
+          const uniquePorts = [...new Set(withPorts.map((p: PortInfo) => p.port!))];
+          let statusByPort = new Map<number, boolean>();
+          try {
+            const batchResults = await API.checkPortsStatusBatch(uniquePorts);
+            statusByPort = new Map(batchResults.map(r => [r.port, r.isRunning]));
+          } catch {
+            // 배치 실패 → 기존 per-port catch와 동일하게 전부 false 취급
+          }
           setPorts(prev =>
-            prev.map(p => {
-              const result = results.find(r => r.id === p.id);
-              return result ? { ...p, isRunning: result.isRunning } : p;
-            })
+            prev.map(p =>
+              p.port ? { ...p, isRunning: statusByPort.get(p.port) ?? false } : p
+            )
           );
         }
       } catch (error) {
@@ -2201,21 +2217,25 @@ function App() {
       try {
         const withPorts = portsRef.current.filter(p => p.port);
         if (withPorts.length === 0) return;
-        const results = await Promise.all(
-          withPorts.map(async p => {
-            try { return { id: p.id, isRunning: await API.checkPortStatus(p.port!) }; }
-            catch { return { id: p.id, isRunning: false }; }
-          })
-        );
+        // 배치 API 1회 호출 (포트당 HTTP/invoke + lsof 1회 → 전체 1회)
+        const uniquePorts = [...new Set(withPorts.map(p => p.port!))];
+        let statusByPort = new Map<number, boolean>();
+        try {
+          const batchResults = await API.checkPortsStatusBatch(uniquePorts);
+          statusByPort = new Map(batchResults.map(r => [r.port, r.isRunning]));
+        } catch {
+          // 배치 실패 → 기존 per-port catch와 동일하게 전부 false 취급 (statusByPort 비어 있음)
+        }
         setPorts(prev => {
           // isRunning이 실제로 바뀐 포트만 새 객체 생성 — 불필요한 객체 교체가
           // ports-save effect(디스크 쓰기)·Supabase auto-push를 10초마다 유발하는 것 방지
           let changed = false;
           const next = prev.map(p => {
-            const r = results.find(r => r.id === p.id);
-            if (!r || !!p.isRunning === r.isRunning) return p;
+            if (!p.port) return p; // 포트 번호 없는 항목(폴더 전용)은 기존처럼 건너뜀
+            const isRunning = statusByPort.get(p.port) ?? false;
+            if (!!p.isRunning === isRunning) return p;
             changed = true;
-            return { ...p, isRunning: r.isRunning };
+            return { ...p, isRunning };
           });
           return changed ? next : prev;
         });
@@ -3279,20 +3299,25 @@ function App() {
           } catch {}
         }
 
-        // 포트 상태 확인 (포트 번호가 있는 경우만)
-        if (updated.port) {
-          try {
-            const isRunning = await API.checkPortStatus(updated.port);
-            updated.isRunning = isRunning;
-          } catch (e) {
-            console.error(`Failed to check port status for ${updated.port}:`, e);
-          }
-        }
-
         return updated;
       });
 
       const updatedData = await Promise.all(updatedDataPromises);
+
+      // 포트 상태 일괄 확인 (배치 — 포트당 lsof 1회 대신 단일 호출)
+      const refreshPorts = [...new Set(updatedData.filter(p => p.port).map(p => p.port!))];
+      if (refreshPorts.length > 0) {
+        try {
+          const batchResults = await API.checkPortsStatusBatch(refreshPorts);
+          const statusByPort = new Map(batchResults.map(r => [r.port, r.isRunning]));
+          for (const p of updatedData) {
+            // 결과에 없는 포트는 기존 isRunning 유지 (기존 per-port catch 동작과 동일)
+            if (p.port) p.isRunning = statusByPort.get(p.port) ?? p.isRunning;
+          }
+        } catch (e) {
+          console.error('Failed to batch-check port status:', e);
+        }
+      }
 
       _refreshed = updatedData;
       setPorts(updatedData);
