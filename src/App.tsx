@@ -1313,6 +1313,7 @@ function App() {
   const portLogContainerRef = useRef<HTMLDivElement>(null);
   const portLogOffsetRef = useRef<number>(0);
   const portLogPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const portLogPollBusyRef = useRef(false); // 로그 폴링 in-flight 가드 — 느린 틱이 다음 틱과 겹치는 것 방지
   const [workspaceRoots, setWorkspaceRoots] = useState<WorkspaceRoot[]>([]);
   const [workspaceRootsOpen, setWorkspaceRootsOpen] = useState(false);
   const [visitCounts, setVisitCounts] = useState<{ portId: string; count: number }[]>([]);
@@ -2188,24 +2189,39 @@ function App() {
   // 10초 간격 포트 상태 자동 폴링 (portsRef로 최신 ports 참조 — dependency loop 방지)
   const portsRef = useRef<PortInfo[]>([]);
   useEffect(() => { portsRef.current = ports; }, [ports]);
+  const portStatusPollBusyRef = useRef(false); // in-flight 가드 — 느린 틱이 다음 틱과 겹치는 것 방지
   useEffect(() => {
     const interval = setInterval(async () => {
       // 창이 숨김/최소화/백그라운드(다른 데스크톱·occluded)일 땐 폴링 작업을 건너뜀 —
       // agent view 등 다른 작업 중 불필요한 lsof spawn·리렌더로 자원 소모 방지.
       // 다시 포커스되면 focus 핸들러가 포트를 자동 reload하므로 즉시 최신 상태 복구됨.
       if (typeof document !== 'undefined' && document.hidden) return;
-      const withPorts = portsRef.current.filter(p => p.port);
-      if (withPorts.length === 0) return;
-      const results = await Promise.all(
-        withPorts.map(async p => {
-          try { return { id: p.id, isRunning: await API.checkPortStatus(p.port!) }; }
-          catch { return { id: p.id, isRunning: false }; }
-        })
-      );
-      setPorts(prev => prev.map(p => {
-        const r = results.find(r => r.id === p.id);
-        return r ? { ...p, isRunning: r.isRunning } : p;
-      }));
+      if (portStatusPollBusyRef.current) return;
+      portStatusPollBusyRef.current = true;
+      try {
+        const withPorts = portsRef.current.filter(p => p.port);
+        if (withPorts.length === 0) return;
+        const results = await Promise.all(
+          withPorts.map(async p => {
+            try { return { id: p.id, isRunning: await API.checkPortStatus(p.port!) }; }
+            catch { return { id: p.id, isRunning: false }; }
+          })
+        );
+        setPorts(prev => {
+          // isRunning이 실제로 바뀐 포트만 새 객체 생성 — 불필요한 객체 교체가
+          // ports-save effect(디스크 쓰기)·Supabase auto-push를 10초마다 유발하는 것 방지
+          let changed = false;
+          const next = prev.map(p => {
+            const r = results.find(r => r.id === p.id);
+            if (!r || !!p.isRunning === r.isRunning) return p;
+            changed = true;
+            return { ...p, isRunning: r.isRunning };
+          });
+          return changed ? next : prev;
+        });
+      } finally {
+        portStatusPollBusyRef.current = false;
+      }
     }, 10000);
     return () => clearInterval(interval);
   }, []);
@@ -2328,6 +2344,7 @@ function App() {
         clearInterval(portLogPollingRef.current);
         portLogPollingRef.current = null;
       }
+      portLogPollBusyRef.current = false;
     };
   }, []);
 
@@ -3325,7 +3342,9 @@ function App() {
       clearInterval(portLogPollingRef.current);
       portLogPollingRef.current = null;
     }
+    portLogPollBusyRef.current = false;
 
+    const MAX_LOG_LINES = 500; // 슬라이딩 윈도우 — 초기 로드/폴링 공통 적용 (렌더 성능 보호)
     try {
       // Initial load
       const data = await API.readLogContent(portId, 0);
@@ -3333,14 +3352,16 @@ function App() {
         setPortLogs(['로그 파일이 아직 생성되지 않았습니다.', '', '서버를 이 앱에서 실행하면 로그가 기록됩니다.']);
       } else {
         const lines = data.content.split('\n').filter((l: string) => l.length > 0);
-        setPortLogs(lines.length > 0 ? lines : ['(로그가 비어 있습니다)']);
+        setPortLogs(lines.length > 0 ? lines.slice(-MAX_LOG_LINES) : ['(로그가 비어 있습니다)']);
         portLogOffsetRef.current = data.size;
       }
       setIsLoadingPortLog(false);
 
       // Start polling for new content
-      const MAX_LOG_LINES = 500;
       portLogPollingRef.current = setInterval(async () => {
+        // in-flight 가드 — 이전 틱이 아직 진행 중이면 건너뜀 (다중 MB 전송 중첩 방지)
+        if (portLogPollBusyRef.current) return;
+        portLogPollBusyRef.current = true;
         try {
           const newData = await API.readLogContent(portId, portLogOffsetRef.current);
           if (!newData.exists) return;
@@ -3353,6 +3374,8 @@ function App() {
             portLogOffsetRef.current = allData.size;
             return;
           }
+          // 새 내용 없음 (size <= offset) — 전체 파일 재처리 방지를 위해 조기 종료
+          if (newData.size <= portLogOffsetRef.current) return;
           if (newData.content && newData.content.length > 0) {
             const newLines = newData.content.split('\n').filter((l: string) => l.length > 0);
             if (newLines.length > 0) {
@@ -3365,6 +3388,8 @@ function App() {
           }
         } catch (e) {
           // Ignore transient polling errors
+        } finally {
+          portLogPollBusyRef.current = false;
         }
       }, 1000);
     } catch (error) {
@@ -3381,6 +3406,7 @@ function App() {
       clearInterval(portLogPollingRef.current);
       portLogPollingRef.current = null;
     }
+    portLogPollBusyRef.current = false;
   };
 
   const handleBuildApp = async () => {

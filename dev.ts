@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 /**
- * 개발 서버 러너 — api-server(3001) + vite(5173)를 자식 프로세스로 함께 실행.
+ * 개발 서버 러너 — api-server(3001) + vite(9000)를 자식 프로세스로 함께 실행.
  *
  * 기존 `bun api-server.ts & vite` 방식은 종료 시 api-server가 고아 프로세스로
  * 남아 포트 3001이 누수되는 문제가 있었음. 이 러너는:
@@ -12,19 +12,23 @@
  */
 
 const API_PORT = 3001;
+const VITE_PORT = 9000;
 
-// 시작 전: 포트 3001 기존 리스너 정리 (macOS만 — win32는 스킵)
+// 시작 전: 포트 3001(api-server) + 9000(vite) 기존 리스너 정리 (macOS만 — win32는 스킵)
+// vite는 strictPort라 9000이 점유되면 즉시 실패 — 고아 vite가 9001/9002로 쌓이는 메모리 누수 방지
 if (process.platform === "darwin") {
-  try {
-    const lsof = Bun.spawnSync(["lsof", "-ti:" + API_PORT]);
-    const pids = lsof.stdout.toString().trim().split("\n").filter(Boolean);
-    for (const pid of pids) {
-      try {
-        process.kill(parseInt(pid, 10), "SIGKILL");
-        console.log(`[dev] killed stale listener on :${API_PORT} (pid ${pid})`);
-      } catch {}
-    }
-  } catch {}
+  for (const port of [API_PORT, VITE_PORT]) {
+    try {
+      const lsof = Bun.spawnSync(["lsof", "-ti:" + port]);
+      const pids = lsof.stdout.toString().trim().split("\n").filter(Boolean);
+      for (const pid of pids) {
+        try {
+          process.kill(parseInt(pid, 10), "SIGKILL");
+          console.log(`[dev] killed stale listener on :${port} (pid ${pid})`);
+        } catch {}
+      }
+    } catch {}
+  }
 }
 
 const apiServer = Bun.spawn(["bun", "api-server.ts"], {
@@ -50,6 +54,10 @@ process.on("SIGINT", () => shutdown(130));
 process.on("SIGTERM", () => shutdown(143));
 process.on("exit", () => shutdown());
 
-// vite 종료 시 api-server도 함께 종료하고 vite의 exit code로 종료
-const viteExitCode = await vite.exited;
-shutdown(viteExitCode);
+// 어느 한쪽이라도 먼저 종료되면 나머지도 함께 정리 — 반쪽만 살아있는 페어가 남지 않도록
+const [exitCode, who] = await Promise.race([
+  vite.exited.then((c) => [c, "vite"] as const),
+  apiServer.exited.then((c) => [c, "api-server"] as const),
+]);
+console.log(`[dev] ${who} exited (code ${exitCode}) — shutting down the other`);
+shutdown(exitCode);

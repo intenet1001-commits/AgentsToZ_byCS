@@ -72,6 +72,49 @@ fn build_path_env() -> String {
     }
 }
 
+/// 로그 파일 읽기(read_log_content) 시 한 번에 반환하는 최대 바이트 수.
+const MAX_TAIL_BYTES: u64 = 256 * 1024;
+/// 로그 파일이 이 크기를 넘으면 spawn 전에 잘라낸다 (무한 디스크 증가 방지).
+const LOG_TRUNCATE_THRESHOLD: u64 = 10 * 1024 * 1024;
+/// 잘라낼 때 보존하는 마지막 바이트 수 (대략 최근 1MB).
+const LOG_KEEP_BYTES: u64 = 1024 * 1024;
+
+/// 로그 파일이 LOG_TRUNCATE_THRESHOLD를 초과하면 마지막 LOG_KEEP_BYTES만 남기고 재작성.
+/// 실패해도 spawn을 막지 않도록 조용히 무시한다.
+fn truncate_log_if_oversized(log_file: &std::path::Path) {
+    use std::io::{Read, Seek, SeekFrom};
+    let size = match fs::metadata(log_file) {
+        Ok(m) => m.len(),
+        Err(_) => return,
+    };
+    if size <= LOG_TRUNCATE_THRESHOLD {
+        return;
+    }
+    let mut file = match fs::File::open(log_file) {
+        Ok(f) => f,
+        Err(_) => return,
+    };
+    if file.seek(SeekFrom::Start(size.saturating_sub(LOG_KEEP_BYTES))).is_err() {
+        return;
+    }
+    let mut tail = Vec::with_capacity(LOG_KEEP_BYTES as usize);
+    if file.read_to_end(&mut tail).is_err() {
+        return;
+    }
+    drop(file);
+    let _ = fs::write(log_file, &tail);
+}
+
+/// fire-and-forget 자식 프로세스의 PID를 가져온 뒤, 분리된 스레드에서 wait()로 reap한다.
+/// (Child를 wait 없이 drop하면 앱 수명 동안 좀비 프로세스가 누적됨)
+fn reap_detached(mut child: std::process::Child) -> u32 {
+    let pid = child.id();
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+    pid
+}
+
 fn spawn_process(args: SpawnArgs) -> Result<u32, String> {
     let home = std::env::var("HOME").unwrap_or_default();
     let new_path = build_path_env();
@@ -79,6 +122,8 @@ fn spawn_process(args: SpawnArgs) -> Result<u32, String> {
     if args.is_file_path {
         let _ = Command::new("chmod").arg("+x").arg(args.command_path).output();
     }
+
+    truncate_log_if_oversized(args.log_file);
 
     let log_out = fs::OpenOptions::new()
         .create(true).append(true).open(args.log_file)
@@ -109,9 +154,9 @@ fn spawn_process(args: SpawnArgs) -> Result<u32, String> {
         unsafe { cmd.pre_exec(|| { libc::setsid(); Ok(()) }); }
     }
 
-    let pid = cmd.spawn()
-        .map_err(|e| format!("Failed to spawn process: {}", e))?
-        .id();
+    let child = cmd.spawn()
+        .map_err(|e| format!("Failed to spawn process: {}", e))?;
+    let pid = reap_detached(child);
     println!("[spawn_process] port={} pid={} cmd={}", args.port_id, pid, args.command_path);
     Ok(pid)
 }
@@ -185,6 +230,7 @@ fn open_app_data_dir(app_handle: tauri::AppHandle) -> Result<(), String> {
     std::process::Command::new("open")
         .arg(&app_data_dir)
         .spawn()
+        .map(reap_detached)
         .map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -242,6 +288,7 @@ fn create_folder(folder_path: String) -> Result<String, String> {
     std::process::Command::new("open")
         .arg(&folder_path)
         .spawn()
+        .map(reap_detached)
         .ok();
     Ok(folder_path)
 }
@@ -272,6 +319,7 @@ fn execute_command(
         #[cfg(target_os = "macos")]
         {
             Command::new("open").arg(&command_path).spawn()
+                .map(reap_detached)
                 .map_err(|e| e.to_string())?;
         }
         #[cfg(target_os = "windows")]
@@ -282,6 +330,7 @@ fn execute_command(
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
             Command::new("xdg-open").arg(&command_path).spawn()
+                .map(reap_detached)
                 .map_err(|e| e.to_string())?;
         }
         return Ok("Opened HTML file in browser".to_string());
@@ -438,7 +487,8 @@ fn stop_command(
             let _ = Command::new("kill")
                 .arg("-9")
                 .arg(pid.to_string())
-                .spawn();
+                .spawn()
+                .map(reap_detached);
             killed_pids.push(pid);
         }
     }
@@ -473,6 +523,7 @@ fn force_restart_command(
         #[cfg(target_os = "macos")]
         {
             Command::new("open").arg(&command_path).spawn()
+                .map(reap_detached)
                 .map_err(|e| e.to_string())?;
         }
         #[cfg(target_os = "windows")]
@@ -483,6 +534,7 @@ fn force_restart_command(
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
             Command::new("xdg-open").arg(&command_path).spawn()
+                .map(reap_detached)
                 .map_err(|e| e.to_string())?;
         }
         return Ok("Opened HTML file in browser".to_string());
@@ -665,6 +717,7 @@ fn open_build_folder() -> Result<String, String> {
     Command::new("open")
         .arg(&bundle_folder)
         .spawn()
+        .map(reap_detached)
         .map_err(|e| e.to_string())?;
 
     Ok("폴더를 열었습니다".to_string())
@@ -758,6 +811,7 @@ fn export_dmg() -> Result<String, String> {
             Command::new("open")
                 .arg(&desktop)
                 .spawn()
+                .map(reap_detached)
                 .map_err(|e| e.to_string())?;
 
             Ok(format!("DMG를 Desktop에 복사했습니다: {}", dest_path))
@@ -788,6 +842,7 @@ fn open_folder(folder_path: String) -> Result<String, String> {
     Command::new("open")
         .arg(&folder_path)
         .spawn()
+        .map(reap_detached)
         .map_err(|e| format!("폴더 열기 실패: {}", e))?;
 
     Ok(format!("폴더를 열었습니다: {}", folder_path))
@@ -834,6 +889,7 @@ fn open_log(port_id: String, app_handle: tauri::AppHandle) -> Result<String, Str
                     .arg("-e")
                     .arg(&fallback)
                     .spawn()
+                    .map(reap_detached)
                     .map_err(|e| format!("Failed to open Terminal: {}", e))?;
             }
             Err(e) => return Err(format!("Failed to open iTerm: {}", e)),
@@ -855,6 +911,7 @@ fn open_log(port_id: String, app_handle: tauri::AppHandle) -> Result<String, Str
         Command::new("xdg-open")
             .arg(log_file.to_string_lossy().to_string())
             .spawn()
+            .map(reap_detached)
             .map_err(|e| format!("Failed to open log file: {}", e))?;
     }
 
@@ -874,20 +931,49 @@ fn read_log_content(port_id: String, offset: usize, app_handle: tauri::AppHandle
         }));
     }
 
-    let content = fs::read_to_string(&log_file)
-        .map_err(|e| format!("Failed to read log file: {}", e))?;
+    use std::io::{Read, Seek, SeekFrom};
 
-    let size = content.len();
-    // Find safe UTF-8 char boundary at or after offset to avoid panic on multi-byte chars
-    let safe_offset = if offset > 0 && offset < size {
-        (offset..=size).find(|&i| content.is_char_boundary(i)).unwrap_or(size)
+    // 파일 전체를 읽지 않고 먼저 크기만 stat — 1초 폴링에서 메모리 폭증 방지
+    let size = fs::metadata(&log_file)
+        .map_err(|e| format!("Failed to read log file: {}", e))?
+        .len();
+    let byte_offset = offset as u64;
+
+    // 정상 상태 (새 데이터 없음): 빈 content + 실제 size 반환.
+    // 파일이 줄어든 경우(size < offset)도 클라이언트가 size < offset 체크로 offset을 리셋한다.
+    if byte_offset >= size && size > 0 {
+        return Ok(serde_json::json!({
+            "content": "",
+            "size": size,
+            "exists": true,
+            "offset": offset
+        }));
+    }
+
+    // offset == 0 → 마지막 MAX_TAIL_BYTES만 읽기 (초기 로드).
+    // 0 < offset < size → delta만 읽되, delta가 cap을 넘으면 size - cap부터 읽기.
+    let read_from = if byte_offset == 0 {
+        size.saturating_sub(MAX_TAIL_BYTES)
+    } else if size - byte_offset > MAX_TAIL_BYTES {
+        size - MAX_TAIL_BYTES
     } else {
-        0
+        byte_offset
     };
-    let sliced = if safe_offset > 0 { &content[safe_offset..] } else { &content };
+
+    let mut file = fs::File::open(&log_file)
+        .map_err(|e| format!("Failed to read log file: {}", e))?;
+    file.seek(SeekFrom::Start(read_from))
+        .map_err(|e| format!("Failed to read log file: {}", e))?;
+    let mut buf = Vec::with_capacity(size.saturating_sub(read_from).min(MAX_TAIL_BYTES) as usize);
+    file.take(MAX_TAIL_BYTES)
+        .read_to_end(&mut buf)
+        .map_err(|e| format!("Failed to read log file: {}", e))?;
+    // 바이트 오프셋이 UTF-8 경계를 가를 수 있음 — lossy 변환으로 panic 방지.
+    // size는 항상 파일의 바이트 크기를 반환해 클라이언트 offset이 바이트 단위로 유지됨.
+    let content = String::from_utf8_lossy(&buf);
 
     Ok(serde_json::json!({
-        "content": sliced,
+        "content": content,
         "size": size,
         "exists": true,
         "offset": offset
@@ -1100,6 +1186,7 @@ fn open_iterm_with_script(cmd: &str) -> Result<(), String> {
         .arg("-e")
         .arg(&applescript)
         .spawn()
+        .map(reap_detached)
         .map_err(|e| format!("Failed to open iTerm: {}", e))?;
     Ok(())
 }
@@ -1450,6 +1537,7 @@ fn open_in_chrome(url: String) -> Result<String, String> {
             .arg("Google Chrome")
             .arg(&url)
             .spawn()
+            .map(reap_detached)
             .map_err(|e| format!("Chrome 열기 실패: {}", e))?;
     }
 
@@ -1458,6 +1546,7 @@ fn open_in_chrome(url: String) -> Result<String, String> {
         Command::new("google-chrome")
             .arg(&url)
             .spawn()
+            .map(reap_detached)
             .map_err(|e| format!("Chrome 열기 실패: {}", e))?;
     }
 
@@ -1530,10 +1619,14 @@ async fn build_app(build_type: String, app_handle: tauri::AppHandle) -> Result<S
     };
 
     std::thread::spawn(move || {
-        let _ = Command::new(command[0])
+        // 이미 백그라운드 스레드이므로 직접 wait()로 reap (좀비 방지)
+        if let Ok(mut child) = Command::new(command[0])
             .args(&command[1..])
             .current_dir(app_dir)
-            .spawn();
+            .spawn()
+        {
+            let _ = child.wait();
+        }
     });
 
     Ok(format!("{} 빌드가 백그라운드에서 시작되었습니다", build_type))

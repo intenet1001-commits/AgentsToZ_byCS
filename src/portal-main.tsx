@@ -9,8 +9,25 @@ import {
   ChevronDown, X, MoreHorizontal, Link2,
   Plus, Check,
 } from 'lucide-react';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { getSupabaseClient } from './lib/supabaseClient';
 import { fetchPushHistory, type PushSnapshot } from './pushHistory';
+
+// ─── Supabase client dedupe ───────────────────────────────────────────────────
+// createClient를 호출할 때마다 window 'visibilitychange' 리스너가 누적되고,
+// 옵션 없는 클라이언트는 auto-refresh interval까지 돌기 때문에 인스턴스를 캐싱한다.
+// - anon 옵션(persistSession:false 등) 클라이언트: lib/supabaseClient의 getSupabaseClient 재사용
+// - 기본 옵션(OAuth 세션 감지용) 클라이언트: 아래 모듈 레벨 memo (옵션은 변경하지 않고 dedupe만)
+const g = globalThis as any;
+if (!g.__sbDefaultCache) g.__sbDefaultCache = new Map<string, SupabaseClient>();
+const _sbDefaultCache: Map<string, SupabaseClient> = g.__sbDefaultCache;
+function getDefaultSupabaseClient(url: string, key: string): SupabaseClient {
+  const cacheKey = `${url}::${key}::default`;
+  if (!_sbDefaultCache.has(cacheKey)) {
+    _sbDefaultCache.set(cacheKey, createClient(url, key));
+  }
+  return _sbDefaultCache.get(cacheKey)!;
+}
 
 const GOOGLE_VERIFIED_KEY = 'portal_google_verified';
 const ALLOWED_EMAIL = (import.meta.env.VITE_ALLOWED_EMAIL as string | undefined) ?? 'intenet1001@gmail.com';
@@ -121,7 +138,7 @@ function GoogleAuthGate({ onVerified }: { onVerified: () => void }) {
   // OAuth 콜백 후 세션 확인
   useEffect(() => {
     if (!sbUrl || !sbKey) { setChecking(false); return; }
-    const sb = createClient(sbUrl, sbKey);
+    const sb = getDefaultSupabaseClient(sbUrl, sbKey);
 
     function check(email: string) {
       if (email.trim() === ALLOWED_EMAIL.trim()) {
@@ -150,7 +167,7 @@ function GoogleAuthGate({ onVerified }: { onVerified: () => void }) {
     if (!sbUrl || !sbKey) { setError('Supabase 설정이 없습니다'); return; }
     setLoading(true);
     setError('');
-    const sb = createClient(sbUrl, sbKey);
+    const sb = getDefaultSupabaseClient(sbUrl, sbKey);
     const { error: err } = await sb.auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: window.location.origin + '/' },
@@ -235,9 +252,8 @@ function PortsView({ deviceId, creds, showToast, onSwitchDevice }: {
   const [submitting, setSubmitting] = useState(false);
 
   // Google OAuth 세션 무시 — anon 역할로 쿼리 (RLS: authenticated uid ≠ device_id 방지)
-  const sb = useCallback(() => createClient(creds.url, creds.key, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-  }), [creds.url, creds.key]);
+  // 캐시된 클라이언트 재사용 (getSupabaseClient = persistSession:false 옵션 동일) — 매 쿼리마다 새 인스턴스 생성 방지
+  const sb = useCallback(() => getSupabaseClient(creds.url, creds.key), [creds.url, creds.key]);
 
   async function loadPorts() {
     if (!deviceId) return;
@@ -653,7 +669,7 @@ function DeviceManagerModal({ devices, creds, onClose, onUpdate }: {
     if (!editName.trim()) return;
     setSaving(true);
     try {
-      const sb = createClient(creds.url, creds.key);
+      const sb = getDefaultSupabaseClient(creds.url, creds.key);
       const { error } = await sb.from('portmgr_devices').update({ name: editName.trim() }).eq('id', id);
       if (error) throw error;
       onUpdate(devices.map(d => d.id === id ? { ...d, name: editName.trim() } : d));
@@ -669,7 +685,7 @@ function DeviceManagerModal({ devices, creds, onClose, onUpdate }: {
     if (!confirm('이 기기를 삭제하시겠습니까?')) return;
     setDeletingId(id);
     try {
-      const sb = createClient(creds.url, creds.key);
+      const sb = getDefaultSupabaseClient(creds.url, creds.key);
       const { error } = await sb.from('portmgr_devices').delete().eq('id', id);
       if (error) throw error;
       onUpdate(devices.filter(d => d.id !== id));
@@ -819,10 +835,8 @@ function App() {
   async function loadDevices() {
     if (!creds) return;
     try {
-      // Google OAuth 세션 무시 — anon 역할 강제 (RLS: auth.uid ≠ device_id 충돌 방지)
-      const sb = createClient(creds.url, creds.key, {
-        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-      });
+      // Google OAuth 세션 무시 — anon 역할 강제 (RLS: auth.uid ≠ device_id 충돌 방지) — 캐시 재사용
+      const sb = getSupabaseClient(creds.url, creds.key);
       const nameMap = new Map<string, string>();
       const seenIds = new Set<string>();
 
@@ -934,7 +948,7 @@ function App() {
     setRegistering(true);
     try {
       const newId = crypto.randomUUID();
-      const sb = createClient(creds.url, creds.key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+      const sb = getSupabaseClient(creds.url, creds.key); // persistSession:false 옵션은 getSupabaseClient 내부에서 동일하게 적용됨
       const { error } = await sb.from('portmgr_devices').insert({ id: newId, name: registerName.trim() });
       if (error) throw error;
       const newDev: DeviceRow = { id: newId, name: registerName.trim(), last_push_at: new Date().toISOString() };
@@ -996,7 +1010,7 @@ function App() {
     setShowPortsHistory(true);
     setPortsHistoryLoading(true);
     try {
-      const sb = createClient(creds.url, creds.key);
+      const sb = getDefaultSupabaseClient(creds.url, creds.key);
       const list = await fetchPushHistory(sb, 'portmgr_ports', selectedDeviceId);
       setPortsHistoryList(list);
     } catch (e) {

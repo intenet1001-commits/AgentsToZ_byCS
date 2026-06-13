@@ -7,9 +7,13 @@ import { homedir } from "node:os";
 const escapeSq = (s: string): string => s.replace(/'/g, "'\\''");
 
 const IS_WIN = process.platform === 'win32';
-const DEV = process.env.NODE_ENV !== 'production';
+// 디버그 로그 게이트: NODE_ENV 체크는 실사용 환경에서 사실상 항상 열려 있어,
+// 10초 폴링류(per-poll) 로그가 자기 자신의 포트 로그 파일로 흘러들어
+// 로그가 quadratic하게 자라는 문제가 있었음. DEBUG_PORTMGR=1일 때만 출력.
+// 시작/에러 로그는 console.log / console.error를 직접 사용 (devLog 사용 금지).
+const DEBUG = process.env.DEBUG_PORTMGR === '1';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const devLog = (...args: any[]) => { if (DEV) console.log(...args); };
+const devLog = (...args: any[]) => { if (DEBUG) console.log(...args); };
 
 /** Git 바이너리 절대경로 — Tauri sandbox·다른 머신 호환성을 위해 PATH 대신 절대경로 사용 */
 function resolveGitPath(): string {
@@ -269,6 +273,56 @@ async function killPid(pid: string, force = false): Promise<void> {
     const sig = force ? '-9' : '-15';
     const p = spawn({ cmd: ['kill', sig, pid], stdout: 'inherit', stderr: 'inherit' });
     await p.exited;
+  }
+}
+
+/** macOS/Linux: `pgrep -P` BFS로 rootPid의 모든 자손 PID 수집.
+ * 루트를 먼저 죽이면 자손이 launchd(1)로 reparent되어 추적 불가하므로,
+ * 종료 전에 반드시 트리를 먼저 수집해야 한다. */
+async function collectDescendantPids(rootPid: number | string): Promise<string[]> {
+  const out: string[] = [];
+  let frontier = [String(rootPid)];
+  // 안전 상한: 비정상적으로 큰 트리(폭주)에서 무한 루프 방지
+  while (frontier.length > 0 && out.length < 4096) {
+    const next: string[] = [];
+    for (const pid of frontier) {
+      try {
+        const proc = spawn({ cmd: ['pgrep', '-P', pid], stdout: 'pipe', stderr: 'pipe' });
+        await proc.exited;
+        const children = (await new Response(proc.stdout).text())
+          .trim().split('\n').map(s => s.trim()).filter(s => /^\d+$/.test(s));
+        for (const c of children) { out.push(c); next.push(c); }
+      } catch { /* pgrep 실패 시 해당 가지 스킵 */ }
+    }
+    frontier = next;
+  }
+  return out;
+}
+
+/** 프로세스 + 자손 트리 전체 종료 (Windows/macOS 공용).
+ * 배경: stop이 lsof로 포트 리스너 PID만 죽이면, .command가 띄운 자식
+ * 프로세스들(dev server의 node helper 등)이 살아남아 누적된다.
+ * macOS에는 setsid가 없어 프로세스 그룹 분리가 어려우므로,
+ * pgrep -P BFS로 자손을 전부 수집한 뒤 SIGTERM → (생존 시) SIGKILL 처리.
+ * Windows는 taskkill /T가 트리 종료를 네이티브 지원. */
+async function killProcessTree(rootPid: number | string, force = false): Promise<void> {
+  const pidStr = String(rootPid);
+  if (!/^\d+$/.test(pidStr)) return;
+  if (IS_WIN) {
+    spawn({ cmd: ['taskkill', '/F', '/T', '/PID', pidStr], stdout: 'pipe', stderr: 'pipe' });
+    await new Promise(r => setTimeout(r, 100));
+    return;
+  }
+  const descendants = await collectDescendantPids(pidStr);
+  const all = [pidStr, ...descendants];
+  for (const pid of all) await killPid(pid, force);
+  if (!force) {
+    await new Promise(r => setTimeout(r, 200));
+    for (const pid of all) {
+      const check = spawn({ cmd: ['kill', '-0', pid], stdout: 'pipe', stderr: 'pipe' });
+      await check.exited;
+      if (check.exitCode === 0) await killPid(pid, true);
+    }
   }
 }
 
@@ -608,8 +662,10 @@ const server = Bun.serve({
         // 기존 프로세스가 실행 중이면 종료
         const existingProc = executableProcesses.get(portId);
         if (existingProc) {
-          devLog(`[Execute] Killing existing process for portId: ${portId}`);
+          devLog(`[Execute] Killing existing process tree for portId: ${portId}`);
           try {
+            // 자손 트리까지 종료 — 리스너만 죽이고 helper 프로세스가 남는 누수 방지
+            if (existingProc.pid) await killProcessTree(existingProc.pid, true);
             existingProc.kill();
           } catch (e) {
             console.error(`[Execute] Error killing process:`, e);
@@ -703,11 +759,14 @@ const server = Bun.serve({
         // Map에서 프로세스 제거
         const proc = executableProcesses.get(portId);
         if (proc) {
-          devLog(`[Stop] Killing process from map for portId: ${portId}, PID: ${proc.pid}`);
+          devLog(`[Stop] Killing process tree from map for portId: ${portId}, PID: ${proc.pid}`);
           try {
+            // 직접 spawn한 .command의 자손 트리 전체 종료 (포트 리스너가 아닌
+            // helper 프로세스들도 함께 정리) — SIGTERM → SIGKILL 에스컬레이션 포함
+            if (proc.pid) await killProcessTree(proc.pid, false);
             proc.kill();
             executableProcesses.delete(portId);
-            devLog(`[Stop] Process killed successfully`);
+            devLog(`[Stop] Process tree killed successfully`);
           } catch (e) {
             console.error(`[Stop] Error killing process:`, e);
           }
@@ -721,14 +780,9 @@ const server = Bun.serve({
             if (pids.length > 0) {
               devLog(`[Stop] Found ${pids.length} PIDs on port ${port}:`, pids);
               for (const pid of pids) {
-                await killPid(pid, false);
-                await new Promise(r => setTimeout(r, 200));
-                // macOS only: check if still alive then force kill
-                if (!IS_WIN) {
-                  const check = spawn({ cmd: ['kill', '-0', pid], stdout: 'pipe', stderr: 'pipe' });
-                  await check.exited;
-                  if (check.exitCode === 0) await killPid(pid, true);
-                }
+                // 리스너 PID뿐 아니라 그 자손 트리까지 종료
+                // (SIGTERM → 생존 확인 → SIGKILL 에스컬레이션은 killProcessTree 내부 처리)
+                await killProcessTree(pid, false);
                 killedPids.push(pid);
               }
               devLog(`[Stop] Successfully killed ${killedPids.length} process(es)`);
@@ -780,8 +834,10 @@ const server = Bun.serve({
         // Map에서도 제거
         const proc = executableProcesses.get(portId);
         if (proc) {
-          devLog(`[ForceRestart] Killing process from map, PID: ${proc.pid}`);
+          devLog(`[ForceRestart] Killing process tree from map, PID: ${proc.pid}`);
           try {
+            // 자손 트리까지 강제 종료 — helper 프로세스 누적 방지
+            if (proc.pid) await killProcessTree(proc.pid, true);
             proc.kill();
             executableProcesses.delete(portId);
           } catch (e) {
@@ -795,7 +851,8 @@ const server = Bun.serve({
           if (pids.length > 0) {
             devLog(`[ForceRestart] Found PIDs on port ${port}:`, pids);
             for (const pid of pids) {
-              await killPid(pid, true);
+              // 리스너 PID + 자손 트리 전체 강제 종료
+              await killProcessTree(pid, true);
             }
             await new Promise(resolve => setTimeout(resolve, 500));
             devLog(`[ForceRestart] Successfully killed all processes on port ${port}`);
@@ -1804,14 +1861,37 @@ end try`);
         if (!existsSync(logFile)) {
           return new Response(JSON.stringify({ content: '', size: 0, exists: false }), { headers });
         }
-        // Use byte-based offset (consistent with stat.size and Tauri's read_log_content)
+        // Use byte-based offset (consistent with stat.size and Tauri's read_log_content).
+        // 메모리 안전: 전체 파일을 절대 메모리에 올리지 않는다 — stat으로 size만 확인하고,
+        // 필요한 바이트 범위만 file.slice()로 읽는다. 1초 폴링 steady state(offset == size)
+        // 에서는 빈 응답을 반환 (기존 코드는 이 경우 전체 파일을 반환하는 off-by-one 버그).
+        const MAX_TAIL_BYTES = 256 * 1024; // 응답 1회당 최대 256KB
         const file = Bun.file(logFile);
-        const text = await file.text();
-        const buf = Buffer.from(text, 'utf-8');
-        const size = buf.length;
-        const content = offset > 0 && offset < buf.length
-          ? buf.slice(offset).toString('utf-8')
-          : text;
+        const size = file.size; // stat only — no read
+        let content = '';
+        if (offset >= size) {
+          // steady state(offset == size) 또는 파일 truncation(offset > size).
+          // truncation은 클라이언트가 size < offset을 보고 자체 리셋하므로 빈 내용 + 실제 size 반환.
+          content = '';
+        } else if (offset > 0) {
+          // 델타 읽기 — 델타가 MAX_TAIL_BYTES보다 크면 마지막 MAX_TAIL_BYTES만 읽기
+          const start = size - offset > MAX_TAIL_BYTES ? size - MAX_TAIL_BYTES : offset;
+          content = await file.slice(start).text();
+          if (start > offset) {
+            // 중간에서 잘랐으면 UTF-8/라인 경계가 깨질 수 있어 첫 부분 라인 제거
+            const nl = content.indexOf('\n');
+            if (nl !== -1) content = content.slice(nl + 1);
+          }
+        } else {
+          // offset === 0: 첫 요청은 tail만 반환 (전체 파일 금지)
+          const start = Math.max(0, size - MAX_TAIL_BYTES);
+          content = await file.slice(start).text();
+          if (start > 0) {
+            const nl = content.indexOf('\n');
+            if (nl !== -1) content = content.slice(nl + 1);
+          }
+        }
+        // 항상 실제 size를 반환 — 클라이언트는 이 값으로 다음 offset을 전진시킴
         return new Response(JSON.stringify({ content, size, exists: true, offset }), { headers });
       } catch (error: any) {
         return new Response(JSON.stringify({ error: error.message }), { status: 500, headers });
@@ -3907,4 +3987,5 @@ ${missing.includes("portmgr_device_credentials") ? `CREATE TABLE IF NOT EXISTS p
   },
 });
 
-devLog(`🚀 API Server running at http://localhost:${server.port}`);
+// 시작 배너는 항상 출력 (devLog 게이트 무관)
+console.log(`🚀 API Server running at http://localhost:${server.port}`);
