@@ -1872,7 +1872,7 @@ function App() {
   };
 
   const openCmuxAgentView = async () => {
-    if (isWindows() && terminalApp !== 'wsl') { cmuxMacOnlyToast(); return; }
+    if (isWindows()) { cmuxMacOnlyToast(); return; }
     try {
       const msg = await callCmux('open_cmux_agent_view', '/api/open-cmux-agent-view', {
         bypass: bypassPermissions,
@@ -6103,9 +6103,9 @@ function App() {
                   cmux
                 </button>
                 )}
-                {(!isWindows() || terminalApp === 'wsl') && (
+                {!isWindows() && (
                 <button data-help-key="header-cmux-agent-view" onClick={openCmuxAgentView}
-                  title={isWindows() ? 'claude agents (WSL에서 실행)' : '전체 Agent View — claude agents (HOME 기준)'}
+                  title="전체 Agent View — claude agents (HOME 기준)"
                   style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(200,168,240,0.15)',borderRadius:5,color:'#c8a8f0',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
                   <Sparkles style={{width:13,height:13}} />
                   agents
