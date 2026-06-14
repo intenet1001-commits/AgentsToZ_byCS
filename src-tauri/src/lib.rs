@@ -1079,20 +1079,26 @@ fn escape_sq(s: &str) -> String {
     s.replace("'", "'\\''")
 }
 
-/// Windows: 포트를 점유 중인 고유 PID 목록 조회 (Get-NetTCPConnection)
+/// Windows: 포트를 점유 중인 고유 PID 목록 조회 (netstat 파싱 — PowerShell보다 ~6배 빠름)
+/// WHY: PowerShell Get-NetTCPConnection은 기동 오버헤드 ~300-500ms, netstat은 ~50ms.
 #[cfg(target_os = "windows")]
 fn win_pids_by_port(port: u16) -> Vec<u32> {
-    let out = Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-Command",
-            &format!("(Get-NetTCPConnection -LocalPort {} -ErrorAction SilentlyContinue).OwningProcess", port),
-        ])
+    let out = Command::new("netstat")
+        .args(["-ano", "-p", "tcp"])
         .output();
     let mut pids: Vec<u32> = Vec::new();
     if let Ok(o) = out {
+        let port_suffix = format!(":{}", port);
         for line in String::from_utf8_lossy(&o.stdout).lines() {
-            if let Ok(pid) = line.trim().parse::<u32>() {
+            // 형식: "  TCP    0.0.0.0:5173    0.0.0.0:0    LISTENING    1234"
+            // 또는: "  TCP    127.0.0.1:3001    0.0.0.0:0    ESTABLISHED  5678"
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() < 5 { continue; }
+            // Local Address (두 번째 컬럼)이 :port로 끝나는지 확인
+            let local_addr = parts[1];
+            if !local_addr.ends_with(&port_suffix) { continue; }
+            // PID는 마지막 컬럼
+            if let Ok(pid) = parts[parts.len() - 1].parse::<u32>() {
                 if pid != 0 && !pids.contains(&pid) {
                     pids.push(pid);
                 }
@@ -1122,18 +1128,24 @@ fn win_to_wsl_path(path: &str) -> String {
     }
 }
 
-// Windows 레지스트리에서 WSL distro 목록 조회 (WSL 서비스 불필요 — 즉시 응답)
+// Windows 레지스트리에서 WSL distro 목록 조회 (reg.exe — PowerShell보다 ~10배 빠름)
+// WHY: PowerShell 기동 오버헤드 ~300-500ms vs reg.exe ~30-50ms.
 #[cfg(target_os = "windows")]
 fn find_wsl_distro() -> Option<String> {
-    let out = Command::new("powershell")
-        .args(["-NoProfile", "-Command",
-            "Get-ChildItem HKCU:/Software/Microsoft/Windows/CurrentVersion/Lxss | ForEach-Object { (Get-ItemProperty $_.PSPath).DistributionName }"])
+    let out = Command::new("reg")
+        .args(["query", "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Lxss", "/s", "/v", "DistributionName"])
         .output().ok()?;
     let text = String::from_utf8_lossy(&out.stdout).to_string();
+    // reg 출력 형식: "    DistributionName    REG_SZ    Ubuntu"
     for line in text.lines() {
-        let name = line.trim();
-        if name.is_empty() || name.to_lowercase().contains("docker") { continue; }
-        return Some(name.to_string());
+        if !line.contains("DistributionName") { continue; }
+        // "REG_SZ" 뒤의 값 추출
+        if let Some(idx) = line.find("REG_SZ") {
+            let name = line[idx + 6..].trim();
+            if !name.is_empty() && !name.to_lowercase().contains("docker") {
+                return Some(name.to_string());
+            }
+        }
     }
     None
 }

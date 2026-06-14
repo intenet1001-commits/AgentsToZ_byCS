@@ -242,20 +242,34 @@ function spawnWslTmux(bashCmd: string, title?: string): void {
   }
 }
 
-/** 포트를 사용 중인 PID 목록 반환 (Windows/macOS 공용) */
+/** 포트를 사용 중인 PID 목록 반환 (Windows/macOS 공용)
+ * WHY: Windows에서 PowerShell Get-NetTCPConnection은 기동 오버헤드 ~300-500ms.
+ * netstat -ano 파싱은 ~50ms로 6배 빠름. */
 async function getPidsByPort(port: number): Promise<string[]> {
   // 포트 값 검증 — Supabase 동기화 등 외부 데이터가 들어올 수 있으므로 인젝션 방지
   const p = Number(port);
   if (!Number.isInteger(p) || p < 1 || p > 65535) return [];
   if (IS_WIN) {
     const proc = spawn({
-      cmd: ['powershell', '-NoProfile', '-NonInteractive', '-Command',
-        `(Get-NetTCPConnection -LocalPort ${p} -ErrorAction SilentlyContinue).OwningProcess | Select-Object -Unique`],
+      cmd: ['netstat', '-ano', '-p', 'tcp'],
       stdout: 'pipe', stderr: 'pipe',
     });
     await proc.exited;
     const out = await new Response(proc.stdout).text();
-    return out.trim().split('\n').map(p => p.trim()).filter(p => /^\d+$/.test(p));
+    const portSuffix = `:${p}`;
+    const pids: string[] = [];
+    for (const line of out.split('\n')) {
+      // 형식: "  TCP    0.0.0.0:5173    0.0.0.0:0    LISTENING    1234"
+      const parts = line.trim().split(/\s+/);
+      if (parts.length < 5) continue;
+      const localAddr = parts[1];
+      if (!localAddr?.endsWith(portSuffix)) continue;
+      const pid = parts[parts.length - 1];
+      if (/^\d+$/.test(pid) && pid !== '0' && !pids.includes(pid)) {
+        pids.push(pid);
+      }
+    }
+    return pids;
   } else {
     const proc = spawn({ cmd: ['/usr/sbin/lsof', '-ti', `:${p}`], stdout: 'pipe', stderr: 'pipe' });
     await proc.exited;
@@ -266,21 +280,29 @@ async function getPidsByPort(port: number): Promise<string[]> {
 
 /** LISTEN 중인 모든 TCP 포트를 단 1회 spawn으로 수집 (Windows/macOS 공용).
  * 배경: 프론트의 10초 폴링이 포트당 lsof를 1회씩 spawn(~35개 = 틱당 ~35 spawn)
- * 하면서 장시간 실행 시 메모리/프로세스 압박 — 스냅샷 1회로 전부 응답한다. */
+ * 하면서 장시간 실행 시 메모리/프로세스 압박 — 스냅샷 1회로 전부 응답한다.
+ * WHY: Windows에서 PowerShell 대신 netstat 사용 — 기동 오버헤드 6배 감소 (300ms → 50ms). */
 async function getListeningPortsSnapshot(): Promise<Set<number>> {
   const listening = new Set<number>();
   try {
     if (IS_WIN) {
       const proc = spawn({
-        cmd: ['powershell', '-NoProfile', '-NonInteractive', '-Command',
-          '(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue).LocalPort | Select-Object -Unique'],
+        cmd: ['netstat', '-ano', '-p', 'tcp'],
         stdout: 'pipe', stderr: 'pipe',
       });
       await proc.exited;
       const out = await new Response(proc.stdout).text();
       for (const line of out.split('\n')) {
-        const n = Number(line.trim());
-        if (Number.isInteger(n) && n >= 1 && n <= 65535) listening.add(n);
+        // 형식: "  TCP    0.0.0.0:5173    0.0.0.0:0    LISTENING    1234"
+        if (!line.includes('LISTENING')) continue;
+        const parts = line.trim().split(/\s+/);
+        if (parts.length < 4) continue;
+        const localAddr = parts[1];
+        const idx = localAddr?.lastIndexOf(':');
+        if (idx !== undefined && idx !== -1) {
+          const n = Number(localAddr.slice(idx + 1));
+          if (Number.isInteger(n) && n >= 1 && n <= 65535) listening.add(n);
+        }
       }
     } else {
       const proc = spawn({ cmd: ['/usr/sbin/lsof', '-nP', '-iTCP', '-sTCP:LISTEN'], stdout: 'pipe', stderr: 'pipe' });
@@ -363,11 +385,12 @@ async function killProcessTree(rootPid: number | string, force = false): Promise
   }
 }
 
-/** 폴더/파일 열기 (Windows/macOS 공용) */
+/** 폴더/파일 열기 (Windows/macOS 공용)
+ * WHY: Windows에서 PowerShell Start-Process 대신 explorer.exe 직접 호출 — 기동 오버헤드 제거 (~300ms → 즉시). */
 function openPath(target: string): void {
   if (IS_WIN) {
     const winPath = target.replace(/\//g, '\\');
-    spawn({ cmd: ['powershell.exe', '-NoProfile', '-WindowStyle', 'Hidden', '-Command', `Start-Process '${winPath}'`], stdout: 'pipe', stderr: 'pipe' });
+    spawn({ cmd: ['explorer.exe', winPath], stdout: 'pipe', stderr: 'pipe' });
   } else {
     spawn({ cmd: ['open', target], stdout: 'inherit', stderr: 'inherit' });
   }
