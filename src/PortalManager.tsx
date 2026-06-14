@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Globe, Folder, Plus, Trash2, Pencil, X, Check, Search,
   ExternalLink, FolderOpen, Star, Download, Upload,
@@ -2120,8 +2120,16 @@ function Modal({ title, children, onClose, onConfirm, confirmLabel }: {
   onConfirm: () => void;
   confirmLabel: string;
 }) {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onCloseRef.current(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(10,8,6,0.65)',backdropFilter:'blur(2px)'}}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(10,8,6,0.65)',backdropFilter:'blur(2px)'}} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div style={{width:'100%',maxWidth:440,background:'var(--pm-bg,#1c1916)',borderRadius:12,border:'1px solid var(--pm-border-hover,rgba(255,240,220,0.12))',boxShadow:'0 24px 80px rgba(0,0,0,0.6)',overflow:'hidden',maxHeight:'90vh',display:'flex',flexDirection:'column',minWidth:0}}>
         <div style={{padding:'14px 18px',display:'flex',alignItems:'center',borderBottom:'1px solid var(--pm-border,rgba(255,240,220,0.07))',flexShrink:0}}>
           <h3 style={{margin:0,fontSize:14,fontWeight:600,letterSpacing:-0.2,color:'var(--pm-text,#ede7dd)'}}>{title}</h3>
