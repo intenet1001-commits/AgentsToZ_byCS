@@ -820,7 +820,10 @@ fn open_build_folder() -> Result<String, String> {
 fn export_dmg() -> Result<String, String> {
     use std::path::Path;
 
-    let home = std::env::var("HOME").unwrap_or_default();
+    // Windows: USERPROFILE 우선, macOS: HOME
+    let home = std::env::var("USERPROFILE")
+        .or_else(|_| std::env::var("HOME"))
+        .unwrap_or_default();
     // .cargo/config.toml의 target-dir 설정과 동일한 경로
     let bundle_dir = format!("{}/cargo-targets/portmanager/release/bundle", home);
 
@@ -858,7 +861,9 @@ fn export_dmg() -> Result<String, String> {
 
     match dmg_file {
         Some(dmg_path) => {
-            let home = std::env::var("HOME").unwrap_or_default();
+            let home = std::env::var("USERPROFILE")
+                .or_else(|_| std::env::var("HOME"))
+                .unwrap_or_default();
             let desktop = format!("{}/Desktop", home);
 
             // 원본 파일명 추출 후 vN 형식으로 단순화
@@ -900,7 +905,15 @@ fn export_dmg() -> Result<String, String> {
             fs::copy(&dmg_path, &dest_path)
                 .map_err(|e| format!("DMG 복사 실패: {}", e))?;
 
-            // Desktop 폴더 열기
+            // Desktop 폴더 열기 (Windows: explorer, macOS: open)
+            #[cfg(target_os = "windows")]
+            Command::new("explorer")
+                .arg(&desktop)
+                .spawn()
+                .map(reap_detached)
+                .map_err(|e| e.to_string())?;
+
+            #[cfg(not(target_os = "windows"))]
             Command::new("open")
                 .arg(&desktop)
                 .spawn()
