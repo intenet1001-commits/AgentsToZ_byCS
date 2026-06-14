@@ -2457,6 +2457,17 @@ fn open_cmux_agent_view() -> Result<String, String> {
 }
 
 #[tauri::command]
+fn open_terminal_agent_view() -> Result<String, String> {
+    #[cfg(target_os = "windows")]
+    {
+        spawn_wt_cmd("claude agents", None, "Claude Agents")?;
+        return Ok("Claude Agents 실행".to_string());
+    }
+    #[cfg(not(target_os = "windows"))]
+    Err("macOS에서는 cmux를 사용하세요".into())
+}
+
+#[tauri::command]
 fn open_cmux_project_agents(folder_path: Option<String>, name: String) -> Result<String, String> {
     if cfg!(windows) { return Err("cmux는 맥에서만 가능합니다".into()); }
     let home = std::env::var("HOME").unwrap_or_else(|_| "/".into());
@@ -2675,6 +2686,7 @@ pub fn run() {
         open_cmux_tmux,
         open_cmux_localhost,
         open_cmux_agent_view,
+        open_terminal_agent_view,
         open_cmux_project_agents,
         open_claude_bg,
         get_global_shortcut,

@@ -1850,6 +1850,21 @@ end try`);
       }
     }
 
+    if (url.pathname === "/api/open-terminal-agent-view" && req.method === "POST") {
+      if (!IS_WIN) return new Response(JSON.stringify({ success: false, error: 'macOS에서는 cmux를 사용하세요' }), { status: 400, headers });
+      try {
+        const hasWt = Bun.spawnSync(['where', 'wt.exe']).exitCode === 0;
+        if (hasWt) {
+          spawn({ cmd: ['cmd.exe', '/c', 'start', 'wt', '--title', 'Claude Agents', '--', 'cmd', '/k', 'claude agents'], stdout: 'inherit', stderr: 'inherit' });
+        } else {
+          spawn({ cmd: ['cmd.exe', '/c', 'start', 'Claude Agents', 'cmd', '/k', 'claude agents'], stdout: 'inherit', stderr: 'inherit' });
+        }
+        return new Response(JSON.stringify({ success: true, message: 'Claude Agents 실행' }), { headers });
+      } catch (e: any) {
+        return new Response(JSON.stringify({ success: false, error: e.message }), { status: 500, headers });
+      }
+    }
+
     if (url.pathname === "/api/open-cmux-project-agents" && req.method === "POST") {
       // Windows: WSL fallback
       if (IS_WIN) {

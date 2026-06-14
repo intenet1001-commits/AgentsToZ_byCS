@@ -464,6 +464,17 @@ const API = {
     }
   },
 
+  async openTerminalAgentView(): Promise<string> {
+    if (isTauri()) {
+      return invoke<string>('open_terminal_agent_view');
+    } else {
+      const response = await fetch('/api/open-terminal-agent-view', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error);
+      return result.message;
+    }
+  },
+
   async openTmuxCodex(sessionName: string, folderPath?: string, worktreePath?: string, bypass?: boolean): Promise<string> {
     if (isTauri()) {
       return invoke<string>('open_tmux_codex', { sessionName, folderPath: folderPath ?? null, worktreePath: worktreePath ?? null, bypass: bypass ?? false });
@@ -1872,7 +1883,16 @@ function App() {
   };
 
   const openCmuxAgentView = async () => {
-    if (isWindows()) { cmuxMacOnlyToast(); return; }
+    if (isWindows()) {
+      try {
+        const msg = await API.openTerminalAgentView();
+        showToast(msg, 'success');
+      } catch (e: any) {
+        const raw = typeof e === 'string' ? e : (e?.message ?? String(e));
+        showToast(`에이전트 열기 실패: ${raw}`, 'error');
+      }
+      return;
+    }
     try {
       const msg = await callCmux('open_cmux_agent_view', '/api/open-cmux-agent-view', {
         bypass: bypassPermissions,
@@ -6103,14 +6123,12 @@ function App() {
                   cmux
                 </button>
                 )}
-                {!isWindows() && (
                 <button data-help-key="header-cmux-agent-view" onClick={openCmuxAgentView}
-                  title="전체 Agent View — claude agents (HOME 기준)"
+                  title={isWindows() ? 'claude agents (새 터미널)' : '전체 Agent View — claude agents (HOME 기준)'}
                   style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(200,168,240,0.15)',borderRadius:5,color:'#c8a8f0',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
                   <Sparkles style={{width:13,height:13}} />
                   agents
                 </button>
-                )}
                 <button onClick={openClaudeAtDotClaude} title={`~/.claude 에서 Claude 열기 (${terminalApp}${bgMode?' --bg':''}${bypassPermissions?' ⚡':''})`} style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(200,168,240,0.15)',borderRadius:5,color:'#c8a8f0',cursor:'pointer',display:'flex',alignItems:'center',gap:3,fontSize:11,fontFamily:'Inter Tight, system-ui, sans-serif'}}>
                   <Sparkles style={{width:13,height:13}} />
                   Claude 열기
