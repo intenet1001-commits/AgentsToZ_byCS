@@ -250,8 +250,10 @@ const API = {
   },
 
   async gitInit(folderPath: string, opts?: { checkOnly?: boolean }): Promise<{ initialized?: boolean; alreadyGit?: boolean; hasCommit?: boolean; error?: string }> {
-    const baseUrl = isTauri() ? 'http://localhost:3001' : '';
-    const res = await fetch(`${baseUrl}/api/git-init`, {
+    if (isTauri()) {
+      return invoke('git_init', { folderPath, checkOnly: opts?.checkOnly ?? false });
+    }
+    const res = await fetch('/api/git-init', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ folderPath, checkOnly: opts?.checkOnly ?? false }),

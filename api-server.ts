@@ -2880,10 +2880,9 @@ end try`);
           worktrees.push({ path: currentPath, branch: currentBranch ?? undefined, is_main: isFirst });
         }
 
-        // main 워크트리 OR {folderPath}/worktrees/ 하위에 있는 것만 표시
-        // → 구 ~/worktrees/ 경로 잔재가 패널에 노출되지 않도록 필터
+        // main 워크트리 OR {folderPath}/.claude/worktrees/ 하위에 있는 것만 표시
         const normPath = (p: string) => p.replace(/\\/g, '/');
-        const projWtDir = normPath(join(folderPath, 'worktrees')) + '/';
+        const projWtDir = normPath(join(folderPath, '.claude', 'worktrees')) + '/';
         const validWorktrees = worktrees.filter(wt =>
           existsSync(wt.path) &&
           (wt.is_main || normPath(wt.path).startsWith(projWtDir))
@@ -2948,11 +2947,8 @@ end try`);
         // Directory name must be ASCII-only — claude -w rejects non-ASCII paths
         const dirSafeBranch = safeBranch.replace(/[^a-zA-Z0-9._-]/g, '-').replace(/-+/g, '-').replace(/^[-.]|[-.]$/g, '') || `wt${Date.now().toString(36).slice(-6)}`;
         const isICloud = (folderPath as string).includes('com~apple~CloudDocs') || (folderPath as string).includes('Mobile Documents');
-        const home = homedir();
-        // 플랫폼 공통 basename: / 와 \ 둘 다 처리
-        const baseName = (folderPath as string).replace(/[\\/]+$/, '').split(/[\\/]/).pop() || 'project';
-        // 워크트리 기본 위치: {folderPath}/worktrees/{dirSafeBranch}
-        const targetPath = worktreePath || join(folderPath as string, 'worktrees', dirSafeBranch);
+        // 워크트리 기본 위치: {folderPath}/.claude/worktrees/{dirSafeBranch}
+        const targetPath = worktreePath || join(folderPath as string, '.claude', 'worktrees', dirSafeBranch);
         // Check if worktree for this branch already exists
         const listProc = Bun.spawn([GIT_PATH, "worktree", "list", "--porcelain"], { cwd: folderPath, stdout: "pipe", stderr: "pipe" });
         await listProc.exited;
@@ -2970,10 +2966,9 @@ end try`);
         if (existingPath) {
           const isAscii = (s: string) => /^[\x00-\x7F]*$/.test(s);
           const normSlashes = (s: string) => s.replace(/\\/g, '/');
-          // worktrees/ 또는 기존 ~/worktrees/ 경로 모두 ASCII면 바로 반환
-          const projWtPrefix = normSlashes(join(folderPath as string, 'worktrees')) + '/';
-          const homeWtPrefix = normSlashes(join(home, 'worktrees')) + '/';
-          const isExpected = normSlashes(existingPath).startsWith(projWtPrefix) || normSlashes(existingPath).startsWith(homeWtPrefix);
+          // .claude/worktrees/ 경로 ASCII면 바로 반환
+          const projWtPrefix = normSlashes(join(folderPath as string, '.claude', 'worktrees')) + '/';
+          const isExpected = normSlashes(existingPath).startsWith(projWtPrefix);
           if (isExpected && isAscii(existingPath)) {
             return new Response(JSON.stringify({ success: true, path: existingPath, existing: true }), { headers });
           }
