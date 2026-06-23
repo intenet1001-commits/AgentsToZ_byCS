@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1779403800581,
+  "lastScanned": 1780383540823,
   "projectRoot": "/Users/gwanli/product_2026/portmanagement",
   "techStack": {
     "languages": [
@@ -95,7 +95,7 @@
       "path": "dist",
       "purpose": "Distribution/build output",
       "fileCount": 1,
-      "lastAccessed": 1779403800544,
+      "lastAccessed": 1780383540812,
       "keyFiles": [
         "index.html"
       ]
@@ -104,7 +104,7 @@
       "path": "dist-portal",
       "purpose": null,
       "fileCount": 2,
-      "lastAccessed": 1779403800544,
+      "lastAccessed": 1780383540814,
       "keyFiles": [
         "portal.html",
         "setup.html"
@@ -114,7 +114,7 @@
       "path": "docs",
       "purpose": "Documentation",
       "fileCount": 9,
-      "lastAccessed": 1779403800559,
+      "lastAccessed": 1780383540816,
       "keyFiles": [
         "DOGFOOD.md",
         "ERRORS.md",
@@ -127,7 +127,7 @@
       "path": "src",
       "purpose": "Source code",
       "fileCount": 11,
-      "lastAccessed": 1779403800559,
+      "lastAccessed": 1780383540817,
       "keyFiles": [
         "App.tsx",
         "ErrorBoundary.tsx",
@@ -140,7 +140,7 @@
       "path": "src-tauri",
       "purpose": null,
       "fileCount": 5,
-      "lastAccessed": 1779403800560,
+      "lastAccessed": 1780383540818,
       "keyFiles": [
         "Cargo.lock",
         "Cargo.toml",
@@ -152,7 +152,7 @@
       "path": "supabase",
       "purpose": null,
       "fileCount": 2,
-      "lastAccessed": 1779403800565,
+      "lastAccessed": 1780383540818,
       "keyFiles": [
         "config.toml"
       ]
@@ -160,8 +160,8 @@
     "tests": {
       "path": "tests",
       "purpose": "Test files",
-      "fileCount": 11,
-      "lastAccessed": 1779403800566,
+      "fileCount": 12,
+      "lastAccessed": 1780383540818,
       "keyFiles": [
         "cs-test-bg-buttons.ts",
         "cs-test-net-check.ts",
@@ -174,7 +174,7 @@
       "path": "uploaded-commands",
       "purpose": null,
       "fileCount": 1,
-      "lastAccessed": 1779403800568,
+      "lastAccessed": 1780383540821,
       "keyFiles": [
         "실행.command"
       ]
@@ -183,25 +183,25 @@
       "path": "worktrees",
       "purpose": null,
       "fileCount": 0,
-      "lastAccessed": 1779403800569,
+      "lastAccessed": 1780383540821,
       "keyFiles": []
     },
     "dist/assets": {
       "path": "dist/assets",
       "purpose": "Static assets",
-      "fileCount": 5,
-      "lastAccessed": 1779403800569,
+      "fileCount": 9,
+      "lastAccessed": 1780383540822,
       "keyFiles": [
-        "index-BcpBZXAU.js",
-        "index-C0U8obX-.js",
-        "index-CTc3Xt8-.css"
+        "SetupWizard-Dc_rTwme.js",
+        "icons-Bf5Xe9qj.js",
+        "index-Bkmdn8_W.js"
       ]
     },
     "dist-portal/assets": {
       "path": "dist-portal/assets",
       "purpose": "Static assets",
       "fileCount": 5,
-      "lastAccessed": 1779403800570,
+      "lastAccessed": 1780383540822,
       "keyFiles": [
         "index-CHsWdwW2.js",
         "index-R23Okk4c.js",
@@ -212,7 +212,7 @@
       "path": "src/lib",
       "purpose": "Library code",
       "fileCount": 3,
-      "lastAccessed": 1779403800572,
+      "lastAccessed": 1780383540823,
       "keyFiles": [
         "env.ts",
         "supabaseClient.ts",
@@ -223,7 +223,7 @@
       "path": "src-tauri/src",
       "purpose": "Source code",
       "fileCount": 2,
-      "lastAccessed": 1779403800575,
+      "lastAccessed": 1780383540823,
       "keyFiles": [
         "lib.rs",
         "main.rs"
@@ -233,13 +233,32 @@
       "path": "supabase/migrations",
       "purpose": "Database migrations",
       "fileCount": 2,
-      "lastAccessed": 1779403800576,
+      "lastAccessed": 1780383540823,
       "keyFiles": [
         "20260501021736_add_favorite_to_ports.sql",
         "20260516_portmgr_device_credentials.sql"
       ]
     }
   },
-  "hotPaths": [],
+  "hotPaths": [
+    {
+      "path": "src/App.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1780383831393,
+      "type": "file"
+    },
+    {
+      "path": "api-server.ts",
+      "accessCount": 2,
+      "lastAccessed": 1780383780305,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/src/lib.rs",
+      "accessCount": 1,
+      "lastAccessed": 1780383848219,
+      "type": "file"
+    }
+  ],
   "userDirectives": []
 }
