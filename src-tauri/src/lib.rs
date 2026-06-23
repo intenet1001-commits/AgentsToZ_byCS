@@ -1773,6 +1773,52 @@ fn path_basename(p: &str) -> &str {
 }
 
 #[tauri::command]
+fn git_init(folder_path: String, check_only: bool) -> Result<serde_json::Value, String> {
+    use std::process::Command;
+    if !is_absolute_path(&folder_path) {
+        return Err("folder_path must be absolute".to_string());
+    }
+    // is it already a git repo?
+    let check = Command::new("git").args(["rev-parse", "--git-dir"])
+        .current_dir(&folder_path).output().map_err(|e| e.to_string())?;
+    let is_git = check.status.success();
+    if is_git {
+        let log = Command::new("git").args(["log", "--oneline", "-1"])
+            .current_dir(&folder_path).output().map_err(|e| e.to_string())?;
+        let has_commit = log.status.success();
+        if check_only {
+            return Ok(serde_json::json!({ "alreadyGit": true, "hasCommit": has_commit }));
+        }
+        if has_commit {
+            return Ok(serde_json::json!({ "alreadyGit": true, "hasCommit": true }));
+        }
+        let commit = Command::new("git").args(["commit", "--allow-empty", "-m", "Initial commit"])
+            .current_dir(&folder_path).output().map_err(|e| e.to_string())?;
+        return Ok(serde_json::json!({ "alreadyGit": true, "hasCommit": commit.status.success() }));
+    }
+    if check_only {
+        return Ok(serde_json::json!({ "alreadyGit": false, "hasCommit": false }));
+    }
+    let init = Command::new("git").args(["init"]).current_dir(&folder_path).output().map_err(|e| e.to_string())?;
+    if !init.status.success() {
+        let err = String::from_utf8_lossy(&init.stderr).trim().to_string();
+        return Err(err.if_empty_then("git init failed"));
+    }
+    let commit = Command::new("git").args(["commit", "--allow-empty", "-m", "Initial commit"])
+        .current_dir(&folder_path).output().map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({ "initialized": true, "hasCommit": commit.status.success() }))
+}
+
+trait IfEmptyThen {
+    fn if_empty_then(self, fallback: &str) -> String;
+}
+impl IfEmptyThen for String {
+    fn if_empty_then(self, fallback: &str) -> String {
+        if self.is_empty() { fallback.to_string() } else { self }
+    }
+}
+
+#[tauri::command]
 fn git_worktree_add(folder_path: String, branch_name: String, worktree_path: Option<String>) -> Result<String, String> {
     if !is_absolute_path(&folder_path) {
         return Err("folder_path must be absolute".to_string());
@@ -1790,13 +1836,8 @@ fn git_worktree_add(folder_path: String, branch_name: String, worktree_path: Opt
     let dir_safe_branch = if dir_safe_branch.is_empty() {
         format!("wt{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs() % 1000000)
     } else { dir_safe_branch };
-    // Windows: HOME 미설정 시 USERPROFILE 사용
-    let home = std::env::var("HOME")
-        .or_else(|_| std::env::var("USERPROFILE"))
-        .unwrap_or_else(|_| if cfg!(windows) { "C:\\".to_string() } else { "/tmp".to_string() });
     let target = worktree_path.filter(|p| !p.is_empty()).unwrap_or_else(|| {
-        let base = path_basename(&folder_path);
-        format!("{}/worktrees/{}-{}", home, base, dir_safe_branch)
+        format!("{}/.claude/worktrees/{}", folder_path.trim_end_matches('/').trim_end_matches('\\'), dir_safe_branch)
     });
     // Use --no-checkout on iCloud paths to avoid SIGBUS (signal 10)
     let is_icloud = folder_path.contains("com~apple~CloudDocs") || folder_path.contains("Mobile Documents");
@@ -1988,7 +2029,13 @@ fn list_git_worktrees(folder_path: String) -> Result<Vec<WorktreeInfo>, String> 
             is_main: is_first,
         });
     }
-    Ok(worktrees)
+    // main OR {project}/.claude/worktrees/ 하위만 표시
+    let norm = |p: &str| p.replace('\\', "/");
+    let proj_wt_dir = format!("{}/.claude/worktrees/", norm(&folder_path).trim_end_matches('/'));
+    let valid: Vec<WorktreeInfo> = worktrees.into_iter().filter(|wt| {
+        wt.is_main || norm(&wt.path).starts_with(&proj_wt_dir)
+    }).collect();
+    Ok(valid)
 }
 
 /// AI 이름 추천 (folderPath 기반, login shell에서 claude -p 호출)
@@ -2670,6 +2717,7 @@ pub fn run() {
         open_tmux_agy,
         run_claude_with_prompt,
         export_dmg,
+        git_init,
         git_worktree_add,
         git_worktree_remove,
         git_merge_branch,
