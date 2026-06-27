@@ -1555,9 +1555,12 @@ function App() {
   const handleWorktreeAdd = useCallback(async (item: PortInfo) => {
     const branchName = worktreeNewBranch[item.id]?.trim();
     if (!branchName || !item.folderPath) return;
-    // git 상태 확인 (read-only)
-    const status = await API.gitInit(item.folderPath, { checkOnly: true }).catch(() => ({ alreadyGit: false, hasCommit: false }));
-    if (status.alreadyGit && status.hasCommit) {
+    // git 상태 확인 (read-only) — 네트워크 실패 시 null로 구별
+    const status = await API.gitInit(item.folderPath, { checkOnly: true }).catch(() => null);
+    if (status === null) {
+      // 상태 확인 실패 (API 서버 오프라인 등) → 직접 시도 (git 없으면 worktreeAdd가 명확한 에러 반환)
+      await executeWorktreeAdd(item, branchName);
+    } else if (status.alreadyGit && status.hasCommit) {
       // 이미 git repo + 커밋 있음 → 바로 진행
       await executeWorktreeAdd(item, branchName);
     } else {
@@ -4765,9 +4768,14 @@ function App() {
                 const { item, branchName } = gitInitConfirm;
                 setGitInitConfirm(null);
                 try {
-                  const result = await API.gitInit(item.folderPath!);
-                  if (result.error) { showToast(`Git 초기화 실패: ${result.error}`, 'error'); return; }
-                  showToast('Git 초기화 완료', 'success');
+                  const result = await API.gitInit(item.folderPath!).catch(() => null);
+                  if (result === null) {
+                    showToast('Git 초기화 연결 실패 — 워크트리 추가 직접 시도', 'error');
+                  } else if (result.error) {
+                    showToast(`Git 초기화 실패: ${result.error}`, 'error'); return;
+                  } else {
+                    showToast('Git 초기화 완료', 'success');
+                  }
                   await executeWorktreeAdd(item, branchName);
                 } catch (e) {
                   showToast(`Git 초기화 실패: ${e}`, 'error');
