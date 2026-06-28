@@ -2266,6 +2266,29 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // 30초 간격 워크트리 자동 폴링 — 패널이 열린 항목만 재조회
+  const expandedWorktreeIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => { expandedWorktreeIdsRef.current = expandedWorktreeIds; }, [expandedWorktreeIds]);
+  const portsForWtRef = useRef<PortInfo[]>([]);
+  useEffect(() => { portsForWtRef.current = ports; }, [ports]);
+  const wtPollBusyRef = useRef(false);
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      if (wtPollBusyRef.current) return;
+      const expanded = expandedWorktreeIdsRef.current;
+      if (expanded.size === 0) return;
+      wtPollBusyRef.current = true;
+      try {
+        const items = portsForWtRef.current.filter(p => expanded.has(p.id) && p.folderPath);
+        await Promise.all(items.map(p => loadWorktrees(p.id, p.folderPath!)));
+      } finally {
+        wtPollBusyRef.current = false;
+      }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [loadWorktrees]);
+
   // 작업 루트 초기 로드
   useEffect(() => {
     API.loadWorkspaceRoots().then(data => {
