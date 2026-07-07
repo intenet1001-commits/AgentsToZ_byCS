@@ -1239,6 +1239,7 @@ function App() {
   const [globalShortcut, setGlobalShortcut] = useState('CommandOrControl+Alt+P');
   const [showShortcutModal, setShowShortcutModal] = useState(false);
   const [shortcutInput, setShortcutInput] = useState('');
+  const [showCleanupReview, setShowCleanupReview] = useState(false);
   // Quick-add project modal (works on deployed web — no folder picker required)
   const [showQuickAddModal, setShowQuickAddModal] = useState(false);
   const [qaName, setQaName] = useState('');
@@ -2699,6 +2700,21 @@ function App() {
     try { await API.savePorts(updated); } catch (e) { console.warn('[saveInlineUrl] persist failed:', e); }
   }, [ports]);
 
+  // 9000번대에서 등록되지 않고 실제로도 열려있지 않은 첫 빈 포트를 찾는다.
+  const suggestPort = useCallback(async (setter: (v: string) => void, base = 9000, max = 9999) => {
+    const used = new Set(ports.map(p => p.port).filter((p): p is number => !!p));
+    for (let candidate = base; candidate <= max; candidate++) {
+      if (used.has(candidate)) continue;
+      const running = await API.checkPortStatus(candidate).catch(() => false);
+      if (!running) {
+        setter(String(candidate));
+        showToast(`추천 포트: ${candidate}`, 'success');
+        return;
+      }
+    }
+    showToast(`${base}~${max} 범위에 빈 포트가 없습니다`, 'error');
+  }, [ports]);
+
   const closeQuickAddModal = () => {
     setShowQuickAddModal(false);
     setQaName(''); setQaPort(''); setQaDeployUrl(''); setQaGithubUrl(''); setQaCategory(''); setQaDescription('');
@@ -4083,6 +4099,22 @@ function App() {
   const v3Running = useMemo(() => v3Ports.filter(p => p.isRunning), [v3Ports]);
   const v3Idle = useMemo(() => v3Ports.filter(p => !p.isRunning), [v3Ports]);
 
+  // 유휴 프로젝트를 마지막 방문 시점 기준으로 세분화 — "가끔 쓰는 것"과 "영구 미사용"을 구분해 정리 대상 판단
+  const IDLE_RECENT_MS = 7 * 86400000;
+  const IDLE_STALE_MS = 30 * 86400000;
+  const v3IdleRecent = useMemo(() => v3Idle.filter(p => {
+    const last = lastVisits[p.id];
+    return !!last && (Date.now() - last) < IDLE_RECENT_MS;
+  }), [v3Idle, lastVisits]);
+  const v3IdleAging = useMemo(() => v3Idle.filter(p => {
+    const last = lastVisits[p.id];
+    return !!last && (Date.now() - last) >= IDLE_RECENT_MS && (Date.now() - last) < IDLE_STALE_MS;
+  }), [v3Idle, lastVisits]);
+  const v3IdleStale = useMemo(() => v3Idle.filter(p => {
+    const last = lastVisits[p.id];
+    return !last || (Date.now() - last) >= IDLE_STALE_MS;
+  }), [v3Idle, lastVisits]);
+
   const inpV3: React.CSSProperties = {
     width:'100%', padding:'7px 10px', background:'#15120f',
     border:'1px solid rgba(255,240,220,0.07)', borderRadius:6,
@@ -4465,7 +4497,29 @@ function App() {
                 <span style={{width:5,height:5,borderRadius:3,background:'#4b4540',display:'inline-block'}}/>
                 {t(lang,'labelIdle')} · {v3Idle.length}
               </div>
-              {v3Idle.map(renderRow)}
+              {v3IdleRecent.length > 0 && <>
+                <div style={{padding:'6px 14px 2px',fontSize:9.5,fontFamily:monoFont,color:'#6b6459',letterSpacing:0.3}}>
+                  최근 사용 (7일 이내) · {v3IdleRecent.length}
+                </div>
+                {v3IdleRecent.map(renderRow)}
+              </>}
+              {v3IdleAging.length > 0 && <>
+                <div style={{padding:'6px 14px 2px',fontSize:9.5,fontFamily:monoFont,color:'#6b6459',letterSpacing:0.3}}>
+                  가끔 사용 (7~30일) · {v3IdleAging.length}
+                </div>
+                {v3IdleAging.map(renderRow)}
+              </>}
+              {v3IdleStale.length > 0 && <>
+                <div style={{padding:'6px 14px 2px',fontSize:9.5,fontFamily:monoFont,color:'#c96a5a',letterSpacing:0.3,display:'flex',alignItems:'center',justifyContent:'space-between',gap:6}}>
+                  <span>오래됨 (30일+/기록 없음) · {v3IdleStale.length}</span>
+                  <button
+                    onClick={() => setShowCleanupReview(true)}
+                    title="오래된 프로젝트 정리 검토"
+                    style={{padding:'1px 6px',background:'rgba(201,106,90,0.12)',border:'1px solid rgba(201,106,90,0.3)',borderRadius:4,color:'#c96a5a',cursor:'pointer',fontSize:9.5,fontFamily:'Inter Tight, system-ui, sans-serif'}}
+                  >정리 검토</button>
+                </div>
+                {v3IdleStale.map(renderRow)}
+              </>}
             </>}
             {v3Ports.length === 0 && (
               <div style={{padding:'40px 0',textAlign:'center',color:'#4b4540',fontSize:12,fontFamily:monoFont}}>{t(lang,'noProjects')}</div>
@@ -4532,6 +4586,7 @@ function App() {
               <div style={{display:'flex',gap:6}}>
                 <input type="text" value={editName} onChange={e=>setEditName(e.target.value)} onKeyDown={handleEditKeyPress} style={{...inpV3,flex:1}} placeholder="프로젝트 이름" autoFocus />
                 <input type="number" value={editPort} onChange={e=>setEditPort(e.target.value)} onKeyDown={handleEditKeyPress} style={{...inpV3,width:70,flex:'none'}} placeholder="포트" />
+                <button type="button" onClick={()=>suggestPort(setEditPort)} title="빈 포트 추천 (9000번대)" style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(255,240,220,0.1)',borderRadius:6,color:'#a39a8c',cursor:'pointer',fontSize:11,whiteSpace:'nowrap' as const}}>추천</button>
                 <button onClick={saveEdit} style={{padding:'5px 8px',background:'rgba(143,185,110,0.14)',border:'1px solid rgba(143,185,110,0.3)',borderRadius:6,cursor:'pointer',display:'flex',alignItems:'center'}}><Check className="w-3.5 h-3.5" style={{color:'#8fb96e'}}/></button>
                 <button onClick={cancelEdit} style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(255,240,220,0.07)',borderRadius:6,cursor:'pointer',display:'flex',alignItems:'center'}}><XIcon className="w-3.5 h-3.5" style={{color:'#6b6459'}}/></button>
               </div>
@@ -5785,14 +5840,22 @@ function App() {
                     </label>
                     <label style={{display:'flex',flexDirection:'column'}}>
                       {lbl('포트 (선택)')}
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        value={qaPort}
-                        onChange={e => setQaPort(e.target.value)}
-                        placeholder="예: 3000"
-                        style={inpStyle}
-                      />
+                      <div style={{display:'flex',gap:6}}>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          value={qaPort}
+                          onChange={e => setQaPort(e.target.value)}
+                          placeholder="예: 9000"
+                          style={{...inpStyle,flex:1}}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => suggestPort(setQaPort)}
+                          title="빈 포트 추천 (9000번대)"
+                          style={{padding:'0 10px',background:'transparent',border:'1px solid rgba(255,240,220,0.12)',borderRadius:6,color:'#a39a8c',cursor:'pointer',fontSize:12,whiteSpace:'nowrap' as const}}
+                        >추천</button>
+                      </div>
                     </label>
                     <label style={{display:'flex',flexDirection:'column'}}>
                       {lbl('배포 주소 (선택)')}
@@ -5853,6 +5916,70 @@ function App() {
                     fontSize: isMobile?14:12,fontWeight:600,
                   }}
                 >추가</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showCleanupReview && (
+          <div
+            style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',zIndex:9500,display:'flex',alignItems:isMobile?'flex-end':'center',justifyContent:'center'}}
+            onClick={() => setShowCleanupReview(false)}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                background:'#1c1916',border:'1px solid rgba(255,240,220,0.12)',
+                borderRadius: isMobile ? '14px 14px 0 0' : 12,
+                padding: isMobile ? '20px 18px 24px' : 24,
+                width: isMobile ? '100%' : 440,
+                maxHeight: isMobile ? '85vh' : '70vh',
+                overflowY: 'auto',
+                display:'flex',flexDirection:'column',gap:10,
+              }}
+            >
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <span style={{fontSize:15,fontWeight:600,color:'#ede7dd'}}>정리 검토 — 30일 이상 미사용</span>
+                <button onClick={() => setShowCleanupReview(false)} style={{background:'transparent',border:'none',cursor:'pointer',color:'#6b6459',padding:4}}>
+                  <XIcon style={{width:16,height:16}}/>
+                </button>
+              </div>
+              <p style={{fontSize:11,color:'#6b6459',margin:0,lineHeight:1.5}}>
+                30일 이상 방문 기록이 없거나 아예 기록이 없는 프로젝트입니다. 계속 쓸 프로젝트는 즐겨찾기로 표시해 제외하고, 안 쓰는 프로젝트는 삭제하세요.
+              </p>
+              {v3IdleStale.length === 0 ? (
+                <div style={{padding:'24px 0',textAlign:'center',color:'#6b6459',fontSize:12}}>정리 대상이 없습니다.</div>
+              ) : (
+                <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                  {v3IdleStale.map(item => {
+                    const last = lastVisits[item.id];
+                    const label = last ? `${Math.floor((Date.now() - last) / 86400000)}일 전 방문` : '방문 기록 없음';
+                    return (
+                      <div key={item.id} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 10px',background:'#15120f',border:'1px solid rgba(255,240,220,0.07)',borderRadius:6}}>
+                        <div style={{flex:1,overflow:'hidden'}}>
+                          <div style={{fontSize:12.5,color:'#ede7dd',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.name}{item.port ? <span style={{color:'#e8a557'}}> :{item.port}</span> : null}</div>
+                          <div style={{fontSize:10.5,color:'#6b6459'}}>{label}</div>
+                        </div>
+                        <button
+                          onClick={() => toggleFavorite(item)}
+                          title="즐겨찾기로 표시 (정리 대상에서 제외)"
+                          style={{padding:'4px 6px',background:'transparent',border:'1px solid rgba(255,240,220,0.1)',borderRadius:5,color:'#a39a8c',cursor:'pointer',display:'flex',alignItems:'center'}}
+                        ><Star style={{width:12,height:12}}/></button>
+                        <button
+                          onClick={() => deletePort(item.id)}
+                          title="삭제"
+                          style={{padding:'4px 6px',background:'rgba(201,106,90,0.12)',border:'1px solid rgba(201,106,90,0.3)',borderRadius:5,color:'#c96a5a',cursor:'pointer',display:'flex',alignItems:'center'}}
+                        ><Trash2 style={{width:12,height:12}}/></button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <div style={{display:'flex',justifyContent:'flex-end',marginTop:4}}>
+                <button
+                  onClick={() => setShowCleanupReview(false)}
+                  style={{padding: isMobile?'10px 16px':'7px 14px',background:'transparent',border:'1px solid rgba(255,240,220,0.1)',borderRadius:6,color:'#a39a8c',cursor:'pointer',fontSize:isMobile?14:12}}
+                >닫기</button>
               </div>
             </div>
           </div>
