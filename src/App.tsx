@@ -2715,6 +2715,25 @@ function App() {
     showToast(`${base}~${max} 범위에 빈 포트가 없습니다`, 'error');
   }, [ports]);
 
+  // .command/.html 등 실행 파일을 네이티브 파일 다이얼로그로 선택 (Tauri 전용 — 브라우저는 절대경로 접근 불가)
+  const handlePickCommandPath = useCallback(async (setter: (v: string) => void, folderSetter?: (v: string) => void, currentFolder?: string) => {
+    try {
+      const extensions = isWindows() ? ['bat', 'cmd', 'html'] : ['command', 'html'];
+      const filePath = await openDialog({
+        multiple: false,
+        filters: [{ name: 'Command/HTML Files', extensions }],
+      });
+      if (!filePath || typeof filePath !== 'string') return;
+      setter(filePath);
+      if (folderSetter && !currentFolder) {
+        const lastSepIndex = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
+        if (lastSepIndex !== -1) folderSetter(filePath.substring(0, lastSepIndex));
+      }
+    } catch (error) {
+      showToast('파일 선택 실패: ' + error, 'error');
+    }
+  }, []);
+
   const closeQuickAddModal = () => {
     setShowQuickAddModal(false);
     setQaName(''); setQaPort(''); setQaDeployUrl(''); setQaGithubUrl(''); setQaCategory(''); setQaDescription('');
@@ -4590,7 +4609,12 @@ function App() {
                 <button onClick={saveEdit} style={{padding:'5px 8px',background:'rgba(143,185,110,0.14)',border:'1px solid rgba(143,185,110,0.3)',borderRadius:6,cursor:'pointer',display:'flex',alignItems:'center'}}><Check className="w-3.5 h-3.5" style={{color:'#8fb96e'}}/></button>
                 <button onClick={cancelEdit} style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(255,240,220,0.07)',borderRadius:6,cursor:'pointer',display:'flex',alignItems:'center'}}><XIcon className="w-3.5 h-3.5" style={{color:'#6b6459'}}/></button>
               </div>
-              <input type="text" value={editCommandPath} onChange={e=>setEditCommandPath(e.target.value)} onKeyDown={handleEditKeyPress} style={inpV3} placeholder={`${execFileExt()} 파일 경로`} />
+              <div style={{display:'flex',gap:6}}>
+                <input type="text" value={editCommandPath} onChange={e=>setEditCommandPath(e.target.value)} onKeyDown={handleEditKeyPress} style={{...inpV3,flex:1}} placeholder={`${execFileExt()} 파일 경로`} />
+                {isTauri() && (
+                  <button type="button" onClick={()=>handlePickCommandPath(setEditCommandPath, setEditFolderPath, editFolderPath)} title="파일 찾아보기" style={{padding:'5px 10px',background:'transparent',border:'1px solid rgba(255,240,220,0.1)',borderRadius:6,color:'#a39a8c',cursor:'pointer',fontSize:11,whiteSpace:'nowrap' as const}}>찾아보기</button>
+                )}
+              </div>
               <input type="text" value={editTerminalCommand} onChange={e=>setEditTerminalCommand(e.target.value)} onKeyDown={handleEditKeyPress} style={inpV3} placeholder="터미널 명령어" />
               <input type="text" value={editFolderPath} onChange={e=>setEditFolderPath(e.target.value)} onKeyDown={handleEditKeyPress} style={inpV3} placeholder="폴더 경로" />
               <input type="text" value={editDeployUrl} onChange={e=>setEditDeployUrl(e.target.value)} onKeyDown={handleEditKeyPress} style={inpV3} placeholder="배포 주소" />
