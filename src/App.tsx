@@ -1324,6 +1324,39 @@ function App() {
       })
       .catch(() => {});
   }, []);
+  // 폴더별 마지막 git 커밋 시각 — 앱 버튼(Run/Claude 등)을 거치지 않고 터미널/에디터에서
+  // 직접 작업한 경우에도 "마지막 실행"이 실제 작업 시점에 가깝게 보이도록 보정
+  const [gitActivity, setGitActivity] = useState<Record<string, number>>({});
+  const gitActivityFetchedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const targets = ports
+      .filter(p => p.folderPath && !gitActivityFetchedRef.current.has(p.id))
+      .map(p => ({ portId: p.id, folderPath: p.folderPath! }));
+    if (targets.length === 0) return;
+    targets.forEach(t => gitActivityFetchedRef.current.add(t.portId));
+    const base = isTauri() ? 'http://localhost:3001' : '';
+    fetch(`${base}/api/last-git-activity`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: targets }),
+    })
+      .then(r => r.json())
+      .then((data: Record<string, number | null>) => {
+        setGitActivity(prev => {
+          const next = { ...prev };
+          for (const [id, ts] of Object.entries(data)) if (ts) next[id] = ts;
+          return next;
+        });
+      })
+      .catch(() => {});
+  }, [ports]);
+  // lastVisits(앱 버튼 클릭)와 gitActivity(실제 커밋) 중 더 최신 값을 "마지막 실행"으로 사용
+  const lastActivityFor = (id: string): number | undefined => {
+    const v = lastVisits[id] ?? 0;
+    const g = gitActivity[id] ?? 0;
+    const max = Math.max(v, g);
+    return max || undefined;
+  };
   // 메뉴 열린 상태에서 스크롤 시 자동 닫기 — position:fixed 메뉴가 트리거에서 떨어지는 문제 방지
   useEffect(() => {
     if (!v3MenuOpenId) return;
@@ -4114,12 +4147,12 @@ function App() {
     else if (sidebarSection === 'wt') list = list.filter(p => !!p.worktreePath);
     else if (sidebarSection === 'stale') {
       const cutoff = Date.now() - 14 * 86400000;
-      list = list.filter(p => { const last = lastVisits[p.id]; return !last || last < cutoff; });
+      list = list.filter(p => { const last = lastActivityFor(p.id); return !last || last < cutoff; });
     }
     else if (sidebarSection === 'recent') {
       const cutoff = Date.now() - 7 * 86400000;
-      list = list.filter(p => { const last = lastVisits[p.id]; return !!last && last >= cutoff; });
-      list = [...list].sort((a, b) => (lastVisits[b.id] || 0) - (lastVisits[a.id] || 0));
+      list = list.filter(p => { const last = lastActivityFor(p.id); return !!last && last >= cutoff; });
+      list = [...list].sort((a, b) => (lastActivityFor(b.id) || 0) - (lastActivityFor(a.id) || 0));
     }
     else if (sidebarSection.startsWith('tag:')) list = list.filter(p => p.category === sidebarSection.slice(4));
     if (searchQuery.trim()) {
@@ -4133,12 +4166,12 @@ function App() {
       );
     }
     return list;
-  }, [ports, sidebarSection, searchQuery, lastVisits]);
+  }, [ports, sidebarSection, searchQuery, lastVisits, gitActivity]);
 
   const v3Running = useMemo(() => v3Ports.filter(p => p.isRunning), [v3Ports]);
   const v3Idle = useMemo(() =>
-    [...v3Ports.filter(p => !p.isRunning)].sort((a, b) => (lastVisits[b.id] || 0) - (lastVisits[a.id] || 0)),
-    [v3Ports, lastVisits]);
+    [...v3Ports.filter(p => !p.isRunning)].sort((a, b) => (lastActivityFor(b.id) || 0) - (lastActivityFor(a.id) || 0)),
+    [v3Ports, lastVisits, gitActivity]);
 
   const inpV3: React.CSSProperties = {
     width:'100%', padding:'7px 10px', background:'#15120f',
@@ -4213,7 +4246,7 @@ function App() {
         {!item.isRunning && (
           <div style={{display:'flex',alignItems:'center',gap:4,fontSize:10.5,color:'#6b6459'}}>
             <Clock style={{width:9,height:9,flexShrink:0}} />
-            {formatLastRun(lastVisits[item.id])}
+            {formatLastRun(lastActivityFor(item.id))}
           </div>
         )}
 
@@ -4468,7 +4501,7 @@ function App() {
           <div style={{flex:1,overflow:'hidden',display:'flex',flexDirection:'column',gap:1}}>
             <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.name}</span>
             {item.aiName && <span style={{fontSize:10,color:'#6b6459',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.aiName}</span>}
-            {!item.isRunning && <span style={{fontSize:10,color:'#6b6459',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{formatLastRun(lastVisits[item.id])}</span>}
+            {!item.isRunning && <span style={{fontSize:10,color:'#6b6459',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{formatLastRun(lastActivityFor(item.id))}</span>}
           </div>
           {item.port ? <span style={{color:'#e8a557',fontSize:11,flexShrink:0}}>:{item.port}</span> : <span style={{color:'#4b4540',fontSize:11,flexShrink:0}}>—</span>}
         </div>
@@ -6064,10 +6097,10 @@ function App() {
               {([
                 {id:'all',    label: t(lang,'sectionAll'),        count: ports.length,                              Icon: Server},
                 {id:'running',label: t(lang,'sectionRunning'),    count: ports.filter((p:PortInfo)=>p.isRunning).length,      Icon: Play},
-                {id:'recent', label: t(lang,'sectionRecent'),     count: (() => { const cutoff = Date.now() - 7*86400000; return ports.filter((p:PortInfo)=>{ const last = lastVisits[p.id]; return !!last && last >= cutoff; }).length; })(), Icon: History},
+                {id:'recent', label: t(lang,'sectionRecent'),     count: (() => { const cutoff = Date.now() - 7*86400000; return ports.filter((p:PortInfo)=>{ const last = lastActivityFor(p.id); return !!last && last >= cutoff; }).length; })(), Icon: History},
                 {id:'starred',label: t(lang,'sectionStarred'),    count: ports.filter((p:PortInfo)=>p.favorite).length,       Icon: Star},
                 {id:'wt',     label: t(lang,'sectionWorktrees'),  count: ports.filter((p:PortInfo)=>!!p.worktreePath).length, Icon: GitBranch},
-                {id:'stale',  label: t(lang,'sectionStale'),      count: (() => { const cutoff = Date.now() - 14*86400000; return ports.filter((p:PortInfo)=>{ const last = lastVisits[p.id]; return !last || last < cutoff; }).length; })(), Icon: Clock},
+                {id:'stale',  label: t(lang,'sectionStale'),      count: (() => { const cutoff = Date.now() - 14*86400000; return ports.filter((p:PortInfo)=>{ const last = lastActivityFor(p.id); return !last || last < cutoff; }).length; })(), Icon: Clock},
               ] as const).map(({id,label,count,Icon}) => (
                 <button key={id} data-help-key={`sidebar-${id === 'wt' ? 'worktrees' : id}`} onClick={() => setSidebarSection(id)} style={{
                   display:'flex',alignItems:'center',gap:8,

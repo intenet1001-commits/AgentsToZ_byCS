@@ -3287,6 +3287,30 @@ end try`);
       }
     }
 
+    // 폴더별 마지막 git 커밋 시각(ms) 일괄 조회 — 앱 버튼 클릭이 아닌 터미널/에디터에서
+    // 직접 작업한 경우에도 "마지막 실행"이 실제 작업 시점에 가깝게 보이도록 보정하는 용도
+    if (url.pathname === "/api/last-git-activity" && req.method === "POST") {
+      try {
+        const { items } = await req.json() as { items: { portId: string; folderPath: string }[] };
+        const results = await Promise.all((items || []).map(async ({ portId, folderPath }) => {
+          if (!folderPath) return [portId, null] as const;
+          try {
+            const proc = Bun.spawn([GIT_PATH, "log", "-1", "--format=%ct"], { cwd: folderPath, stdout: "pipe", stderr: "pipe" });
+            await proc.exited;
+            if (proc.exitCode !== 0) return [portId, null] as const;
+            const out = (await new Response(proc.stdout).text()).trim();
+            const sec = parseInt(out, 10);
+            return [portId, Number.isFinite(sec) ? sec * 1000 : null] as const;
+          } catch {
+            return [portId, null] as const;
+          }
+        }));
+        return new Response(JSON.stringify(Object.fromEntries(results)), { headers });
+      } catch (error: any) {
+        return new Response(JSON.stringify({ error: error.message }), { status: 500, headers });
+      }
+    }
+
     if (url.pathname === "/api/open-terminal-at-folder" && req.method === "POST") {
       try {
         const { folderPath, title: titleArg } = await req.json();
