@@ -467,6 +467,7 @@ const APP_DATA_DIR = process.platform === 'win32'
   : join(homedir(), "Library/Application Support/com.portmanager.portmanager");
 const PORTS_DATA_FILE = join(APP_DATA_DIR, "ports.json");
 const WORKSPACE_ROOTS_FILE = join(APP_DATA_DIR, "workspace-roots.json");
+const LAST_VISITS_FILE = join(APP_DATA_DIR, "last-visits.json");
 const PORTAL_DATA_FILE = join(APP_DATA_DIR, "portal.json");
 
 // ──────────────── 포트 로그 회전 + append fd ────────────────
@@ -570,6 +571,33 @@ async function savePortsData(data: any) {
   }
 }
 
+// 마지막 실행/방문 시각 로드 — 웹/앱이 동일 파일을 공유
+async function loadLastVisitsData(): Promise<Record<string, number>> {
+  try {
+    const file = Bun.file(LAST_VISITS_FILE);
+    if (await file.exists()) return await file.json();
+  } catch (error) {
+    console.error("[Data] Error loading last visits data:", error);
+  }
+  return {};
+}
+
+// 포트 하나의 마지막 방문 시각 upsert (더 최신 값만 반영 — 동시 기록 시 과거 값으로 덮어쓰지 않음)
+async function saveLastVisitData(portId: string, timestamp: number): Promise<Record<string, number>> {
+  const data = await loadLastVisitsData();
+  if (!data[portId] || timestamp > data[portId]) data[portId] = timestamp;
+  try {
+    if (!existsSync(APP_DATA_DIR)) {
+      const { mkdirSync } = await import("node:fs");
+      mkdirSync(APP_DATA_DIR, { recursive: true });
+    }
+    await Bun.write(LAST_VISITS_FILE, JSON.stringify(data, null, 2));
+  } catch (error) {
+    console.error("[Data] Error saving last visits data:", error);
+  }
+  return data;
+}
+
 // 작업 루트 데이터 로드
 async function loadWorkspaceRootsData() {
   try {
@@ -652,6 +680,30 @@ const server = Bun.serve({
           JSON.stringify({ error: error.message }),
           { status: 500, headers }
         );
+      }
+    }
+
+    if (url.pathname === "/api/last-visits" && req.method === "GET") {
+      try {
+        const data = await loadLastVisitsData();
+        return new Response(JSON.stringify(data), { headers });
+      } catch (error: any) {
+        console.error("[API] Error loading last visits:", error);
+        return new Response(JSON.stringify({ error: error.message }), { status: 500, headers });
+      }
+    }
+
+    if (url.pathname === "/api/last-visits" && req.method === "POST") {
+      try {
+        const { portId, timestamp } = await req.json();
+        if (!portId || typeof timestamp !== "number") {
+          return new Response(JSON.stringify({ error: "Missing portId or timestamp" }), { status: 400, headers });
+        }
+        const data = await saveLastVisitData(portId, timestamp);
+        return new Response(JSON.stringify(data), { headers });
+      } catch (error: any) {
+        console.error("[API] Error saving last visit:", error);
+        return new Response(JSON.stringify({ error: error.message }), { status: 500, headers });
       }
     }
 

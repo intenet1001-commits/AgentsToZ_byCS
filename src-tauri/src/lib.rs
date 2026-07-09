@@ -204,6 +204,44 @@ fn save_ports(app_handle: tauri::AppHandle, ports: Vec<PortInfo>) -> Result<(), 
     Ok(())
 }
 
+// 웹(api-server.ts)과 동일한 last-visits.json 파일을 공유 — 앱/웹 어느 쪽에서 실행해도 같이 반영됨
+#[tauri::command]
+fn load_last_visits(app_handle: tauri::AppHandle) -> Result<HashMap<String, i64>, String> {
+    let app_data_dir = ensure_app_data_dir(&app_handle)?;
+    let file = app_data_dir.join("last-visits.json");
+
+    if file.exists() {
+        let content = fs::read_to_string(&file).map_err(|e| e.to_string())?;
+        let data: HashMap<String, i64> = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+        return Ok(data);
+    }
+
+    Ok(HashMap::new())
+}
+
+#[tauri::command]
+fn save_last_visit(app_handle: tauri::AppHandle, port_id: String, timestamp: i64) -> Result<HashMap<String, i64>, String> {
+    let app_data_dir = ensure_app_data_dir(&app_handle)?;
+    let file = app_data_dir.join("last-visits.json");
+
+    let mut data: HashMap<String, i64> = if file.exists() {
+        let content = fs::read_to_string(&file).map_err(|e| e.to_string())?;
+        serde_json::from_str(&content).map_err(|e| e.to_string())?
+    } else {
+        HashMap::new()
+    };
+
+    // 더 최신 값만 반영 — 동시 기록 시 과거 값으로 덮어쓰지 않음
+    let is_newer = data.get(&port_id).map_or(true, |&existing| timestamp > existing);
+    if is_newer {
+        data.insert(port_id, timestamp);
+        let content = serde_json::to_string_pretty(&data).map_err(|e| e.to_string())?;
+        fs::write(&file, content).map_err(|e| e.to_string())?;
+    }
+
+    Ok(data)
+}
+
 #[tauri::command]
 fn scan_command_files(folder_path: String) -> Result<Vec<String>, String> {
     let path = std::path::Path::new(&folder_path);
@@ -2682,6 +2720,8 @@ pub fn run() {
     .invoke_handler(tauri::generate_handler![
         load_ports,
         save_ports,
+        load_last_visits,
+        save_last_visit,
         scan_command_files,
         open_app_data_dir,
         load_portal,

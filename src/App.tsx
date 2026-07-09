@@ -44,6 +44,29 @@ const API = {
     }
   },
 
+  // 마지막 실행/방문 시각 — 웹/앱이 동일 파일(last-visits.json)을 공유해 어느 쪽으로 써도 같이 반영됨
+  async loadLastVisits(): Promise<Record<string, number>> {
+    if (isTauri()) {
+      return invoke<Record<string, number>>('load_last_visits');
+    } else {
+      const response = await fetch('/api/last-visits');
+      if (!response.ok) throw new Error('Failed to load last visits');
+      return response.json();
+    }
+  },
+
+  async saveLastVisit(portId: string, timestamp: number): Promise<void> {
+    if (isTauri()) {
+      return invoke('save_last_visit', { portId, timestamp });
+    } else {
+      await fetch('/api/last-visits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ portId, timestamp }),
+      });
+    }
+  },
+
   async executeCommand(portId: string, commandPath: string, folderPath?: string): Promise<void> {
     if (isTauri()) {
       return invoke('execute_command', { portId, commandPath, folderPath: folderPath ?? null });
@@ -1286,6 +1309,21 @@ function App() {
     try { return JSON.parse(localStorage.getItem('portmanager-last-visits') || '{}'); }
     catch { return {}; }
   });
+  // 마운트 시 웹/앱 공용 저장소(last-visits.json)와 병합 — 다른 쪽(웹 또는 앱)에서 기록한 실행 이력을 따라잡는다
+  useEffect(() => {
+    API.loadLastVisits()
+      .then(serverData => {
+        setLastVisits(prev => {
+          const next = { ...prev };
+          for (const [id, ts] of Object.entries(serverData)) {
+            if (!next[id] || ts > next[id]) next[id] = ts;
+          }
+          try { localStorage.setItem('portmanager-last-visits', JSON.stringify(next)); } catch {}
+          return next;
+        });
+      })
+      .catch(() => {});
+  }, []);
   // 메뉴 열린 상태에서 스크롤 시 자동 닫기 — position:fixed 메뉴가 트리거에서 떨어지는 문제 방지
   useEffect(() => {
     if (!v3MenuOpenId) return;
@@ -3627,12 +3665,15 @@ function App() {
   };
 
   const recordVisit = async (portId: string) => {
+    const now = Date.now();
     // 항상 로컬 lastVisits 업데이트 — Supabase 미설정 환경에서도 Stale 필터 동작
     setLastVisits(prev => {
-      const next = { ...prev, [portId]: Date.now() };
+      const next = { ...prev, [portId]: now };
       try { localStorage.setItem('portmanager-last-visits', JSON.stringify(next)); } catch {}
       return next;
     });
+    // 웹/앱 공용 저장소(last-visits.json)에도 기록 — 어느 쪽에서 실행해도 같이 반영되도록
+    API.saveLastVisit(portId, now).catch(() => {});
     const cfg = portalConfigRef.current;
     if (!cfg?.supabaseUrl || !cfg?.supabaseAnonKey || !cfg?.deviceId) return;
     try {
