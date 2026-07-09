@@ -4000,6 +4000,20 @@ function App() {
     }
   };
 
+  const formatLastRun = (ts: number | undefined): string => {
+    if (!ts) return lang === 'ko' ? '실행 이력 없음' : 'Never run';
+    const diffMs = Date.now() - ts;
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return lang === 'ko' ? '방금 전' : 'just now';
+    if (diffMin < 60) return lang === 'ko' ? `${diffMin}분 전` : `${diffMin}m ago`;
+    const diffHour = Math.floor(diffMin / 60);
+    if (diffHour < 24) return lang === 'ko' ? `${diffHour}시간 전` : `${diffHour}h ago`;
+    const diffDay = Math.floor(diffHour / 24);
+    if (diffDay < 30) return lang === 'ko' ? `${diffDay}일 전` : `${diffDay}d ago`;
+    const diffMonth = Math.floor(diffDay / 30);
+    return lang === 'ko' ? `${diffMonth}개월 전` : `${diffMonth}mo ago`;
+  };
+
   const matchesSearch = (p: PortInfo, q: string): boolean => {
     const folderBasename = p.folderPath?.split('/').pop()?.toLowerCase() ?? '';
     const aiName = p.aiName?.toLowerCase() ?? '';
@@ -4081,7 +4095,9 @@ function App() {
   }, [ports, sidebarSection, searchQuery, lastVisits]);
 
   const v3Running = useMemo(() => v3Ports.filter(p => p.isRunning), [v3Ports]);
-  const v3Idle = useMemo(() => v3Ports.filter(p => !p.isRunning), [v3Ports]);
+  const v3Idle = useMemo(() =>
+    [...v3Ports.filter(p => !p.isRunning)].sort((a, b) => (lastVisits[b.id] || 0) - (lastVisits[a.id] || 0)),
+    [v3Ports, lastVisits]);
 
   const inpV3: React.CSSProperties = {
     width:'100%', padding:'7px 10px', background:'#15120f',
@@ -4151,6 +4167,13 @@ function App() {
 
         {item.aiName && (
           <div style={{fontSize:12,color:'#a39a8c',marginTop:-2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.aiName}</div>
+        )}
+
+        {!item.isRunning && (
+          <div style={{display:'flex',alignItems:'center',gap:4,fontSize:10.5,color:'#6b6459'}}>
+            <Clock style={{width:9,height:9,flexShrink:0}} />
+            {formatLastRun(lastVisits[item.id])}
+          </div>
         )}
 
         {item.worktreePath && (
@@ -4404,6 +4427,7 @@ function App() {
           <div style={{flex:1,overflow:'hidden',display:'flex',flexDirection:'column',gap:1}}>
             <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.name}</span>
             {item.aiName && <span style={{fontSize:10,color:'#6b6459',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.aiName}</span>}
+            {!item.isRunning && <span style={{fontSize:10,color:'#6b6459',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{formatLastRun(lastVisits[item.id])}</span>}
           </div>
           {item.port ? <span style={{color:'#e8a557',fontSize:11,flexShrink:0}}>:{item.port}</span> : <span style={{color:'#4b4540',fontSize:11,flexShrink:0}}>—</span>}
         </div>
