@@ -1470,6 +1470,43 @@ end try`);
       }
     }
 
+    if (url.pathname === "/api/pick-file" && req.method === "GET") {
+      try {
+        let picked = '';
+        if (IS_WIN) {
+          // Windows: PowerShell OpenFileDialog
+          const ps = Bun.spawn({
+            cmd: ['powershell', '-NoProfile', '-NonInteractive', '-Command',
+              `Add-Type -AssemblyName System.Windows.Forms; $f = New-Object System.Windows.Forms.OpenFileDialog; $f.Filter = 'Executable Files (*.bat;*.cmd;*.html)|*.bat;*.cmd;*.html|All Files (*.*)|*.*'; if ($f.ShowDialog() -eq 'OK') { Write-Output $f.FileName }`],
+            stdout: 'pipe', stderr: 'pipe',
+          });
+          await ps.exited;
+          picked = (await new Response(ps.stdout).text()).trim();
+        } else {
+          const scriptPath = `/tmp/pick-file-${Date.now()}.applescript`;
+          await Bun.write(scriptPath, `try
+  set chosen to choose file with prompt "파일을 선택하세요"
+  return POSIX path of chosen
+on error
+  return ""
+end try`);
+          const proc = Bun.spawn({
+            cmd: ['osascript', scriptPath],
+            stdout: 'pipe', stderr: 'pipe',
+          });
+          await proc.exited;
+          picked = (await new Response(proc.stdout).text()).trim();
+          Bun.file(scriptPath).exists().then(() => Bun.spawn({ cmd: ['rm', scriptPath] })).catch(() => {});
+        }
+        if (!picked) {
+          return new Response(JSON.stringify({ error: 'cancelled' }), { status: 400, headers });
+        }
+        return new Response(JSON.stringify({ path: picked }), { headers });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers });
+      }
+    }
+
     if (url.pathname === "/api/expand-path" && req.method === "POST") {
       try {
         const { path: inputPath } = await req.json();
