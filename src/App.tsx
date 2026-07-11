@@ -731,6 +731,8 @@ interface WorktreeInfo {
   path: string;
   branch?: string;
   is_main: boolean;
+  /** main 브랜치 대비 머지 안 된 커밋 수. 0이면 이미 머지됨 (undefined = 계산 안 됨/알 수 없음) */
+  aheadCount?: number;
 }
 
 type SortType = 'name' | 'port' | 'recent';
@@ -4488,7 +4490,13 @@ function App() {
                 <button onClick={e=>{e.stopPropagation(); setCommitModal({item:portItem,wt,msg:''});}} style={miniBtn}>커밋</button>
                 <button onClick={e=>{e.stopPropagation(); API.gitPull(wt.path).then(o=>showToast(`풀 완료: ${displayName} ${o||'up-to-date'}`,'success')).catch(err=>showToast(`풀 실패: ${err.message}`,'error'));}} style={miniBtn}>풀</button>
                 <button onClick={e=>{e.stopPropagation(); const baseUrl=isTauri()?'http://localhost:3001':''; fetch(`${baseUrl}/api/git-push`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({folderPath:wt.path})}).then(r=>r.json()).then(d=>{if(d.success)showToast(`푸시 완료: ${displayName}`,'success');else showToast(`푸시 실패: ${d.error}`,'error');}).catch(()=>showToast('푸시 실패','error'));}} style={miniBtn}>푸시</button>
-                <button onClick={e=>{e.stopPropagation(); handleWorktreeMerge(portItem,wt);}} style={{...miniBtn,color:'#e8a557',borderColor:'rgba(232,165,87,0.2)'}}>머지</button>
+                <button onClick={e=>{e.stopPropagation(); handleWorktreeMerge(portItem,wt);}}
+                  style={wt.aheadCount===0
+                    ? {...miniBtn,color:'#6b6459',borderColor:'rgba(255,240,220,0.07)'}
+                    : {...miniBtn,color:'#e8a557',borderColor:'rgba(232,165,87,0.2)'}}
+                  title={wt.aheadCount===0?'이미 메인에 머지됨 — 클릭하면 워크트리 삭제로 진행':undefined}>
+                  {wt.aheadCount===0?'머지됨':'머지'}
+                </button>
                 <button onClick={e=>{e.stopPropagation(); handleWorktreeRemove(portItem,wt);}} style={{...miniBtn,color:'#c96a5a',borderColor:'rgba(201,106,90,0.2)'}}>삭제</button>
               </>}
               </div>
