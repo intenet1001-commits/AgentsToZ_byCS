@@ -1432,6 +1432,7 @@ function App() {
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [showOptionalFields, setShowOptionalFields] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectPort, setNewProjectPort] = useState('');
   const [activeRootId, setActiveRootId] = useState<string | null>(null);
   const [registerAsProject, setRegisterAsProject] = useState(true);
   const [projectModalTab, setProjectModalTab] = useState<'new' | 'existing'>('new');
@@ -2776,7 +2777,7 @@ function App() {
     await API.savePorts(updated);
   }, [ports]);
 
-  const saveInlineUrl = useCallback(async (id: string, field: 'deployUrl' | 'githubUrl', value: string) => {
+  const saveInlineUrl = useCallback(async (id: string, field: 'deployUrl' | 'githubUrl' | 'description', value: string) => {
     const trimmed = value.trim();
     const updated = ports.map(p => p.id === id ? { ...p, [field]: trimmed || undefined } : p);
     setPorts(updated);
@@ -3839,10 +3840,12 @@ function App() {
       const result = await API.createFolder(fullPath);
       if (result.success) {
         if (registerAsProject) {
-          setPorts(prev => [{ id: crypto.randomUUID(), name: trimmed, folderPath: fullPath }, ...prev]);
+          const portNum = newProjectPort ? parseInt(newProjectPort) : undefined;
+          setPorts(prev => [{ id: crypto.randomUUID(), name: trimmed, folderPath: fullPath, port: portNum }, ...prev]);
         }
         showToast(`폴더 생성${registerAsProject ? ' + 프로젝트 등록' : ''} 완료: ${trimmed}`, 'success');
         setNewProjectName('');
+        setNewProjectPort('');
         setShowNewProjectModal(false);
       } else {
         showToast((result as any).error || '폴더 생성 실패', 'error');
@@ -4145,9 +4148,11 @@ function App() {
   const matchesSearch = (p: PortInfo, q: string): boolean => {
     const folderBasename = p.folderPath?.split('/').pop()?.toLowerCase() ?? '';
     const aiName = p.aiName?.toLowerCase() ?? '';
+    const description = p.description?.toLowerCase() ?? '';
     return (
       p.name.toLowerCase().includes(q) ||
       aiName.includes(q) ||
+      description.includes(q) ||
       (p.port?.toString() ?? '').includes(q) ||
       folderBasename.includes(q)
     );
@@ -4215,6 +4220,7 @@ function App() {
         p.name.toLowerCase().includes(q) ||
         (p.aiName || '').toLowerCase().includes(q) ||
         (p.category || '').toLowerCase().includes(q) ||
+        (p.description || '').toLowerCase().includes(q) ||
         (p.worktreePath || '').toLowerCase().includes(q) ||
         String(p.port ?? '').includes(q)
       );
@@ -4258,6 +4264,7 @@ function App() {
               style={{...inpV3,flex:1}} placeholder="프로젝트 이름" autoFocus />
             <input type="number" value={editPort} onChange={e=>setEditPort(e.target.value)} onKeyDown={handleEditKeyPress}
               style={{...inpV3,width:70,flex:'none'}} placeholder="포트" />
+            <button type="button" onClick={()=>suggestPort(setEditPort)} title="빈 포트 추천 (9000번대)" style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(255,240,220,0.1)',borderRadius:6,color:'#a39a8c',cursor:'pointer',fontSize:11,whiteSpace:'nowrap' as const,flexShrink:0}}>추천</button>
             <button onClick={saveEdit} style={{padding:'5px 8px',background:'rgba(143,185,110,0.14)',border:'1px solid rgba(143,185,110,0.3)',borderRadius:6,cursor:'pointer',display:'flex',alignItems:'center'}}>
               <Check className="w-3.5 h-3.5" style={{color:'#8fb96e'}} />
             </button>
@@ -4315,9 +4322,11 @@ function App() {
             : item.folderPath && <span style={{fontSize:10,padding:'1px 6px',borderRadius:4,background:'rgba(232,165,87,0.12)',color:'#e8a557',flexShrink:0,border:'1px solid rgba(232,165,87,0.25)'}}>폴더</span>}
         </div>
 
-        {item.aiName && (
-          <div style={{fontSize:12,color:'#a39a8c',marginTop:-2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.aiName}</div>
-        )}
+        {item.description
+          ? <div style={{fontSize:12,color:'#a39a8c',marginTop:-2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={item.description}>📝 {item.description}</div>
+          : item.aiName && (
+            <div style={{fontSize:12,color:'#a39a8c',marginTop:-2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.aiName}</div>
+          )}
 
         {!item.isRunning && (
           <div style={{display:'flex',alignItems:'center',gap:4,fontSize:10.5,color:'#6b6459'}}>
@@ -4660,6 +4669,31 @@ function App() {
               }}/>
             </div>
           </div>
+          {(() => {
+            const tags = [...new Set(ports.map((p:PortInfo)=>p.category).filter(Boolean) as string[])].sort();
+            if (!tags.length) return null;
+            return (
+              <div style={{padding:'8px 10px',display:'flex',gap:4,flexWrap:'wrap' as const,borderBottom:'1px solid rgba(255,240,220,0.07)'}}>
+                {tags.map(tag => {
+                  const n = ports.filter((p:PortInfo)=>p.category===tag).length;
+                  const active = sidebarSection === `tag:${tag}`;
+                  return (
+                    <button key={tag} onClick={()=>setSidebarSection(active ? 'all' : `tag:${tag}`)} title={`카테고리: ${tag}`} style={{
+                      padding:'2px 7px',borderRadius:4,fontSize:10.5,cursor:'pointer',
+                      fontFamily:'Inter Tight, system-ui, sans-serif',
+                      background:active?'rgba(232,165,87,0.12)':'transparent',
+                      color:active?'#e8a557':'#6b6459',
+                      border:`1px solid ${active?'rgba(232,165,87,0.25)':'rgba(255,240,220,0.07)'}`,
+                      display:'flex',alignItems:'center',gap:3,
+                    }}>
+                      {tag}
+                      <span style={{fontSize:9,fontFamily:'JetBrains Mono, monospace',opacity:0.7}}>{n}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
           <div style={{flex:1,overflowY:'auto'}}>
             {v3Running.length > 0 && <>
               <div style={{padding:'8px 14px 4px',fontSize:10,fontFamily:monoFont,color:'#6b6459',textTransform:'uppercase' as const,letterSpacing:0.5,display:'flex',alignItems:'center',gap:5}}>
@@ -4832,6 +4866,7 @@ function App() {
               {sel.terminalCommand && <div style={{display:'flex',gap:10}}><span style={{color:'#4b4540',minWidth:72,flexShrink:0}}>terminal</span><span style={{color:'#a39a8c',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{sel.terminalCommand}</span></div>}
               <InlineUrlRow label="deploy" value={sel.deployUrl} onSave={(v) => saveInlineUrl(sel.id, 'deployUrl', v)} placeholder="배포 주소 입력" mobile={isMobile} />
               <InlineUrlRow label="github" value={sel.githubUrl} onSave={(v) => saveInlineUrl(sel.id, 'githubUrl', v)} placeholder="GitHub 주소 입력" mobile={isMobile} />
+              <InlineUrlRow label="메모" value={sel.description} onSave={(v) => saveInlineUrl(sel.id, 'description', v)} placeholder="이 프로젝트가 뭔지 메모 (나중에 헷갈리지 않도록)" mobile={isMobile} />
             </div>
 
             {/* 실행 제어 */}
@@ -6667,8 +6702,27 @@ function App() {
                         className="accent-amber-500 w-3.5 h-3.5" />
                       <span className="text-xs text-zinc-400">포트 목록에 프로젝트로 등록</span>
                     </label>
+                    {registerAsProject && (
+                      <div>
+                        <label className="text-xs text-zinc-400 mb-1 block">포트 (선택)</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            value={newProjectPort}
+                            onChange={e => setNewProjectPort(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && handleCreateProjectFolder()}
+                            placeholder="9000"
+                            className="flex-1 px-3 py-2 bg-stone-900 border border-stone-700 rounded-lg text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-amber-500/50"
+                          />
+                          <button type="button" onClick={() => suggestPort(setNewProjectPort)} title="빈 포트 추천 (9000번대)"
+                            className="px-3 py-2 text-xs text-zinc-400 border border-stone-700 rounded-lg hover:bg-stone-800 transition-colors whitespace-nowrap">
+                            추천
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     <div className="flex gap-2 pt-1">
-                      <button onClick={() => { setShowNewProjectModal(false); setProjectModalTab('new'); }}
+                      <button onClick={() => { setShowNewProjectModal(false); setProjectModalTab('new'); setNewProjectPort(''); }}
                         className="flex-1 py-2 text-sm text-zinc-400 border border-stone-700 rounded-lg hover:bg-stone-800 transition-colors">
                         취소
                       </button>
