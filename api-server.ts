@@ -3143,9 +3143,9 @@ end try`);
         if (!isAbsolute(worktreePath as string)) {
           return new Response(JSON.stringify({ error: "worktreePath must be absolute" }), { status: 400, headers });
         }
-        if (!existsSync(worktreePath as string)) {
-          return new Response(JSON.stringify({ error: `Worktree path does not exist: ${worktreePath}` }), { status: 400, headers });
-        }
+        // 폴더가 이미 사라졌어도(외부에서 rm 등) git 메타(.git/worktrees/<name>)는 잠금 때문에
+        // 남아있을 수 있으므로 여기서 즉시 에러 처리하지 않고 아래 prune 정리 경로로 진행한다.
+        const physicalDirMissing = !existsSync(worktreePath as string);
         // git worktree remove은 메인 레포 컨텍스트에서 실행 필요
         // worktree/.git 파일에서 메인 레포 경로 추출 (경로 구분자는 / 또는 \ 둘 다 가능)
         const parentDir = (p: string) => p.replace(/[\\/][^\\/]+[\\/]?$/, '') || (IS_WIN ? 'C:\\' : '/tmp');
@@ -3162,6 +3162,10 @@ end try`);
         } catch {
           mainRepoDir = parentDir(worktreePath as string);
         }
+        // git worktree remove/prune는 잠긴(locked) 워크트리를 건드리지 않으므로 먼저 unlock 시도(실패 무시)
+        const unlockProc = Bun.spawn([GIT_PATH, "worktree", "unlock", worktreePath], { cwd: mainRepoDir, stdout: "pipe", stderr: "pipe" });
+        await unlockProc.exited;
+
         // `git worktree remove --force` 실행 + 재시도 + 폴백 정리
         // Windows에서 Explorer가 폴더 열면 EPERM/EBUSY 발생 → 지연 후 재시도
         const runRemove = async () => {
@@ -3175,10 +3179,11 @@ end try`);
         // Windows는 파일 락이면 git이 "Invalid argument" 또는 "failed to delete" 를 뱉을 수 있음
         const isLockError = (err: string) => /permission denied|being used|EBUSY|EPERM|cannot access|access is denied|invalid argument|failed to delete/i.test(err);
 
-        let result = await runRemove();
+        // 물리 디렉터리가 이미 없으면 remove 시도는 의미가 없으니(항상 실패) 바로 prune 정리로 진행
+        let result = physicalDirMissing ? { ok: false, err: 'directory already missing' } : await runRemove();
         let attempts = 1;
         // 파일 락 에러면 최대 3회 재시도 (200ms, 400ms, 800ms 점증)
-        while (!result.ok && isLockError(result.err) && attempts < 3) {
+        while (!result.ok && !physicalDirMissing && isLockError(result.err) && attempts < 3) {
           await new Promise(r => setTimeout(r, 200 * Math.pow(2, attempts - 1)));
           result = await runRemove();
           attempts++;
