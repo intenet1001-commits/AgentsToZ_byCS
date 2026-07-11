@@ -2948,25 +2948,33 @@ end try`);
         const text = await new Response(proc.stdout).text();
 
         // parse --porcelain output
-        const worktrees: { path: string; branch?: string; is_main: boolean }[] = [];
+        const worktrees: { path: string; branch?: string; is_main: boolean; locked?: boolean; lockedReason?: string }[] = [];
         let currentPath: string | null = null;
         let currentBranch: string | null = null;
+        let currentLocked = false;
+        let currentLockedReason: string | undefined;
         let isFirst = true;
 
         for (const line of text.split('\n')) {
           if (line.startsWith('worktree ')) {
             if (currentPath !== null) {
-              worktrees.push({ path: currentPath, branch: currentBranch ?? undefined, is_main: isFirst });
+              worktrees.push({ path: currentPath, branch: currentBranch ?? undefined, is_main: isFirst, locked: currentLocked, lockedReason: currentLockedReason });
               if (isFirst) isFirst = false;
               currentBranch = null;
+              currentLocked = false;
+              currentLockedReason = undefined;
             }
             currentPath = line.slice('worktree '.length);
           } else if (line.startsWith('branch refs/heads/')) {
             currentBranch = line.slice('branch refs/heads/'.length);
+          } else if (line === 'locked' || line.startsWith('locked ')) {
+            currentLocked = true;
+            const reason = line.slice('locked'.length).trim();
+            currentLockedReason = reason || undefined;
           }
         }
         if (currentPath !== null) {
-          worktrees.push({ path: currentPath, branch: currentBranch ?? undefined, is_main: isFirst });
+          worktrees.push({ path: currentPath, branch: currentBranch ?? undefined, is_main: isFirst, locked: currentLocked, lockedReason: currentLockedReason });
         }
 
         // main 워크트리 OR {folderPath}/.claude/worktrees/ 하위에 있는 것만 표시
@@ -3239,13 +3247,43 @@ end try`);
         if (!folderPath || !existsSync(folderPath as string)) {
           return new Response(JSON.stringify({ success: true, skipped: true }), { headers });
         }
+        // git worktree prune은 locked 워크트리를 건드리지 않으므로,
+        // 물리 디렉터리가 이미 사라진 locked 워크트리(.claude/worktrees/ 하위)는 먼저 unlock + remove로 정리
+        const projWtDirNorm = join(folderPath as string, '.claude', 'worktrees').replace(/\\/g, '/') + '/';
+        try {
+          const preListProc = Bun.spawn([GIT_PATH, "worktree", "list", "--porcelain"], { cwd: folderPath, stdout: "pipe", stderr: "pipe" });
+          await preListProc.exited;
+          const preListOut = await new Response(preListProc.stdout).text();
+          let curPath: string | null = null;
+          let curLocked = false;
+          const orphanLockedPaths: string[] = [];
+          const flush = () => {
+            if (curPath && curLocked && curPath.replace(/\\/g, '/').startsWith(projWtDirNorm) && !existsSync(curPath)) {
+              orphanLockedPaths.push(curPath);
+            }
+          };
+          for (const line of preListOut.split('\n')) {
+            if (line.startsWith('worktree ')) {
+              flush();
+              curPath = line.slice('worktree '.length);
+              curLocked = false;
+            } else if (line === 'locked' || line.startsWith('locked ')) {
+              curLocked = true;
+            }
+          }
+          flush();
+          for (const p of orphanLockedPaths) {
+            await Bun.spawn([GIT_PATH, "worktree", "unlock", p], { cwd: folderPath, stdout: "pipe", stderr: "pipe" }).exited;
+            await Bun.spawn([GIT_PATH, "worktree", "remove", "--force", p], { cwd: folderPath, stdout: "pipe", stderr: "pipe" }).exited;
+          }
+        } catch { /* best-effort */ }
         // git worktree prune으로 삭제된 워크트리 메타 정리
         const pruneProc = Bun.spawn([GIT_PATH, "worktree", "prune"], {
           cwd: folderPath, stdout: "pipe", stderr: "pipe",
         });
         await pruneProc.exited;
-        // worktrees/ 하위 폴더 중 git 목록에 없는 것 물리 삭제
-        const wtDir = join(folderPath as string, 'worktrees');
+        // .claude/worktrees/ 하위 폴더 중 git 목록에 없는 것 물리 삭제
+        const wtDir = join(folderPath as string, '.claude', 'worktrees');
         if (existsSync(wtDir)) {
           const listProc = Bun.spawn([GIT_PATH, "worktree", "list", "--porcelain"], {
             cwd: folderPath, stdout: "pipe", stderr: "pipe",

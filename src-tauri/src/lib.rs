@@ -1793,6 +1793,12 @@ struct WorktreeInfo {
     path: String,
     branch: Option<String>,
     is_main: bool,
+    #[serde(default)]
+    locked: bool,
+    #[serde(rename = "lockedReason", default, skip_serializing_if = "Option::is_none")]
+    locked_reason: Option<String>,
+    #[serde(rename = "aheadCount", default, skip_serializing_if = "Option::is_none")]
+    ahead_count: Option<i64>,
 }
 
 /// POSIX `/...` 과 Windows `C:\...` / `C:/...` 둘 다 절대경로로 인정
@@ -1936,6 +1942,12 @@ fn git_worktree_remove(worktree_path: String) -> Result<(), String> {
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_else(|| if cfg!(windows) { "C:\\".to_string() } else { "/tmp".to_string() })
         });
+    // git worktree remove/prune는 잠긴(locked) 워크트리를 건드리지 않으므로 먼저 unlock 시도(실패 무시)
+    let _ = Command::new("git")
+        .args(["worktree", "unlock", &worktree_path])
+        .current_dir(&main_repo_dir)
+        .output();
+
     let run_remove = || -> Result<(bool, String), String> {
         let out = Command::new("git")
             .args(["worktree", "remove", "--force", &worktree_path])
@@ -1951,10 +1963,16 @@ fn git_worktree_remove(worktree_path: String) -> Result<(), String> {
             || low.contains("invalid argument") || low.contains("failed to delete")
     };
 
-    let (mut ok, mut err) = run_remove()?;
+    // 물리 디렉터리가 이미 없으면 remove 시도는 항상 실패하므로 바로 prune 정리로 진행
+    let physical_dir_missing = !std::path::Path::new(&worktree_path).exists();
+    let (mut ok, mut err) = if physical_dir_missing {
+        (false, "directory already missing".to_string())
+    } else {
+        run_remove()?
+    };
     let mut attempts = 1;
     // 파일 락 에러면 최대 3회 재시도 (200/400/800 ms 점증)
-    while !ok && is_lock_error(&err) && attempts < 3 {
+    while !ok && !physical_dir_missing && is_lock_error(&err) && attempts < 3 {
         std::thread::sleep(std::time::Duration::from_millis(200u64 * (1u64 << (attempts - 1))));
         let (o, e) = run_remove()?;
         ok = o;
@@ -2041,6 +2059,8 @@ fn list_git_worktrees(folder_path: String) -> Result<Vec<WorktreeInfo>, String> 
     let mut worktrees = Vec::new();
     let mut current_path: Option<String> = None;
     let mut current_branch: Option<String> = None;
+    let mut current_locked: bool = false;
+    let mut current_locked_reason: Option<String> = None;
     let mut is_first = true;
 
     for line in stdout.lines() {
@@ -2052,11 +2072,19 @@ fn list_git_worktrees(folder_path: String) -> Result<Vec<WorktreeInfo>, String> 
                     path,
                     branch: current_branch.take(),
                     is_main,
+                    locked: current_locked,
+                    locked_reason: current_locked_reason.take(),
+                    ahead_count: None,
                 });
+                current_locked = false;
             }
             current_path = Some(line["worktree ".len()..].to_string());
         } else if line.starts_with("branch refs/heads/") {
             current_branch = Some(line["branch refs/heads/".len()..].to_string());
+        } else if line == "locked" || line.starts_with("locked ") {
+            current_locked = true;
+            let reason = line.strip_prefix("locked").unwrap_or("").trim().to_string();
+            current_locked_reason = if reason.is_empty() { None } else { Some(reason) };
         }
     }
     // flush last entry
@@ -2065,15 +2093,52 @@ fn list_git_worktrees(folder_path: String) -> Result<Vec<WorktreeInfo>, String> 
             path,
             branch: current_branch,
             is_main: is_first,
+            locked: current_locked,
+            locked_reason: current_locked_reason,
+            ahead_count: None,
         });
     }
-    // main OR {project}/.claude/worktrees/ 하위만 표시
+    // main OR {project}/.claude/worktrees/ 하위만 표시 + 물리 디렉터리가 존재하는 것만 (orphan 메타 숨김)
     let norm = |p: &str| p.replace('\\', "/");
     let proj_wt_dir = format!("{}/.claude/worktrees/", norm(&folder_path).trim_end_matches('/'));
     let valid: Vec<WorktreeInfo> = worktrees.into_iter().filter(|wt| {
-        wt.is_main || norm(&wt.path).starts_with(&proj_wt_dir)
+        std::path::Path::new(&wt.path).exists() && (wt.is_main || norm(&wt.path).starts_with(&proj_wt_dir))
     }).collect();
-    Ok(valid)
+
+    // 메인 브랜치 대비 머지 안 된 커밋 수 (0 = 이미 머지됨) — non-main 워크트리만 계산
+    let main_branch_out = std::process::Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .current_dir(&folder_path)
+        .output();
+    let main_branch_name = main_branch_out
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
+
+    let with_merge_status: Vec<WorktreeInfo> = valid.into_iter().map(|mut wt| {
+        if wt.is_main || main_branch_name.is_empty() {
+            return wt;
+        }
+        if let Some(branch) = wt.branch.clone() {
+            if branch == main_branch_name {
+                return wt;
+            }
+            let count_out = std::process::Command::new("git")
+                .args(["rev-list", "--count", &format!("{}..{}", main_branch_name, branch)])
+                .current_dir(&folder_path)
+                .output();
+            if let Ok(out) = count_out {
+                if out.status.success() {
+                    if let Ok(n) = String::from_utf8_lossy(&out.stdout).trim().parse::<i64>() {
+                        wt.ahead_count = Some(n);
+                    }
+                }
+            }
+        }
+        wt
+    }).collect();
+
+    Ok(with_merge_status)
 }
 
 /// AI 이름 추천 (folderPath 기반, login shell에서 claude -p 호출)
