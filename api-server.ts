@@ -781,22 +781,32 @@ const server = Bun.serve({
       const folderPath = url.searchParams.get('path');
       if (!folderPath) return new Response(JSON.stringify({ error: 'Missing path' }), { status: 400, headers });
       const pkgPath = `${folderPath}/package.json`;
+      // scripts.dev/start의 실제 내용으로 framework 판별 — config 파일 존재 여부만으로 판단하면
+      // "vite.config.ts는 있지만 dev 스크립트는 커스텀 코디네이터(예: bun dev.ts)"인 프로젝트를
+      // 잘못 순수 vite/next 프로젝트로 오판해 워크트리 실행 시 잘못된 툴로 덮어쓰게 된다.
+      const detectFramework = (scriptContent: string | undefined): 'next' | 'vite' | 'other' => {
+        if (!scriptContent) return 'other';
+        const trimmed = scriptContent.trim();
+        if (/^next\s+dev\b/.test(trimmed)) return 'next';
+        if (/^vite\b/.test(trimmed)) return 'vite';
+        return 'other';
+      };
       if (existsSync(pkgPath)) {
         try {
           const pkg = await Bun.file(pkgPath).json();
           const scripts = pkg.scripts || {};
-          if ('dev' in scripts)   return new Response(JSON.stringify({ command: 'bun run dev' }), { headers });
-          if ('start' in scripts) return new Response(JSON.stringify({ command: 'bun run start' }), { headers });
+          if ('dev' in scripts)   return new Response(JSON.stringify({ command: 'bun run dev', framework: detectFramework(scripts.dev) }), { headers });
+          if ('start' in scripts) return new Response(JSON.stringify({ command: 'bun run start', framework: detectFramework(scripts.start) }), { headers });
         } catch {}
-        return new Response(JSON.stringify({ command: 'bun run dev' }), { headers });
+        return new Response(JSON.stringify({ command: 'bun run dev', framework: 'other' }), { headers });
       }
       if (existsSync(`${folderPath}/pyproject.toml`)) {
-        return new Response(JSON.stringify({ command: 'uv run python main.py' }), { headers });
+        return new Response(JSON.stringify({ command: 'uv run python main.py', framework: 'other' }), { headers });
       }
       if (existsSync(`${folderPath}/Cargo.toml`)) {
-        return new Response(JSON.stringify({ command: 'cargo run' }), { headers });
+        return new Response(JSON.stringify({ command: 'cargo run', framework: 'other' }), { headers });
       }
-      return new Response(JSON.stringify({ command: null }), { headers });
+      return new Response(JSON.stringify({ command: null, framework: 'other' }), { headers });
     }
 
     if (url.pathname === "/api/execute-command" && req.method === "POST") {
