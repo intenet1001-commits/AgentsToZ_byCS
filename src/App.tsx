@@ -3760,6 +3760,22 @@ function App() {
     }
   };
 
+  const handlePickCommandFile = async () => {
+    if (isTauri()) {
+      const { open } = await import('@tauri-apps/plugin-dialog');
+      const selected = await open({ directory: false, multiple: false });
+      if (selected && typeof selected === 'string') setEditCommandPath(selected);
+    } else {
+      try {
+        const res = await fetch('/api/pick-file');
+        const data = await res.json();
+        if (data.path) setEditCommandPath(data.path);
+      } catch (e: any) {
+        if (e.name !== 'AbortError') showToast('파일 선택 실패: ' + e.message, 'error');
+      }
+    }
+  };
+
   const handleRemoveWorkspaceRoot = (id: string) => {
     dirHandlesRef.current.delete(id);
     idbDeleteHandle(id);
@@ -4195,8 +4211,14 @@ function App() {
               <XIcon className="w-3.5 h-3.5" style={{color:'#6b6459'}} />
             </button>
           </div>
-          <input type="text" value={editCommandPath} onChange={e=>setEditCommandPath(e.target.value)} onKeyDown={handleEditKeyPress}
-            style={inpV3} placeholder={`${execFileExt()} 파일 경로`} />
+          <div style={{display:'flex',gap:6}}>
+            <input type="text" value={editCommandPath} onChange={e=>setEditCommandPath(e.target.value)} onKeyDown={handleEditKeyPress}
+              style={{...inpV3,flex:1}} placeholder={`${execFileExt()} 파일 경로`} />
+            <button type="button" onClick={handlePickCommandFile} title="파일 선택"
+              style={{padding:'0 9px',background:'rgba(255,240,220,0.05)',border:'1px solid rgba(255,240,220,0.07)',borderRadius:6,color:'#a39a8c',cursor:'pointer',display:'flex',alignItems:'center',flexShrink:0}}>
+              <FolderOpen style={{width:13,height:13}}/>
+            </button>
+          </div>
           <input type="text" value={editTerminalCommand} onChange={e=>setEditTerminalCommand(e.target.value)} onKeyDown={handleEditKeyPress}
             style={inpV3} placeholder="터미널 명령어" />
           <input type="text" value={editFolderPath} onChange={e=>setEditFolderPath(e.target.value)} onKeyDown={handleEditKeyPress}
@@ -4633,7 +4655,13 @@ function App() {
                 <button onClick={saveEdit} style={{padding:'5px 8px',background:'rgba(143,185,110,0.14)',border:'1px solid rgba(143,185,110,0.3)',borderRadius:6,cursor:'pointer',display:'flex',alignItems:'center'}}><Check className="w-3.5 h-3.5" style={{color:'#8fb96e'}}/></button>
                 <button onClick={cancelEdit} style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(255,240,220,0.07)',borderRadius:6,cursor:'pointer',display:'flex',alignItems:'center'}}><XIcon className="w-3.5 h-3.5" style={{color:'#6b6459'}}/></button>
               </div>
-              <input type="text" value={editCommandPath} onChange={e=>setEditCommandPath(e.target.value)} onKeyDown={handleEditKeyPress} style={inpV3} placeholder={`${execFileExt()} 파일 경로`} />
+              <div style={{display:'flex',gap:6}}>
+                <input type="text" value={editCommandPath} onChange={e=>setEditCommandPath(e.target.value)} onKeyDown={handleEditKeyPress} style={{...inpV3,flex:1}} placeholder={`${execFileExt()} 파일 경로`} />
+                <button type="button" onClick={handlePickCommandFile} title="파일 선택"
+                  style={{padding:'0 9px',background:'rgba(255,240,220,0.05)',border:'1px solid rgba(255,240,220,0.07)',borderRadius:6,color:'#a39a8c',cursor:'pointer',display:'flex',alignItems:'center',flexShrink:0}}>
+                  <FolderOpen style={{width:13,height:13}}/>
+                </button>
+              </div>
               <input type="text" value={editTerminalCommand} onChange={e=>setEditTerminalCommand(e.target.value)} onKeyDown={handleEditKeyPress} style={inpV3} placeholder="터미널 명령어" />
               <input type="text" value={editFolderPath} onChange={e=>setEditFolderPath(e.target.value)} onKeyDown={handleEditKeyPress} style={inpV3} placeholder="폴더 경로" />
               <input type="text" value={editDeployUrl} onChange={e=>setEditDeployUrl(e.target.value)} onKeyDown={handleEditKeyPress} style={inpV3} placeholder="배포 주소" />
