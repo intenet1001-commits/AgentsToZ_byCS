@@ -4669,6 +4669,31 @@ function App() {
               }}/>
             </div>
           </div>
+          {(() => {
+            const tags = [...new Set(ports.map((p:PortInfo)=>p.category).filter(Boolean) as string[])].sort();
+            if (!tags.length) return null;
+            return (
+              <div style={{padding:'8px 10px',display:'flex',gap:4,flexWrap:'wrap' as const,borderBottom:'1px solid rgba(255,240,220,0.07)'}}>
+                {tags.map(tag => {
+                  const n = ports.filter((p:PortInfo)=>p.category===tag).length;
+                  const active = sidebarSection === `tag:${tag}`;
+                  return (
+                    <button key={tag} onClick={()=>setSidebarSection(active ? 'all' : `tag:${tag}`)} title={`카테고리: ${tag}`} style={{
+                      padding:'2px 7px',borderRadius:4,fontSize:10.5,cursor:'pointer',
+                      fontFamily:'Inter Tight, system-ui, sans-serif',
+                      background:active?'rgba(232,165,87,0.12)':'transparent',
+                      color:active?'#e8a557':'#6b6459',
+                      border:`1px solid ${active?'rgba(232,165,87,0.25)':'rgba(255,240,220,0.07)'}`,
+                      display:'flex',alignItems:'center',gap:3,
+                    }}>
+                      {tag}
+                      <span style={{fontSize:9,fontFamily:'JetBrains Mono, monospace',opacity:0.7}}>{n}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
           <div style={{flex:1,overflowY:'auto'}}>
             {v3Running.length > 0 && <>
               <div style={{padding:'8px 14px 4px',fontSize:10,fontFamily:monoFont,color:'#6b6459',textTransform:'uppercase' as const,letterSpacing:0.5,display:'flex',alignItems:'center',gap:5}}>
