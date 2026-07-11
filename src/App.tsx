@@ -731,7 +731,7 @@ interface WorktreeInfo {
   path: string;
   branch?: string;
   is_main: boolean;
-  /** main 브랜치 대비 머지 안 된 커밋 수. 0이면 이미 머지됨 (undefined = 계산 안 됨/알 수 없음) */
+  /** main 브랜치 대비 머지 안 된 커밋 수. 0이면 머지할 변경사항 없음(신규 생성 직후 포함) (undefined = 계산 안 됨/알 수 없음) */
   aheadCount?: number;
   /** git worktree lock 여부 (Claude Code 세션 등이 사용 중) */
   locked?: boolean;
@@ -1660,6 +1660,12 @@ function App() {
     try {
       await API.gitWorktreeRemove(wt.path);
       showToast(`워크트리 제거됨: ${name}`, 'success');
+      // 워크트리 "실행" 시 자동 등록됐던 프로젝트 카드도 함께 정리 (폴더가 사라진 카드가 남지 않도록)
+      setPorts(prev => prev.filter(p =>
+        p.worktreePath !== wt.path &&
+        !(wt.branch && p.worktreePath === wt.branch) &&
+        p.folderPath !== wt.path
+      ));
       await loadWorktrees(item.id, item.folderPath!);
     } catch (e) {
       showToast(`워크트리 제거 실패: ${e}`, 'error');
@@ -4500,6 +4506,23 @@ function App() {
             // 상단 툴바 옵션(terminalApp, bgMode 등)을 반영하는 통합 핸들러 사용
             openClaudeMain(portItem, false, wt.path);
           };
+          // 워크트리를 처음 실행할 때 전체 프로젝트 목록에도 영구 등록 (사이드바 "워크트리" 카운트가 실제 상태를 반영하도록)
+          const ensureWtPortEntry = (): PortInfo => {
+            if (wtPortEntry) return wtPortEntry;
+            const newEntry: PortInfo = {
+              ...portItem,
+              id: `${portItem.id}_wt_${wtName}`,
+              name: `${portItem.name} (${displayName})`,
+              port: wtPort,
+              folderPath: wt.path,
+              worktreePath: wt.path,
+              commandPath: undefined,
+              terminalCommand: undefined,
+              isRunning: false,
+            };
+            setPorts(prev => prev.some(p => p.id === newEntry.id) ? prev : [...prev, newEntry]);
+            return newEntry;
+          };
           return (
             <div key={wt.path} style={{padding:'5px 6px',borderRadius:5,background:wt.is_main?'rgba(232,165,87,0.04)':'rgba(255,240,220,0.02)',border:'1px solid rgba(255,240,220,0.05)',borderLeft:wt.is_main?'2px solid rgba(232,165,87,0.35)':'1px solid rgba(255,240,220,0.05)',display:'flex',flexDirection:'column',gap:4}}>
               <div style={{display:'flex',alignItems:'center',gap:5}}>
@@ -4529,12 +4552,12 @@ function App() {
                 <button onClick={e=>{e.stopPropagation(); portItem.folderPath && API.gitPull(portItem.folderPath).then(o=>showToast(`풀 완료: ${o||'up-to-date'}`,'success')).catch(err=>showToast(`풀 실패: ${err.message}`,'error'));}} style={miniBtn}>풀</button>
                 <button onClick={e=>{e.stopPropagation(); const baseUrl=isTauri()?'http://localhost:3001':''; fetch(`${baseUrl}/api/git-push`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({folderPath:portItem.folderPath})}).then(r=>r.json()).then(d=>{if(d.success)showToast('푸시 완료','success');else showToast(`푸시 실패: ${d.error}`,'error');}).catch(()=>showToast('푸시 실패','error'));}} style={miniBtn}>푸시</button>
               </> : <>
-                <button onClick={e=>{e.stopPropagation(); if(wtPortEntry){isWtRunning?stopCommand(wtPortEntry):executeCommand(wtPortEntry);}else{executeCommand({...portItem,id:`${portItem.id}_wt_${wtName}`,port:wtPort,folderPath:wt.path,worktreePath:wt.path,commandPath:undefined,terminalCommand:undefined});}}} style={{...miniBtn,color:isWtRunning?'#c96a5a':'#8fb96e',borderColor:isWtRunning?'rgba(201,106,90,0.2)':'rgba(143,185,110,0.2)'}} title={isWtRunning?`포트 ${wtPort}`:undefined}>
+                <button onClick={e=>{e.stopPropagation(); if(wtPortEntry){isWtRunning?stopCommand(wtPortEntry):executeCommand(wtPortEntry);}else{executeCommand(ensureWtPortEntry());}}} style={{...miniBtn,color:isWtRunning?'#c96a5a':'#8fb96e',borderColor:isWtRunning?'rgba(201,106,90,0.2)':'rgba(143,185,110,0.2)'}} title={isWtRunning?`포트 ${wtPort}`:undefined}>
                   {isWtRunning ? '중지' : `실행(${wtPort})`}
                 </button>
                 <button onClick={e=>{e.stopPropagation(); API.openInChrome(`http://localhost:${wtPort}`).catch(()=>{});}} style={miniBtn} title="브라우저에서 열기"><Globe style={{width:9,height:9}}/></button>
                 {!isWindows() && <button onClick={e=>{e.stopPropagation(); openCmuxLocalhost({...portItem,port:wtPort,worktreePath:wt.path});}} style={{...miniBtn,color:'#2dd4bf',borderColor:'rgba(45,212,191,0.2)'}} title={`cmux localhost:${wtPort}`}><Terminal style={{width:9,height:9}}/></button>}
-                <button onClick={e=>{e.stopPropagation(); if(wtPortEntry)forceRestartCommand(wtPortEntry);else forceRestartCommand({...portItem,id:`${portItem.id}_wt_${wtName}`,port:wtPort,folderPath:wt.path,worktreePath:wt.path,commandPath:undefined,terminalCommand:undefined});}} style={{...miniBtn,color:'#e8a557',borderColor:'rgba(232,165,87,0.2)'}} title="강제 재실행"><RotateCw style={{width:9,height:9}}/></button>
+                <button onClick={e=>{e.stopPropagation(); forceRestartCommand(ensureWtPortEntry());}} style={{...miniBtn,color:'#e8a557',borderColor:'rgba(232,165,87,0.2)'}} title="강제 재실행"><RotateCw style={{width:9,height:9}}/></button>
                 <button onClick={e=>{e.stopPropagation(); API.openFolder(wt.path).catch(()=>{});}} style={miniBtn} title="Finder에서 열기"><FolderOpen style={{width:9,height:9}}/></button>
                 <button onClick={e=>{e.stopPropagation(); wtClaudeBypass();}} style={{...miniBtn,color:'#c8a8f0',borderColor:'rgba(200,168,240,0.25)'}}><Zap style={{width:8,height:8,display:'inline',verticalAlign:'middle'}}/>{bypassPermissions?'Claude ⚡':'Claude'}</button>
                 <button onClick={e=>{e.stopPropagation(); openCodexMain({...portItem,folderPath:wt.path},wt.path);}} style={{...miniBtn,color:'#6ee7b7',borderColor:'rgba(110,231,183,0.25)'}} title={`Codex (${terminalApp})`}>Codex</button>
@@ -4546,8 +4569,8 @@ function App() {
                   style={wt.aheadCount===0
                     ? {...miniBtn,color:'#6b6459',borderColor:'rgba(255,240,220,0.07)'}
                     : {...miniBtn,color:'#e8a557',borderColor:'rgba(232,165,87,0.2)'}}
-                  title={wt.aheadCount===0?'이미 메인에 머지됨 — 클릭하면 워크트리 삭제로 진행':undefined}>
-                  {wt.aheadCount===0?'머지됨':'머지'}
+                  title={wt.aheadCount===0?'main과 비교해 머지할 변경사항이 없습니다 (이미 머지됐거나 아직 새 커밋이 없는 상태)':undefined}>
+                  {wt.aheadCount===0?'변경 없음':'머지'}
                 </button>
                 <button onClick={e=>{e.stopPropagation(); if(wt.locked){showToast('Claude Code 세션이 사용 중입니다. 세션 종료 후 삭제하세요.','error');return;} handleWorktreeRemove(portItem,wt);}}
                   disabled={!!wt.locked}
