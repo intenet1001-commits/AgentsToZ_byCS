@@ -1432,6 +1432,7 @@ function App() {
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [showOptionalFields, setShowOptionalFields] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectPort, setNewProjectPort] = useState('');
   const [activeRootId, setActiveRootId] = useState<string | null>(null);
   const [registerAsProject, setRegisterAsProject] = useState(true);
   const [projectModalTab, setProjectModalTab] = useState<'new' | 'existing'>('new');
@@ -3839,10 +3840,12 @@ function App() {
       const result = await API.createFolder(fullPath);
       if (result.success) {
         if (registerAsProject) {
-          setPorts(prev => [{ id: crypto.randomUUID(), name: trimmed, folderPath: fullPath }, ...prev]);
+          const portNum = newProjectPort ? parseInt(newProjectPort) : undefined;
+          setPorts(prev => [{ id: crypto.randomUUID(), name: trimmed, folderPath: fullPath, port: portNum }, ...prev]);
         }
         showToast(`폴더 생성${registerAsProject ? ' + 프로젝트 등록' : ''} 완료: ${trimmed}`, 'success');
         setNewProjectName('');
+        setNewProjectPort('');
         setShowNewProjectModal(false);
       } else {
         showToast((result as any).error || '폴더 생성 실패', 'error');
@@ -4261,6 +4264,7 @@ function App() {
               style={{...inpV3,flex:1}} placeholder="프로젝트 이름" autoFocus />
             <input type="number" value={editPort} onChange={e=>setEditPort(e.target.value)} onKeyDown={handleEditKeyPress}
               style={{...inpV3,width:70,flex:'none'}} placeholder="포트" />
+            <button type="button" onClick={()=>suggestPort(setEditPort)} title="빈 포트 추천 (9000번대)" style={{padding:'5px 8px',background:'transparent',border:'1px solid rgba(255,240,220,0.1)',borderRadius:6,color:'#a39a8c',cursor:'pointer',fontSize:11,whiteSpace:'nowrap' as const,flexShrink:0}}>추천</button>
             <button onClick={saveEdit} style={{padding:'5px 8px',background:'rgba(143,185,110,0.14)',border:'1px solid rgba(143,185,110,0.3)',borderRadius:6,cursor:'pointer',display:'flex',alignItems:'center'}}>
               <Check className="w-3.5 h-3.5" style={{color:'#8fb96e'}} />
             </button>
@@ -6673,8 +6677,27 @@ function App() {
                         className="accent-amber-500 w-3.5 h-3.5" />
                       <span className="text-xs text-zinc-400">포트 목록에 프로젝트로 등록</span>
                     </label>
+                    {registerAsProject && (
+                      <div>
+                        <label className="text-xs text-zinc-400 mb-1 block">포트 (선택)</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="number"
+                            value={newProjectPort}
+                            onChange={e => setNewProjectPort(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && handleCreateProjectFolder()}
+                            placeholder="9000"
+                            className="flex-1 px-3 py-2 bg-stone-900 border border-stone-700 rounded-lg text-sm text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-amber-500/50"
+                          />
+                          <button type="button" onClick={() => suggestPort(setNewProjectPort)} title="빈 포트 추천 (9000번대)"
+                            className="px-3 py-2 text-xs text-zinc-400 border border-stone-700 rounded-lg hover:bg-stone-800 transition-colors whitespace-nowrap">
+                            추천
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     <div className="flex gap-2 pt-1">
-                      <button onClick={() => { setShowNewProjectModal(false); setProjectModalTab('new'); }}
+                      <button onClick={() => { setShowNewProjectModal(false); setProjectModalTab('new'); setNewProjectPort(''); }}
                         className="flex-1 py-2 text-sm text-zinc-400 border border-stone-700 rounded-lg hover:bg-stone-800 transition-colors">
                         취소
                       </button>
