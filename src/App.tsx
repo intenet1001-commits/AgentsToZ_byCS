@@ -2776,7 +2776,7 @@ function App() {
     await API.savePorts(updated);
   }, [ports]);
 
-  const saveInlineUrl = useCallback(async (id: string, field: 'deployUrl' | 'githubUrl', value: string) => {
+  const saveInlineUrl = useCallback(async (id: string, field: 'deployUrl' | 'githubUrl' | 'description', value: string) => {
     const trimmed = value.trim();
     const updated = ports.map(p => p.id === id ? { ...p, [field]: trimmed || undefined } : p);
     setPorts(updated);
@@ -4145,9 +4145,11 @@ function App() {
   const matchesSearch = (p: PortInfo, q: string): boolean => {
     const folderBasename = p.folderPath?.split('/').pop()?.toLowerCase() ?? '';
     const aiName = p.aiName?.toLowerCase() ?? '';
+    const description = p.description?.toLowerCase() ?? '';
     return (
       p.name.toLowerCase().includes(q) ||
       aiName.includes(q) ||
+      description.includes(q) ||
       (p.port?.toString() ?? '').includes(q) ||
       folderBasename.includes(q)
     );
@@ -4215,6 +4217,7 @@ function App() {
         p.name.toLowerCase().includes(q) ||
         (p.aiName || '').toLowerCase().includes(q) ||
         (p.category || '').toLowerCase().includes(q) ||
+        (p.description || '').toLowerCase().includes(q) ||
         (p.worktreePath || '').toLowerCase().includes(q) ||
         String(p.port ?? '').includes(q)
       );
@@ -4315,9 +4318,11 @@ function App() {
             : item.folderPath && <span style={{fontSize:10,padding:'1px 6px',borderRadius:4,background:'rgba(232,165,87,0.12)',color:'#e8a557',flexShrink:0,border:'1px solid rgba(232,165,87,0.25)'}}>폴더</span>}
         </div>
 
-        {item.aiName && (
-          <div style={{fontSize:12,color:'#a39a8c',marginTop:-2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.aiName}</div>
-        )}
+        {item.description
+          ? <div style={{fontSize:12,color:'#a39a8c',marginTop:-2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={item.description}>📝 {item.description}</div>
+          : item.aiName && (
+            <div style={{fontSize:12,color:'#a39a8c',marginTop:-2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.aiName}</div>
+          )}
 
         {!item.isRunning && (
           <div style={{display:'flex',alignItems:'center',gap:4,fontSize:10.5,color:'#6b6459'}}>
@@ -4832,6 +4837,7 @@ function App() {
               {sel.terminalCommand && <div style={{display:'flex',gap:10}}><span style={{color:'#4b4540',minWidth:72,flexShrink:0}}>terminal</span><span style={{color:'#a39a8c',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{sel.terminalCommand}</span></div>}
               <InlineUrlRow label="deploy" value={sel.deployUrl} onSave={(v) => saveInlineUrl(sel.id, 'deployUrl', v)} placeholder="배포 주소 입력" mobile={isMobile} />
               <InlineUrlRow label="github" value={sel.githubUrl} onSave={(v) => saveInlineUrl(sel.id, 'githubUrl', v)} placeholder="GitHub 주소 입력" mobile={isMobile} />
+              <InlineUrlRow label="메모" value={sel.description} onSave={(v) => saveInlineUrl(sel.id, 'description', v)} placeholder="이 프로젝트가 뭔지 메모 (나중에 헷갈리지 않도록)" mobile={isMobile} />
             </div>
 
             {/* 실행 제어 */}
