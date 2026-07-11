@@ -81,14 +81,14 @@ const API = {
     }
   },
 
-  async detectStartCommand(folderPath: string): Promise<string | null> {
+  async detectStartCommand(folderPath: string): Promise<{ command: string | null; framework: 'next' | 'vite' | 'other' }> {
     if (isTauri()) {
-      return invoke<string | null>('detect_start_command', { folderPath });
+      return invoke<{ command: string | null; framework: 'next' | 'vite' | 'other' }>('detect_start_command', { folderPath });
     }
     const res = await fetch(`/api/detect-start-command?path=${encodeURIComponent(folderPath)}`);
-    if (!res.ok) return null;
+    if (!res.ok) return { command: null, framework: 'other' };
     const data = await res.json();
-    return data.command ?? null;
+    return { command: data.command ?? null, framework: data.framework ?? 'other' };
   },
 
   async stopCommand(portId: string, port: number): Promise<void> {
@@ -2833,14 +2833,19 @@ function App() {
     // commandPath/terminalCommand 없으면 folderPath에서 자동 감지
     if (!runTarget && item.folderPath) {
       try {
-        const detected = await API.detectStartCommand(item.folderPath);
+        const { command: detected, framework } = await API.detectStartCommand(item.folderPath);
         if (detected) {
           runTarget = detected;
-          // 워크트리 실행 시: node_modules가 없어도 bunx로 Vite 직접 실행
-          if (item.port && item.worktreePath && /^(bun run (dev|start)|npm run (dev|start)|yarn dev|pnpm dev|vite)\b/.test(detected)) {
+          // 워크트리 실행 시: dev 스크립트가 순수 vite/next 단일 바이너리 호출이면
+          // 로컬 node_modules/.bin 스크립트 러너를 우회해 bunx로 직접 실행 + 포트 지정.
+          // framework가 'other'(커스텀 코디네이터 스크립트 등)면 절대 덮어쓰지 않는다 —
+          // 잘못된 툴을 강제 실행해 실제 dev 서버(백엔드 포함)가 하나도 안 뜨는 사고 방지.
+          if (item.port && item.worktreePath && framework === 'vite') {
             runTarget = `bunx vite --port ${item.port}`;
+          } else if (item.port && item.worktreePath && framework === 'next') {
+            runTarget = `bunx next dev -p ${item.port}`;
           }
-          showToast(`자동 감지: ${detected}`, 'success');
+          showToast(`자동 감지: ${runTarget}`, 'success');
         }
       } catch {}
     }
@@ -2903,11 +2908,13 @@ function App() {
     // commandPath/terminalCommand 없으면 folderPath에서 자동 감지 (워크트리 케이스)
     if (!runTarget && item.folderPath) {
       try {
-        const detected = await API.detectStartCommand(item.folderPath);
+        const { command: detected, framework } = await API.detectStartCommand(item.folderPath);
         if (detected) {
           runTarget = detected;
-          if (item.port && item.worktreePath && /^(bun run (dev|start)|npm run (dev|start)|yarn dev|pnpm dev|vite)\b/.test(detected)) {
+          if (item.port && item.worktreePath && framework === 'vite') {
             runTarget = `bunx vite --port ${item.port}`;
+          } else if (item.port && item.worktreePath && framework === 'next') {
+            runTarget = `bunx next dev -p ${item.port}`;
           }
         }
       } catch {}

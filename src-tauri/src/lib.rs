@@ -2738,8 +2738,25 @@ fn set_global_shortcut(app: tauri::AppHandle, shortcut: String, old_shortcut: St
     Ok(())
 }
 
+#[derive(Debug, Serialize, Clone)]
+struct DetectedStartCommand {
+    command: Option<String>,
+    framework: String,
+}
+
+// scripts.dev/start의 실제 내용으로 framework 판별 — config 파일 존재 여부만으로 판단하면
+// "vite.config.ts는 있지만 dev 스크립트는 커스텀 코디네이터(예: bun dev.ts)"인 프로젝트를
+// 잘못 순수 vite/next 프로젝트로 오판해 워크트리 실행 시 잘못된 툴로 덮어쓰게 된다.
+fn detect_framework(script_content: Option<&str>) -> String {
+    match script_content.map(|s| s.trim()) {
+        Some(s) if s.starts_with("next dev") => "next".to_string(),
+        Some(s) if s.starts_with("vite") => "vite".to_string(),
+        _ => "other".to_string(),
+    }
+}
+
 #[tauri::command]
-fn detect_start_command(folder_path: String) -> Option<String> {
+fn detect_start_command(folder_path: String) -> DetectedStartCommand {
     let path = std::path::Path::new(&folder_path);
 
     // package.json → bun run dev / bun run start
@@ -2748,29 +2765,29 @@ fn detect_start_command(folder_path: String) -> Option<String> {
         if let Ok(content) = fs::read_to_string(&pkg_path) {
             if let Ok(pkg) = serde_json::from_str::<serde_json::Value>(&content) {
                 if let Some(scripts) = pkg.get("scripts") {
-                    if scripts.get("dev").is_some() {
-                        return Some("bun run dev".to_string());
+                    if let Some(dev) = scripts.get("dev").and_then(|v| v.as_str()) {
+                        return DetectedStartCommand { command: Some("bun run dev".to_string()), framework: detect_framework(Some(dev)) };
                     }
-                    if scripts.get("start").is_some() {
-                        return Some("bun run start".to_string());
+                    if let Some(start) = scripts.get("start").and_then(|v| v.as_str()) {
+                        return DetectedStartCommand { command: Some("bun run start".to_string()), framework: detect_framework(Some(start)) };
                     }
                 }
             }
         }
-        return Some("bun run dev".to_string());
+        return DetectedStartCommand { command: Some("bun run dev".to_string()), framework: "other".to_string() };
     }
 
     // pyproject.toml → uv run
     if path.join("pyproject.toml").exists() {
-        return Some("uv run python main.py".to_string());
+        return DetectedStartCommand { command: Some("uv run python main.py".to_string()), framework: "other".to_string() };
     }
 
     // Cargo.toml → cargo run
     if path.join("Cargo.toml").exists() {
-        return Some("cargo run".to_string());
+        return DetectedStartCommand { command: Some("cargo run".to_string()), framework: "other".to_string() };
     }
 
-    None
+    DetectedStartCommand { command: None, framework: "other".to_string() }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
