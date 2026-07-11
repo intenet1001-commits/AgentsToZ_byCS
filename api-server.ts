@@ -2977,7 +2977,20 @@ end try`);
           (wt.is_main || normPath(wt.path).startsWith(projWtDir))
         );
 
-        return new Response(JSON.stringify({ success: true, worktrees: validWorktrees }), { headers });
+        // 메인 브랜치 대비 머지 안 된 커밋 수 (0 = 이미 머지됨) — non-main 워크트리만 계산
+        const mainBranchProc = Bun.spawn([GIT_PATH, "rev-parse", "--abbrev-ref", "HEAD"], { cwd: folderPath, stdout: "pipe", stderr: "pipe" });
+        await mainBranchProc.exited;
+        const mainBranchName = (await new Response(mainBranchProc.stdout).text()).trim();
+        const withMergeStatus = await Promise.all(validWorktrees.map(async wt => {
+          if (wt.is_main || !wt.branch || wt.branch === mainBranchName) return wt;
+          const countProc = Bun.spawn([GIT_PATH, "rev-list", "--count", `${mainBranchName}..${wt.branch}`], { cwd: folderPath, stdout: "pipe", stderr: "pipe" });
+          await countProc.exited;
+          if (countProc.exitCode !== 0) return wt;
+          const aheadCount = parseInt((await new Response(countProc.stdout).text()).trim(), 10);
+          return { ...wt, aheadCount: Number.isFinite(aheadCount) ? aheadCount : undefined };
+        }));
+
+        return new Response(JSON.stringify({ success: true, worktrees: withMergeStatus }), { headers });
       } catch (e: any) {
         return new Response(JSON.stringify({ success: true, worktrees: [] }), { headers });
       }
