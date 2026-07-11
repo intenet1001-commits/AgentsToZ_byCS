@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
-import { Server, Trash2, Plus, ExternalLink, Terminal, ArrowUpDown, Pencil, Check, X as XIcon, Play, Square, Rocket, FolderOpen, Upload, Download, Folder, FilePlus, Package, RefreshCw, FileText, RotateCw, Globe, Github, SquareTerminal, Info, Monitor, BookMarked, Cloud, CloudUpload, CloudDownload, Search, Sparkles, Settings, GitPullRequest, Copy, GitBranch, GitCommit, Star, BookOpen, ChevronDown, ChevronUp, StickyNote, Clock, Zap, History, Laptop, Keyboard, LayoutList, LayoutGrid, MoreHorizontal } from 'lucide-react';
+import { Server, Trash2, Plus, ExternalLink, Terminal, ArrowUpDown, Pencil, Check, X as XIcon, Play, Square, Rocket, FolderOpen, Upload, Download, Folder, FilePlus, Package, RefreshCw, FileText, RotateCw, Globe, Github, SquareTerminal, Info, Monitor, BookMarked, Cloud, CloudUpload, CloudDownload, Search, Sparkles, Settings, GitPullRequest, Copy, GitBranch, GitCommit, Star, BookOpen, ChevronDown, ChevronUp, StickyNote, Clock, Zap, History, Laptop, Keyboard, LayoutList, LayoutGrid, MoreHorizontal, Lock } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { getSupabaseClient } from './lib/supabaseClient';
@@ -733,6 +733,10 @@ interface WorktreeInfo {
   is_main: boolean;
   /** main 브랜치 대비 머지 안 된 커밋 수. 0이면 이미 머지됨 (undefined = 계산 안 됨/알 수 없음) */
   aheadCount?: number;
+  /** git worktree lock 여부 (Claude Code 세션 등이 사용 중) */
+  locked?: boolean;
+  /** lock 사유 (예: "claude session <name> (pid ... start ...)") */
+  lockedReason?: string;
 }
 
 type SortType = 'name' | 'port' | 'recent';
@@ -1596,7 +1600,7 @@ function App() {
         return next;
       });
     } catch {
-      setWorktreeLists(prev => ({ ...prev, [portId]: [] }));
+      // 일시적 오류(git/API 순간 실패)로 패널이 텅 비어 보이지 않도록 이전 목록 유지
     } finally {
       setWorktreeLoading(prev => ({ ...prev, [portId]: false }));
     }
@@ -4502,6 +4506,12 @@ function App() {
                 <GitBranch style={{width:9,height:9,color:wt.is_main?'#6b6459':'#7ba7c9',flexShrink:0}}/>
                 <span style={{fontSize:11,fontWeight:600,color:wt.is_main?'#ede7dd':'#7ba7c9',fontFamily:'JetBrains Mono, monospace',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{displayName}</span>
                 {wt.is_main && <span style={{fontSize:9,color:'#6b6459',background:'rgba(255,240,220,0.06)',padding:'1px 4px',borderRadius:3}}>main</span>}
+                {!wt.is_main && wt.locked && (
+                  <span title={wt.lockedReason ? `세션 사용 중 — ${wt.lockedReason}` : '세션 사용 중이라 삭제할 수 없습니다'}
+                    style={{display:'flex',alignItems:'center',gap:2,fontSize:9,color:'#e8a557',background:'rgba(232,165,87,0.08)',padding:'1px 4px',borderRadius:3,flexShrink:0}}>
+                    <Lock style={{width:8,height:8}}/>세션 사용 중
+                  </span>
+                )}
               </div>
               <div style={{display:'flex',gap:3,flexWrap:'wrap' as const}}>
               {wt.is_main ? <>
@@ -4539,7 +4549,12 @@ function App() {
                   title={wt.aheadCount===0?'이미 메인에 머지됨 — 클릭하면 워크트리 삭제로 진행':undefined}>
                   {wt.aheadCount===0?'머지됨':'머지'}
                 </button>
-                <button onClick={e=>{e.stopPropagation(); handleWorktreeRemove(portItem,wt);}} style={{...miniBtn,color:'#c96a5a',borderColor:'rgba(201,106,90,0.2)'}}>삭제</button>
+                <button onClick={e=>{e.stopPropagation(); if(wt.locked){showToast('Claude Code 세션이 사용 중입니다. 세션 종료 후 삭제하세요.','error');return;} handleWorktreeRemove(portItem,wt);}}
+                  disabled={!!wt.locked}
+                  style={wt.locked
+                    ? {...miniBtn,color:'#6b6459',borderColor:'rgba(255,240,220,0.07)',cursor:'not-allowed',opacity:0.6}
+                    : {...miniBtn,color:'#c96a5a',borderColor:'rgba(201,106,90,0.2)'}}
+                  title={wt.locked?'Claude Code 세션이 사용 중입니다. 세션 종료 후 삭제하세요.':undefined}>삭제</button>
               </>}
               </div>
             </div>
