@@ -2948,25 +2948,33 @@ end try`);
         const text = await new Response(proc.stdout).text();
 
         // parse --porcelain output
-        const worktrees: { path: string; branch?: string; is_main: boolean }[] = [];
+        const worktrees: { path: string; branch?: string; is_main: boolean; locked?: boolean; lockedReason?: string }[] = [];
         let currentPath: string | null = null;
         let currentBranch: string | null = null;
+        let currentLocked = false;
+        let currentLockedReason: string | undefined;
         let isFirst = true;
 
         for (const line of text.split('\n')) {
           if (line.startsWith('worktree ')) {
             if (currentPath !== null) {
-              worktrees.push({ path: currentPath, branch: currentBranch ?? undefined, is_main: isFirst });
+              worktrees.push({ path: currentPath, branch: currentBranch ?? undefined, is_main: isFirst, locked: currentLocked, lockedReason: currentLockedReason });
               if (isFirst) isFirst = false;
               currentBranch = null;
+              currentLocked = false;
+              currentLockedReason = undefined;
             }
             currentPath = line.slice('worktree '.length);
           } else if (line.startsWith('branch refs/heads/')) {
             currentBranch = line.slice('branch refs/heads/'.length);
+          } else if (line === 'locked' || line.startsWith('locked ')) {
+            currentLocked = true;
+            const reason = line.slice('locked'.length).trim();
+            currentLockedReason = reason || undefined;
           }
         }
         if (currentPath !== null) {
-          worktrees.push({ path: currentPath, branch: currentBranch ?? undefined, is_main: isFirst });
+          worktrees.push({ path: currentPath, branch: currentBranch ?? undefined, is_main: isFirst, locked: currentLocked, lockedReason: currentLockedReason });
         }
 
         // main 워크트리 OR {folderPath}/.claude/worktrees/ 하위에 있는 것만 표시
@@ -3143,9 +3151,9 @@ end try`);
         if (!isAbsolute(worktreePath as string)) {
           return new Response(JSON.stringify({ error: "worktreePath must be absolute" }), { status: 400, headers });
         }
-        if (!existsSync(worktreePath as string)) {
-          return new Response(JSON.stringify({ error: `Worktree path does not exist: ${worktreePath}` }), { status: 400, headers });
-        }
+        // 폴더가 이미 사라졌어도(외부에서 rm 등) git 메타(.git/worktrees/<name>)는 잠금 때문에
+        // 남아있을 수 있으므로 여기서 즉시 에러 처리하지 않고 아래 prune 정리 경로로 진행한다.
+        const physicalDirMissing = !existsSync(worktreePath as string);
         // git worktree remove은 메인 레포 컨텍스트에서 실행 필요
         // worktree/.git 파일에서 메인 레포 경로 추출 (경로 구분자는 / 또는 \ 둘 다 가능)
         const parentDir = (p: string) => p.replace(/[\\/][^\\/]+[\\/]?$/, '') || (IS_WIN ? 'C:\\' : '/tmp');
@@ -3162,6 +3170,10 @@ end try`);
         } catch {
           mainRepoDir = parentDir(worktreePath as string);
         }
+        // git worktree remove/prune는 잠긴(locked) 워크트리를 건드리지 않으므로 먼저 unlock 시도(실패 무시)
+        const unlockProc = Bun.spawn([GIT_PATH, "worktree", "unlock", worktreePath], { cwd: mainRepoDir, stdout: "pipe", stderr: "pipe" });
+        await unlockProc.exited;
+
         // `git worktree remove --force` 실행 + 재시도 + 폴백 정리
         // Windows에서 Explorer가 폴더 열면 EPERM/EBUSY 발생 → 지연 후 재시도
         const runRemove = async () => {
@@ -3175,10 +3187,11 @@ end try`);
         // Windows는 파일 락이면 git이 "Invalid argument" 또는 "failed to delete" 를 뱉을 수 있음
         const isLockError = (err: string) => /permission denied|being used|EBUSY|EPERM|cannot access|access is denied|invalid argument|failed to delete/i.test(err);
 
-        let result = await runRemove();
+        // 물리 디렉터리가 이미 없으면 remove 시도는 의미가 없으니(항상 실패) 바로 prune 정리로 진행
+        let result = physicalDirMissing ? { ok: false, err: 'directory already missing' } : await runRemove();
         let attempts = 1;
         // 파일 락 에러면 최대 3회 재시도 (200ms, 400ms, 800ms 점증)
-        while (!result.ok && isLockError(result.err) && attempts < 3) {
+        while (!result.ok && !physicalDirMissing && isLockError(result.err) && attempts < 3) {
           await new Promise(r => setTimeout(r, 200 * Math.pow(2, attempts - 1)));
           result = await runRemove();
           attempts++;
@@ -3234,13 +3247,43 @@ end try`);
         if (!folderPath || !existsSync(folderPath as string)) {
           return new Response(JSON.stringify({ success: true, skipped: true }), { headers });
         }
+        // git worktree prune은 locked 워크트리를 건드리지 않으므로,
+        // 물리 디렉터리가 이미 사라진 locked 워크트리(.claude/worktrees/ 하위)는 먼저 unlock + remove로 정리
+        const projWtDirNorm = join(folderPath as string, '.claude', 'worktrees').replace(/\\/g, '/') + '/';
+        try {
+          const preListProc = Bun.spawn([GIT_PATH, "worktree", "list", "--porcelain"], { cwd: folderPath, stdout: "pipe", stderr: "pipe" });
+          await preListProc.exited;
+          const preListOut = await new Response(preListProc.stdout).text();
+          let curPath: string | null = null;
+          let curLocked = false;
+          const orphanLockedPaths: string[] = [];
+          const flush = () => {
+            if (curPath && curLocked && curPath.replace(/\\/g, '/').startsWith(projWtDirNorm) && !existsSync(curPath)) {
+              orphanLockedPaths.push(curPath);
+            }
+          };
+          for (const line of preListOut.split('\n')) {
+            if (line.startsWith('worktree ')) {
+              flush();
+              curPath = line.slice('worktree '.length);
+              curLocked = false;
+            } else if (line === 'locked' || line.startsWith('locked ')) {
+              curLocked = true;
+            }
+          }
+          flush();
+          for (const p of orphanLockedPaths) {
+            await Bun.spawn([GIT_PATH, "worktree", "unlock", p], { cwd: folderPath, stdout: "pipe", stderr: "pipe" }).exited;
+            await Bun.spawn([GIT_PATH, "worktree", "remove", "--force", p], { cwd: folderPath, stdout: "pipe", stderr: "pipe" }).exited;
+          }
+        } catch { /* best-effort */ }
         // git worktree prune으로 삭제된 워크트리 메타 정리
         const pruneProc = Bun.spawn([GIT_PATH, "worktree", "prune"], {
           cwd: folderPath, stdout: "pipe", stderr: "pipe",
         });
         await pruneProc.exited;
-        // worktrees/ 하위 폴더 중 git 목록에 없는 것 물리 삭제
-        const wtDir = join(folderPath as string, 'worktrees');
+        // .claude/worktrees/ 하위 폴더 중 git 목록에 없는 것 물리 삭제
+        const wtDir = join(folderPath as string, '.claude', 'worktrees');
         if (existsSync(wtDir)) {
           const listProc = Bun.spawn([GIT_PATH, "worktree", "list", "--porcelain"], {
             cwd: folderPath, stdout: "pipe", stderr: "pipe",
