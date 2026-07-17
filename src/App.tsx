@@ -626,12 +626,18 @@ const API = {
 
   async suggestBatch(ports: Array<{ id: string; folderPath: string; name: string; aiName?: string }>): Promise<Array<{ id: string; name: string | null; category: string | null }>> {
     if (isTauri()) {
-      // Tauri: Rust 커맨드 사용 (id→이름 매핑 객체 반환, 카테고리는 미지원 → null)
+      // Tauri: Rust 커맨드 사용 (id → {name, category} 매핑 객체 반환)
       try {
         const result = await invoke<Record<string, unknown>>('suggest_names_batch', { ports });
-        return Object.entries(result ?? {}).map(([id, name]) => ({
-          id, name: typeof name === 'string' ? name : null, category: null,
-        }));
+        return Object.entries(result ?? {}).map(([id, v]) => {
+          const entry = v as { name?: unknown; category?: unknown } | string | null;
+          if (typeof entry === 'string') return { id, name: entry, category: null }; // 구버전 응답 호환
+          return {
+            id,
+            name: typeof entry?.name === 'string' ? entry.name : null,
+            category: typeof entry?.category === 'string' ? entry.category : null,
+          };
+        });
       } catch { return []; }
     }
     try {
@@ -1425,6 +1431,7 @@ function App() {
   const portLogPollBusyRef = useRef(false); // 로그 폴링 in-flight 가드 — 느린 틱이 다음 틱과 겹치는 것 방지
   const [workspaceRoots, setWorkspaceRoots] = useState<WorkspaceRoot[]>([]);
   const [workspaceRootsOpen, setWorkspaceRootsOpen] = useState(false);
+  const [tagsPanelOpen, setTagsPanelOpen] = useState(false);
   const [visitCounts, setVisitCounts] = useState<{ portId: string; count: number }[]>([]);
   const [visitWindow, setVisitWindow] = useState<'alltime' | 'weekly' | 'daily'>('alltime');
   const [highlightedPortId, setHighlightedPortId] = useState<string | null>(null);
@@ -3489,29 +3496,42 @@ function App() {
       setIsRefreshing(false);
     }
 
-    // Phase 2: AI 이름/카테고리 배치 생성 (missing 항목만, 단 1회 Claude 호출)
+    // Phase 2: AI 이름/카테고리 배치 생성 (missing 항목만)
+    // 한 번의 claude -p 호출에 너무 많은 프로젝트를 넣으면 응답 생성 시간이 늘어나
+    // 서버 타임아웃(60s)에 걸려 전체 배치가 통째로 실패한다 (결과 없이 조용히 {results:[]}).
+    // 그래서 AI_BATCH_CHUNK_SIZE 단위로 쪼개 순차 호출하고, 청크마다 즉시 저장해
+    // 뒤쪽 청크가 실패해도 앞쪽에서 얻은 결과는 남도록 한다.
     const targets = _refreshed.filter(p => p.folderPath && (!p.aiName || !p.category));
     if (targets.length === 0) return;
     setIsAiEnriching(true);
-    showToast(`AI 이름/카테고리 생성 중… (${targets.length}개)`, 'success');
-    let nameCount = 0, catCount = 0;
-    try {
-      const batchInput = targets.map(p => ({ id: p.id, folderPath: p.folderPath!, name: p.name, aiName: p.aiName }));
-      const results = await API.suggestBatch(batchInput);
-      const resultMap = new Map(results.map(r => [r.id, r]));
-      setPorts(prev => prev.map(p => {
-        const r = resultMap.get(p.id);
-        if (!r) return p;
-        const newName = !p.aiName && r.name ? r.name : undefined;
-        const newCat = !p.category && r.category ? r.category : undefined;
-        if (newName) nameCount++;
-        if (newCat) catCount++;
-        return (newName || newCat) ? { ...p, aiName: newName ?? p.aiName, category: newCat ?? p.category } : p;
-      }));
-    } catch {}
-    setPorts(prev => { API.savePorts(prev); return prev; });
+    const AI_BATCH_CHUNK_SIZE = 15;
+    const chunks: PortInfo[][] = [];
+    for (let i = 0; i < targets.length; i += AI_BATCH_CHUNK_SIZE) chunks.push(targets.slice(i, i + AI_BATCH_CHUNK_SIZE));
+    let nameCount = 0, catCount = 0, failedChunks = 0;
+    for (let i = 0; i < chunks.length; i++) {
+      showToast(`AI 이름/카테고리 생성 중… (${i * AI_BATCH_CHUNK_SIZE + chunks[i]!.length}/${targets.length})`, 'success');
+      try {
+        const batchInput = chunks[i]!.map(p => ({ id: p.id, folderPath: p.folderPath!, name: p.name, aiName: p.aiName }));
+        const results = await API.suggestBatch(batchInput);
+        const resultMap = new Map(results.map(r => [r.id, r]));
+        setPorts(prev => prev.map(p => {
+          const r = resultMap.get(p.id);
+          if (!r) return p;
+          const newName = !p.aiName && r.name ? r.name : undefined;
+          const newCat = !p.category && r.category ? r.category : undefined;
+          if (newName) nameCount++;
+          if (newCat) catCount++;
+          return (newName || newCat) ? { ...p, aiName: newName ?? p.aiName, category: newCat ?? p.category } : p;
+        }));
+      } catch {
+        failedChunks++;
+      }
+      // 청크 완료마다 즉시 저장 — 이후 청크가 실패/중단돼도 지금까지의 진행은 보존
+      await new Promise<void>(resolve => setPorts(prev => { API.savePorts(prev); resolve(); return prev; }));
+    }
     setIsAiEnriching(false);
-    showToast(`AI 업데이트 완료: 이름 ${nameCount}개, 카테고리 ${catCount}개`, 'success');
+    const failHint = failedChunks > 0 ? ` (${failedChunks}개 배치 실패, 다음 새로고침에서 재시도됩니다)` : '';
+    showToast(`AI 업데이트 완료: 이름 ${nameCount}개, 카테고리 ${catCount}개${failHint}`, failedChunks > 0 ? 'error' : 'success');
   };
 
   // Port log viewer handler
@@ -3853,7 +3873,9 @@ function App() {
       if (result.success) {
         if (registerAsProject) {
           const portNum = newProjectPort ? parseInt(newProjectPort) : undefined;
-          setPorts(prev => [{ id: crypto.randomUUID(), name: trimmed, folderPath: fullPath, port: portNum }, ...prev]);
+          const newId = crypto.randomUUID();
+          setPorts(prev => [{ id: newId, name: trimmed, folderPath: fullPath, port: portNum }, ...prev]);
+          setLastVisits(prev => ({ ...prev, [newId]: Date.now() }));
         }
         showToast(`폴더 생성${registerAsProject ? ' + 프로젝트 등록' : ''} 완료: ${trimmed}`, 'success');
         setNewProjectName('');
@@ -3888,7 +3910,7 @@ function App() {
   };
 
   const handleRegisterExistingFolder = () => {
-    const trimmed = existingFolderPath.trim();
+    const trimmed = existingFolderPath.trim().replace(/[/\\]+$/, '');
     if (!trimmed) {
       showToast('폴더 경로를 입력하세요', 'error');
       return;
@@ -3905,6 +3927,7 @@ function App() {
       ...(existingDetectedPort ? { port: existingDetectedPort } : {}),
     };
     setPorts(prev => [newPort, ...prev]);
+    setLastVisits(prev => ({ ...prev, [newPort.id]: Date.now() }));
     const portHint = existingDetectedPort ? ` (포트 ${existingDetectedPort} 감지됨)` : '';
     showToast(`프로젝트 등록 완료: ${name}${portHint}`, 'success');
     setExistingFolderPath('');
@@ -4234,6 +4257,8 @@ function App() {
         (p.category || '').toLowerCase().includes(q) ||
         (p.description || '').toLowerCase().includes(q) ||
         (p.worktreePath || '').toLowerCase().includes(q) ||
+        (p.folderPath || '').toLowerCase().includes(q) ||
+        (p.commandPath || '').toLowerCase().includes(q) ||
         String(p.port ?? '').includes(q)
       );
     }
@@ -4682,27 +4707,46 @@ function App() {
             </div>
           </div>
           {(() => {
-            const tags = [...new Set(ports.map((p:PortInfo)=>p.category).filter(Boolean) as string[])].sort();
+            const tags = [...new Set(ports.map((p:PortInfo)=>p.category).filter(Boolean) as string[])]
+              .sort((a,b) => ports.filter((p:PortInfo)=>p.category===b).length - ports.filter((p:PortInfo)=>p.category===a).length);
             if (!tags.length) return null;
+            const activeTag = sidebarSection.startsWith('tag:') ? sidebarSection.slice(4) : null;
+            const isOpen = tagsPanelOpen || !!activeTag;
             return (
-              <div style={{padding:'8px 10px',display:'flex',gap:4,flexWrap:'wrap' as const,borderBottom:'1px solid rgba(255,240,220,0.07)'}}>
-                {tags.map(tag => {
-                  const n = ports.filter((p:PortInfo)=>p.category===tag).length;
-                  const active = sidebarSection === `tag:${tag}`;
-                  return (
-                    <button key={tag} onClick={()=>setSidebarSection(active ? 'all' : `tag:${tag}`)} title={`카테고리: ${tag}`} style={{
-                      padding:'2px 7px',borderRadius:4,fontSize:10.5,cursor:'pointer',
-                      fontFamily:'Inter Tight, system-ui, sans-serif',
-                      background:active?'rgba(232,165,87,0.12)':'transparent',
-                      color:active?'#e8a557':'#6b6459',
-                      border:`1px solid ${active?'rgba(232,165,87,0.25)':'rgba(255,240,220,0.07)'}`,
-                      display:'flex',alignItems:'center',gap:3,
-                    }}>
-                      {tag}
-                      <span style={{fontSize:9,fontFamily:'JetBrains Mono, monospace',opacity:0.7}}>{n}</span>
-                    </button>
-                  );
-                })}
+              <div style={{borderBottom:'1px solid rgba(255,240,220,0.07)'}}>
+                <button onClick={()=>setTagsPanelOpen(v=>!v)} style={{
+                  width:'100%',padding:'7px 10px',display:'flex',alignItems:'center',gap:6,
+                  background:'transparent',border:'none',cursor:'pointer',
+                  fontFamily:'Inter Tight, system-ui, sans-serif',fontSize:11,color:'#6b6459',
+                }}>
+                  {isOpen ? <ChevronUp style={{width:11,height:11,flexShrink:0}}/> : <ChevronDown style={{width:11,height:11,flexShrink:0}}/>}
+                  <span style={{flex:1,textAlign:'left' as const}}>{t(lang,'sectionTags')} · {tags.length}</span>
+                  {!isOpen && activeTag && <span style={{
+                    fontSize:10.5,color:'#e8a557',fontFamily:'JetBrains Mono, monospace',
+                    padding:'1px 6px',borderRadius:4,border:'1px solid rgba(232,165,87,0.25)',background:'rgba(232,165,87,0.12)',
+                  }}>{activeTag}</span>}
+                </button>
+                {isOpen && (
+                  <div style={{padding:'0 10px 8px',display:'flex',gap:4,flexWrap:'wrap' as const}}>
+                    {tags.map(tag => {
+                      const n = ports.filter((p:PortInfo)=>p.category===tag).length;
+                      const active = sidebarSection === `tag:${tag}`;
+                      return (
+                        <button key={tag} onClick={()=>setSidebarSection(active ? 'all' : `tag:${tag}`)} title={`카테고리: ${tag}`} style={{
+                          padding:'2px 7px',borderRadius:4,fontSize:10.5,cursor:'pointer',
+                          fontFamily:'Inter Tight, system-ui, sans-serif',
+                          background:active?'rgba(232,165,87,0.12)':'transparent',
+                          color:active?'#e8a557':'#6b6459',
+                          border:`1px solid ${active?'rgba(232,165,87,0.25)':'rgba(255,240,220,0.07)'}`,
+                          display:'flex',alignItems:'center',gap:3,
+                        }}>
+                          {tag}
+                          <span style={{fontSize:9,fontFamily:'JetBrains Mono, monospace',opacity:0.7}}>{n}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -6376,7 +6420,9 @@ function App() {
 
               {/* Tags */}
               {(() => {
-                const tags = [...new Set(ports.map((p:PortInfo)=>p.category).filter(Boolean) as string[])].slice(0,8);
+                const tags = [...new Set(ports.map((p:PortInfo)=>p.category).filter(Boolean) as string[])]
+                  .sort((a,b) => ports.filter((p:PortInfo)=>p.category===b).length - ports.filter((p:PortInfo)=>p.category===a).length)
+                  .slice(0,12);
                 if (!tags.length) return null;
                 return (
                   <>

@@ -2177,7 +2177,7 @@ fn suggest_name(folder_path: String) -> Result<Vec<String>, String> {
     // (Tauri 직접 spawn은 Homebrew PATH / auth 환경이 없어서 claude를 못 찾거나 인증 실패)
     let escaped_prompt = prompt.replace('\'', "'\"'\"'"); // sh single-quote escape
     let shell_cmd = format!(
-        "cd '{}' && claude -p '{}'",
+        "cd '{}' && claude --safe-mode -p --model haiku '{}'",
         escape_sq(&folder_path),
         escaped_prompt
     );
@@ -2263,12 +2263,14 @@ fn suggest_names_batch(ports: Vec<serde_json::Value>) -> Result<serde_json::Valu
     }
 
     let prompt = format!(
-        "For each project below, suggest 1 concise English project name (2-4 words).\nReply ONLY with a JSON object mapping each id to a name: {{\"id1\": \"Name One\", \"id2\": \"Name Two\"}}\n\n{}",
+        "For each project below, suggest a concise English project name (2-4 words) and a category (single lowercase word describing WHAT it does, e.g. converter, dashboard, manager, tracker, bot, guide, calculator, automation, monitor, generator).\nReply ONLY with a JSON object mapping each id to {{\"name\":...,\"category\":...}}: {{\"id1\": {{\"name\": \"Name One\", \"category\": \"manager\"}}}}\n\n{}",
         project_lines.join("\n")
     );
 
     let escaped_prompt = prompt.replace('\'', "'\"'\"'");
-    let shell_cmd = format!("claude -p '{}'", escaped_prompt);
+    // --safe-mode: hooks/plugin sync/CLAUDE.md 자동탐색을 건너뛰어 CLI 부팅 오버헤드 제거 (OAuth 인증은 유지, --bare와 달리 API 키 불필요)
+    // --model haiku: 이름/카테고리 분류처럼 가벼운 작업에는 무거운 기본 모델이 불필요
+    let shell_cmd = format!("claude --safe-mode -p --model haiku '{}'", escaped_prompt);
 
     let out = std::process::Command::new("/bin/zsh")
         .args(["-l", "-c", &shell_cmd])
