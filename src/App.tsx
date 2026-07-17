@@ -1431,6 +1431,7 @@ function App() {
   const portLogPollBusyRef = useRef(false); // 로그 폴링 in-flight 가드 — 느린 틱이 다음 틱과 겹치는 것 방지
   const [workspaceRoots, setWorkspaceRoots] = useState<WorkspaceRoot[]>([]);
   const [workspaceRootsOpen, setWorkspaceRootsOpen] = useState(false);
+  const [tagsPanelOpen, setTagsPanelOpen] = useState(false);
   const [visitCounts, setVisitCounts] = useState<{ portId: string; count: number }[]>([]);
   const [visitWindow, setVisitWindow] = useState<'alltime' | 'weekly' | 'daily'>('alltime');
   const [highlightedPortId, setHighlightedPortId] = useState<string | null>(null);
@@ -4706,27 +4707,46 @@ function App() {
             </div>
           </div>
           {(() => {
-            const tags = [...new Set(ports.map((p:PortInfo)=>p.category).filter(Boolean) as string[])].sort();
+            const tags = [...new Set(ports.map((p:PortInfo)=>p.category).filter(Boolean) as string[])]
+              .sort((a,b) => ports.filter((p:PortInfo)=>p.category===b).length - ports.filter((p:PortInfo)=>p.category===a).length);
             if (!tags.length) return null;
+            const activeTag = sidebarSection.startsWith('tag:') ? sidebarSection.slice(4) : null;
+            const isOpen = tagsPanelOpen || !!activeTag;
             return (
-              <div style={{padding:'8px 10px',display:'flex',gap:4,flexWrap:'wrap' as const,borderBottom:'1px solid rgba(255,240,220,0.07)'}}>
-                {tags.map(tag => {
-                  const n = ports.filter((p:PortInfo)=>p.category===tag).length;
-                  const active = sidebarSection === `tag:${tag}`;
-                  return (
-                    <button key={tag} onClick={()=>setSidebarSection(active ? 'all' : `tag:${tag}`)} title={`카테고리: ${tag}`} style={{
-                      padding:'2px 7px',borderRadius:4,fontSize:10.5,cursor:'pointer',
-                      fontFamily:'Inter Tight, system-ui, sans-serif',
-                      background:active?'rgba(232,165,87,0.12)':'transparent',
-                      color:active?'#e8a557':'#6b6459',
-                      border:`1px solid ${active?'rgba(232,165,87,0.25)':'rgba(255,240,220,0.07)'}`,
-                      display:'flex',alignItems:'center',gap:3,
-                    }}>
-                      {tag}
-                      <span style={{fontSize:9,fontFamily:'JetBrains Mono, monospace',opacity:0.7}}>{n}</span>
-                    </button>
-                  );
-                })}
+              <div style={{borderBottom:'1px solid rgba(255,240,220,0.07)'}}>
+                <button onClick={()=>setTagsPanelOpen(v=>!v)} style={{
+                  width:'100%',padding:'7px 10px',display:'flex',alignItems:'center',gap:6,
+                  background:'transparent',border:'none',cursor:'pointer',
+                  fontFamily:'Inter Tight, system-ui, sans-serif',fontSize:11,color:'#6b6459',
+                }}>
+                  {isOpen ? <ChevronUp style={{width:11,height:11,flexShrink:0}}/> : <ChevronDown style={{width:11,height:11,flexShrink:0}}/>}
+                  <span style={{flex:1,textAlign:'left' as const}}>{t(lang,'sectionTags')} · {tags.length}</span>
+                  {!isOpen && activeTag && <span style={{
+                    fontSize:10.5,color:'#e8a557',fontFamily:'JetBrains Mono, monospace',
+                    padding:'1px 6px',borderRadius:4,border:'1px solid rgba(232,165,87,0.25)',background:'rgba(232,165,87,0.12)',
+                  }}>{activeTag}</span>}
+                </button>
+                {isOpen && (
+                  <div style={{padding:'0 10px 8px',display:'flex',gap:4,flexWrap:'wrap' as const}}>
+                    {tags.map(tag => {
+                      const n = ports.filter((p:PortInfo)=>p.category===tag).length;
+                      const active = sidebarSection === `tag:${tag}`;
+                      return (
+                        <button key={tag} onClick={()=>setSidebarSection(active ? 'all' : `tag:${tag}`)} title={`카테고리: ${tag}`} style={{
+                          padding:'2px 7px',borderRadius:4,fontSize:10.5,cursor:'pointer',
+                          fontFamily:'Inter Tight, system-ui, sans-serif',
+                          background:active?'rgba(232,165,87,0.12)':'transparent',
+                          color:active?'#e8a557':'#6b6459',
+                          border:`1px solid ${active?'rgba(232,165,87,0.25)':'rgba(255,240,220,0.07)'}`,
+                          display:'flex',alignItems:'center',gap:3,
+                        }}>
+                          {tag}
+                          <span style={{fontSize:9,fontFamily:'JetBrains Mono, monospace',opacity:0.7}}>{n}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             );
           })()}
