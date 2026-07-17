@@ -151,6 +151,12 @@ fn spawn_process(args: SpawnArgs) -> Result<u32, String> {
 
     if let Some(p) = args.port {
         cmd.env("PORT", p.to_string());
+        // 워크트리 프로젝트의 dev 툴링(예: 이 저장소 자신의 dev.ts)이 쓰는 두 번째 포트 —
+        // 충돌 방지를 위해 PORT+1을 함께 주입 (사용하지 않는 프로젝트엔 무해)
+        let api_port = p as u32 + 1;
+        if api_port <= 65535 {
+            cmd.env("API_PORT", api_port.to_string());
+        }
     }
 
     #[cfg(unix)]

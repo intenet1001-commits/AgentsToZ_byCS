@@ -33,7 +33,9 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        // api-server.ts의 리스닝 포트와 동일한 API_PORT 환경변수를 읽어야
+        // 워크트리 인스턴스에서 API_PORT를 오버라이드해도 프록시가 올바른 인스턴스로 향한다
+        target: `http://localhost:${Number(process.env.API_PORT) || 3001}`,
         changeOrigin: true,
       },
     },
