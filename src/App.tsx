@@ -626,12 +626,18 @@ const API = {
 
   async suggestBatch(ports: Array<{ id: string; folderPath: string; name: string; aiName?: string }>): Promise<Array<{ id: string; name: string | null; category: string | null }>> {
     if (isTauri()) {
-      // Tauri: Rust 커맨드 사용 (id→이름 매핑 객체 반환, 카테고리는 미지원 → null)
+      // Tauri: Rust 커맨드 사용 (id → {name, category} 매핑 객체 반환)
       try {
         const result = await invoke<Record<string, unknown>>('suggest_names_batch', { ports });
-        return Object.entries(result ?? {}).map(([id, name]) => ({
-          id, name: typeof name === 'string' ? name : null, category: null,
-        }));
+        return Object.entries(result ?? {}).map(([id, v]) => {
+          const entry = v as { name?: unknown; category?: unknown } | string | null;
+          if (typeof entry === 'string') return { id, name: entry, category: null }; // 구버전 응답 호환
+          return {
+            id,
+            name: typeof entry?.name === 'string' ? entry.name : null,
+            category: typeof entry?.category === 'string' ? entry.category : null,
+          };
+        });
       } catch { return []; }
     }
     try {
@@ -3489,29 +3495,42 @@ function App() {
       setIsRefreshing(false);
     }
 
-    // Phase 2: AI 이름/카테고리 배치 생성 (missing 항목만, 단 1회 Claude 호출)
+    // Phase 2: AI 이름/카테고리 배치 생성 (missing 항목만)
+    // 한 번의 claude -p 호출에 너무 많은 프로젝트를 넣으면 응답 생성 시간이 늘어나
+    // 서버 타임아웃(60s)에 걸려 전체 배치가 통째로 실패한다 (결과 없이 조용히 {results:[]}).
+    // 그래서 AI_BATCH_CHUNK_SIZE 단위로 쪼개 순차 호출하고, 청크마다 즉시 저장해
+    // 뒤쪽 청크가 실패해도 앞쪽에서 얻은 결과는 남도록 한다.
     const targets = _refreshed.filter(p => p.folderPath && (!p.aiName || !p.category));
     if (targets.length === 0) return;
     setIsAiEnriching(true);
-    showToast(`AI 이름/카테고리 생성 중… (${targets.length}개)`, 'success');
-    let nameCount = 0, catCount = 0;
-    try {
-      const batchInput = targets.map(p => ({ id: p.id, folderPath: p.folderPath!, name: p.name, aiName: p.aiName }));
-      const results = await API.suggestBatch(batchInput);
-      const resultMap = new Map(results.map(r => [r.id, r]));
-      setPorts(prev => prev.map(p => {
-        const r = resultMap.get(p.id);
-        if (!r) return p;
-        const newName = !p.aiName && r.name ? r.name : undefined;
-        const newCat = !p.category && r.category ? r.category : undefined;
-        if (newName) nameCount++;
-        if (newCat) catCount++;
-        return (newName || newCat) ? { ...p, aiName: newName ?? p.aiName, category: newCat ?? p.category } : p;
-      }));
-    } catch {}
-    setPorts(prev => { API.savePorts(prev); return prev; });
+    const AI_BATCH_CHUNK_SIZE = 15;
+    const chunks: PortInfo[][] = [];
+    for (let i = 0; i < targets.length; i += AI_BATCH_CHUNK_SIZE) chunks.push(targets.slice(i, i + AI_BATCH_CHUNK_SIZE));
+    let nameCount = 0, catCount = 0, failedChunks = 0;
+    for (let i = 0; i < chunks.length; i++) {
+      showToast(`AI 이름/카테고리 생성 중… (${i * AI_BATCH_CHUNK_SIZE + chunks[i]!.length}/${targets.length})`, 'success');
+      try {
+        const batchInput = chunks[i]!.map(p => ({ id: p.id, folderPath: p.folderPath!, name: p.name, aiName: p.aiName }));
+        const results = await API.suggestBatch(batchInput);
+        const resultMap = new Map(results.map(r => [r.id, r]));
+        setPorts(prev => prev.map(p => {
+          const r = resultMap.get(p.id);
+          if (!r) return p;
+          const newName = !p.aiName && r.name ? r.name : undefined;
+          const newCat = !p.category && r.category ? r.category : undefined;
+          if (newName) nameCount++;
+          if (newCat) catCount++;
+          return (newName || newCat) ? { ...p, aiName: newName ?? p.aiName, category: newCat ?? p.category } : p;
+        }));
+      } catch {
+        failedChunks++;
+      }
+      // 청크 완료마다 즉시 저장 — 이후 청크가 실패/중단돼도 지금까지의 진행은 보존
+      await new Promise<void>(resolve => setPorts(prev => { API.savePorts(prev); resolve(); return prev; }));
+    }
     setIsAiEnriching(false);
-    showToast(`AI 업데이트 완료: 이름 ${nameCount}개, 카테고리 ${catCount}개`, 'success');
+    const failHint = failedChunks > 0 ? ` (${failedChunks}개 배치 실패, 다음 새로고침에서 재시도됩니다)` : '';
+    showToast(`AI 업데이트 완료: 이름 ${nameCount}개, 카테고리 ${catCount}개${failHint}`, failedChunks > 0 ? 'error' : 'success');
   };
 
   // Port log viewer handler

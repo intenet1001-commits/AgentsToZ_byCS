@@ -3609,7 +3609,7 @@ ${summaries}`;
           [CLAUDE_PATH!, '--safe-mode', '-p', '--model', 'haiku', prompt],
           { env: { ...process.env, PATH: '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin' }, stdout: 'pipe', stderr: 'pipe' }
         );
-        const timeoutId = setTimeout(() => proc.kill(), 60_000);
+        const timeoutId = setTimeout(() => proc.kill(), 90_000);
         await proc.exited;
         clearTimeout(timeoutId);
         const raw = (await new Response(proc.stdout).text()).trim();
