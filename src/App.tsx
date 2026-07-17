@@ -67,14 +67,14 @@ const API = {
     }
   },
 
-  async executeCommand(portId: string, commandPath: string, folderPath?: string): Promise<void> {
+  async executeCommand(portId: string, commandPath: string, folderPath?: string, port?: number): Promise<void> {
     if (isTauri()) {
-      return invoke('execute_command', { portId, commandPath, folderPath: folderPath ?? null });
+      return invoke('execute_command', { portId, commandPath, folderPath: folderPath ?? null, port: port ?? null });
     } else {
       const response = await fetch('/api/execute-command', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ portId, commandPath, folderPath })
+        body: JSON.stringify({ portId, commandPath, folderPath, port })
       });
       const result = await response.json();
       if (!result.success) throw new Error(result.error);
@@ -800,28 +800,7 @@ const getSessionName = (item: PortInfo): string => {
 const isAbsolutePath = (p: string): boolean => /^(\/|[A-Za-z]:[\\/])/.test(p);
 
 /**
- * 워크트리용 다음 사용 가능한 포트.
- * mainPort가 있으면 mainPort×10 + 1,2,3... 순으로 탐색 (예: 9025 → 90251, 90252...)
- * mainPort 없으면 10001+ 범위에서 탐색
- */
-const getNextWorktreePort = (ports: PortInfo[], mainPort?: number): number => {
-  const used = new Set(ports.map(p => p.port).filter((p): p is number => p != null));
-  if (mainPort) {
-    const base = mainPort * 10;
-    if (base <= 65534) {
-      for (let i = 1; i <= 9; i++) {
-        if (!used.has(base + i)) return base + i;
-      }
-    }
-  }
-  for (let p = 10001; p <= 19999; p++) {
-    if (!used.has(p)) return p;
-  }
-  return 10001;
-};
-
-/**
- * 워크트리 경로 기반 안정적인 포트 할당.
+ * 워크트리 경로 기반 안정적인 포트 할당 (fallback).
  * 알파벳순 정렬 인덱스 대신 경로 해시를 사용해 새 워크트리 추가 시 기존 포트 유지.
  * 범위: 10001–10499
  */
@@ -833,6 +812,29 @@ const worktreePortFromPath = (worktreePath: string, usedPorts: Set<number>): num
   for (let p = base; p <= 10499; p++) { if (!usedPorts.has(p)) return p; }
   for (let p = 10001; p < base; p++) { if (!usedPorts.has(p)) return p; }
   return base;
+};
+
+/**
+ * 메인 포트에서 파생된 워크트리 포트 할당.
+ * mainPort가 1000-9999 범위면 slot*10000+mainPort (slot 1..5) 중 하나를 경로 해시로 선택.
+ * 예: 메인 9005 → 19005, 29005, 39005, 49005, 59005 중 하나.
+ * mainPort가 없거나 범위 밖이면 worktreePortFromPath로 폴백.
+ */
+const worktreePortForMain = (mainPort: number | undefined, worktreePath: string, usedPorts: Set<number>): number => {
+  if (mainPort == null || mainPort < 1000 || mainPort > 9999) {
+    return worktreePortFromPath(worktreePath, usedPorts);
+  }
+  const name = worktreePath.split('/').pop() ?? worktreePath;
+  let h = 5381;
+  for (let i = 0; i < name.length; i++) h = ((h << 5) + h + name.charCodeAt(i)) >>> 0;
+  const slotCount = 5;
+  const startSlot = 1 + (h % slotCount);
+  for (let i = 0; i < slotCount; i++) {
+    const slot = 1 + ((startSlot - 1 + i) % slotCount);
+    const candidate = slot * 10000 + mainPort;
+    if (candidate <= 65535 && !usedPorts.has(candidate)) return candidate;
+  }
+  return worktreePortFromPath(worktreePath, usedPorts);
 };
 
 /** Race a promise against a timeout. Rejects with Error if ms elapses first. */
@@ -1587,7 +1589,8 @@ function App() {
             const d = await r.json();
             if (d.success && d.port) actualPort = d.port;
           } catch { /* ignore */ }
-          const hashPort = worktreePortFromPath(wt.path, usedPortsSnap);
+          const mainPort = portsRef.current.find(p => p.id === portId)?.port;
+          const hashPort = worktreePortForMain(mainPort, wt.path, usedPortsSnap);
           const isRunning = actualPort != null
             ? true
             : await API.checkPortStatus(hashPort).catch(() => false);
@@ -2873,7 +2876,7 @@ function App() {
         await API.openFolder(item.commandPath!);
         showToast(`${item.name} 파일을 열었습니다!`, 'success');
       } else {
-        await API.executeCommand(item.id, runTarget, item.folderPath);
+        await API.executeCommand(item.id, runTarget, item.folderPath, item.port);
         setPorts(prev => prev.map(p =>
           p.id === item.id ? { ...p, isRunning: true } : p
         ));
@@ -4546,7 +4549,7 @@ function App() {
           );
           const usedPorts = new Set(ports.map(p => p.port).filter((p): p is number => p != null));
           const detectedPort = wtActualPorts[wt.path];
-          const wtPort = detectedPort ?? (wtPortEntry?.port ?? worktreePortFromPath(wt.path, usedPorts));
+          const wtPort = detectedPort ?? (wtPortEntry?.port ?? worktreePortForMain(portItem.port, wt.path, usedPorts));
           const isWtRunning = detectedPort != null || (wtPortEntry?.isRunning ?? wtPortStatuses[wtPort] ?? false);
           const wtClaudeBypass = () => {
             // 상단 툴바 옵션(terminalApp, bgMode 등)을 반영하는 통합 핸들러 사용

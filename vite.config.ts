@@ -25,7 +25,7 @@ export default defineConfig({
     },
   },
   server: {
-    port: 9000,
+    port: Number(process.env.PORT) || 9000,
     // 9000 점유 시 9001/9002로 조용히 폴백하며 고아 vite 서버가 쌓이는 것 방지 — 즉시 실패
     strictPort: true,
     watch: {

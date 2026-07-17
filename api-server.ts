@@ -627,7 +627,7 @@ if (IS_WIN) {
 }
 
 const server = Bun.serve({
-  port: 3001,
+  port: Number(process.env.API_PORT) || 3001,
   hostname: "127.0.0.1",
   async fetch(req) {
     const url = new URL(req.url);
@@ -812,7 +812,7 @@ const server = Bun.serve({
 
     if (url.pathname === "/api/execute-command" && req.method === "POST") {
       try {
-        const { portId, commandPath, folderPath } = await req.json();
+        const { portId, commandPath, folderPath, port } = await req.json();
 
         devLog(`[Execute] Received request for portId: ${portId}, path: ${commandPath}`);
 
@@ -877,6 +877,7 @@ const server = Bun.serve({
           stdout: logFd ?? "inherit",
           stderr: logFd ?? "inherit",
           stdin: "ignore",
+          env: { ...process.env, ...(port ? { PORT: String(port) } : {}) },
         });
         // 자식이 fd를 상속받았으므로 parent 쪽 복사본은 즉시 닫는다 (fd 누수 방지)
         if (logFd !== null) { try { closeSync(logFd); } catch { /* already closed */ } }
@@ -988,7 +989,7 @@ const server = Bun.serve({
 
     if (url.pathname === "/api/force-restart-command" && req.method === "POST") {
       try {
-        const { portId, port, commandPath } = await req.json();
+        const { portId, port, commandPath, folderPath } = await req.json();
 
         devLog(`[ForceRestart] Received request for portId: ${portId}, port: ${port}, path: ${commandPath}`);
 
@@ -1056,9 +1057,11 @@ const server = Bun.serve({
 
         const newProc = spawn({
           cmd: restartCmd,
+          cwd: (!isFilePath && folderPath) ? folderPath : undefined,
           stdout: restartLogFd ?? "inherit",
           stderr: restartLogFd ?? "inherit",
           stdin: "ignore",
+          env: { ...process.env, PORT: String(port) },
         });
         if (restartLogFd !== null) { try { closeSync(restartLogFd); } catch { /* already closed */ } }
 
