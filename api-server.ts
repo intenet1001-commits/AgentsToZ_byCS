@@ -3606,7 +3606,7 @@ Projects:
 ${summaries}`;
 
         const proc = Bun.spawn(
-          [CLAUDE_PATH!, '-p', prompt],
+          [CLAUDE_PATH!, '-p', '--model', 'haiku', prompt],
           { env: { ...process.env, PATH: '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin' }, stdout: 'pipe', stderr: 'pipe' }
         );
         const timeoutId = setTimeout(() => proc.kill(), 60_000);
@@ -3676,7 +3676,7 @@ package.json excerpt: ${pkgJson}
 Analyze this project and reply with JSON only (no markdown, no explanation):
 {"name":"2-4 word English alias","category":"one short topic word that best describes this project (e.g. converter, dashboard, automation, chatbot, portfolio, tracker, etc.)"}`;
         const proc = Bun.spawn(
-          [CLAUDE_PATH!, '-p', prompt],
+          [CLAUDE_PATH!, '-p', '--model', 'haiku', prompt],
           { env: { ...process.env, PATH: '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin' }, stdout: 'pipe', stderr: 'pipe' }
         );
         const timeoutId = setTimeout(() => proc.kill(), 30_000);
@@ -3715,7 +3715,7 @@ Analyze this project and reply with JSON only (no markdown, no explanation):
         }
         const prompt = `Project name: ${name || 'unknown'}\nFiles: ${files}\npackage.json: ${pkgJson}\n\nWrite a one-sentence project description (max 100 chars, English). Reply with plain text only, no quotes.`;
         const proc = Bun.spawn(
-          [CLAUDE_PATH!, '-p', prompt],
+          [CLAUDE_PATH!, '-p', '--model', 'haiku', prompt],
           { env: { ...process.env, PATH: '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin' }, stdout: 'pipe', stderr: 'pipe' }
         );
         const timeoutId = setTimeout(() => proc.kill(), 30_000);

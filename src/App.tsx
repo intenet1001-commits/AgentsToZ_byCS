@@ -3853,7 +3853,9 @@ function App() {
       if (result.success) {
         if (registerAsProject) {
           const portNum = newProjectPort ? parseInt(newProjectPort) : undefined;
-          setPorts(prev => [{ id: crypto.randomUUID(), name: trimmed, folderPath: fullPath, port: portNum }, ...prev]);
+          const newId = crypto.randomUUID();
+          setPorts(prev => [{ id: newId, name: trimmed, folderPath: fullPath, port: portNum }, ...prev]);
+          setLastVisits(prev => ({ ...prev, [newId]: Date.now() }));
         }
         showToast(`폴더 생성${registerAsProject ? ' + 프로젝트 등록' : ''} 완료: ${trimmed}`, 'success');
         setNewProjectName('');
@@ -3888,7 +3890,7 @@ function App() {
   };
 
   const handleRegisterExistingFolder = () => {
-    const trimmed = existingFolderPath.trim();
+    const trimmed = existingFolderPath.trim().replace(/[/\\]+$/, '');
     if (!trimmed) {
       showToast('폴더 경로를 입력하세요', 'error');
       return;
@@ -3905,6 +3907,7 @@ function App() {
       ...(existingDetectedPort ? { port: existingDetectedPort } : {}),
     };
     setPorts(prev => [newPort, ...prev]);
+    setLastVisits(prev => ({ ...prev, [newPort.id]: Date.now() }));
     const portHint = existingDetectedPort ? ` (포트 ${existingDetectedPort} 감지됨)` : '';
     showToast(`프로젝트 등록 완료: ${name}${portHint}`, 'success');
     setExistingFolderPath('');
@@ -4234,6 +4237,8 @@ function App() {
         (p.category || '').toLowerCase().includes(q) ||
         (p.description || '').toLowerCase().includes(q) ||
         (p.worktreePath || '').toLowerCase().includes(q) ||
+        (p.folderPath || '').toLowerCase().includes(q) ||
+        (p.commandPath || '').toLowerCase().includes(q) ||
         String(p.port ?? '').includes(q)
       );
     }
@@ -6376,7 +6381,9 @@ function App() {
 
               {/* Tags */}
               {(() => {
-                const tags = [...new Set(ports.map((p:PortInfo)=>p.category).filter(Boolean) as string[])].slice(0,8);
+                const tags = [...new Set(ports.map((p:PortInfo)=>p.category).filter(Boolean) as string[])]
+                  .sort((a,b) => ports.filter((p:PortInfo)=>p.category===b).length - ports.filter((p:PortInfo)=>p.category===a).length)
+                  .slice(0,12);
                 if (!tags.length) return null;
                 return (
                   <>
