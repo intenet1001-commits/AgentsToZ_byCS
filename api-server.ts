@@ -1169,6 +1169,28 @@ const server = Bun.serve({
       }
     }
 
+    // 워크트리 카드처럼 폴더 존재 여부만으로 유효성을 판단해야 하는 경우를 위한 일괄 확인
+    if (url.pathname === "/api/check-paths-batch" && req.method === "POST") {
+      try {
+        const { paths } = await req.json();
+        if (!Array.isArray(paths) || paths.length > 500 ||
+            !paths.every((p: unknown) => typeof p === 'string' && p.length > 0)) {
+          return new Response(
+            JSON.stringify({ success: false, error: "paths must be an array of non-empty strings (max 500)" }),
+            { status: 400, headers }
+          );
+        }
+        const results = (paths as string[]).map((p) => ({ path: p, exists: existsSync(p) }));
+        return new Response(JSON.stringify({ success: true, results }), { headers });
+      } catch (error: any) {
+        console.error(`[CheckPathsBatch] Error:`, error);
+        return new Response(
+          JSON.stringify({ success: false, error: error.message }),
+          { status: 500, headers }
+        );
+      }
+    }
+
     // 워크트리 폴더 경로와 CWD가 일치하는 프로세스의 실제 리스닝 포트 반환
     if (url.pathname === "/api/find-worktree-port" && req.method === "POST") {
       try {

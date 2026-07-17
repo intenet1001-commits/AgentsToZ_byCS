@@ -840,6 +840,22 @@ fn check_file_exists(path: String) -> bool {
     std::path::Path::new(&path).exists()
 }
 
+#[derive(Debug, Serialize, Clone)]
+struct PathExistsResult {
+    path: String,
+    exists: bool,
+}
+
+/// 워크트리 카드처럼 폴더 존재 여부만으로 유효성을 판단해야 하는 경우를 위한 일괄 확인.
+#[tauri::command]
+fn check_paths_batch(paths: Vec<String>) -> Vec<PathExistsResult> {
+    const MAX_PATHS: usize = 500;
+    paths.into_iter().take(MAX_PATHS).map(|p| {
+        let exists = std::path::Path::new(&p).exists();
+        PathExistsResult { path: p, exists }
+    }).collect()
+}
+
 #[tauri::command]
 fn open_build_folder() -> Result<String, String> {
     // Windows: USERPROFILE 우선, macOS: HOME
@@ -2861,6 +2877,7 @@ pub fn run() {
         git_merge_branch,
         list_git_worktrees,
         check_file_exists,
+        check_paths_batch,
         create_folder,
         suggest_name,
         suggest_names_batch,
