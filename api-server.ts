@@ -877,7 +877,13 @@ const server = Bun.serve({
           stdout: logFd ?? "inherit",
           stderr: logFd ?? "inherit",
           stdin: "ignore",
-          env: { ...process.env, ...(port ? { PORT: String(port) } : {}) },
+          env: {
+            ...process.env,
+            ...(port ? { PORT: String(port) } : {}),
+            // 워크트리 프로젝트의 dev 툴링(예: 이 저장소 자신의 dev.ts)이 쓰는 두 번째 포트 —
+            // 충돌 방지를 위해 PORT+1을 함께 주입 (사용하지 않는 프로젝트엔 무해)
+            ...(port && port + 1 <= 65535 ? { API_PORT: String(port + 1) } : {}),
+          },
         });
         // 자식이 fd를 상속받았으므로 parent 쪽 복사본은 즉시 닫는다 (fd 누수 방지)
         if (logFd !== null) { try { closeSync(logFd); } catch { /* already closed */ } }
@@ -1061,7 +1067,13 @@ const server = Bun.serve({
           stdout: restartLogFd ?? "inherit",
           stderr: restartLogFd ?? "inherit",
           stdin: "ignore",
-          env: { ...process.env, PORT: String(port) },
+          env: {
+            ...process.env,
+            PORT: String(port),
+            // 워크트리 프로젝트의 dev 툴링(예: 이 저장소 자신의 dev.ts)이 쓰는 두 번째 포트 —
+            // 충돌 방지를 위해 PORT+1을 함께 주입 (사용하지 않는 프로젝트엔 무해)
+            ...(port && port + 1 <= 65535 ? { API_PORT: String(port + 1) } : {}),
+          },
         });
         if (restartLogFd !== null) { try { closeSync(restartLogFd); } catch { /* already closed */ } }
 
@@ -1164,8 +1176,9 @@ const server = Bun.serve({
         if (!folderPath || IS_WIN) {
           return new Response(JSON.stringify({ success: true, port: null }), { headers });
         }
-        // 1) 10001-10499 범위에서 LISTEN 중인 포트+PID 수집
-        const r1 = Bun.spawnSync(['/usr/sbin/lsof', '-iTCP:10001-10499', '-sTCP:LISTEN', '-P', '-n', '-F', 'pn'], { stderr: 'pipe' });
+        // 1) LISTEN 중인 포트+PID 수집 — 레거시 path-hash 범위(10001-10499)와
+        //    신규 slot*10000+mainPort 범위(대략 11000-59999)를 한 번에 스캔
+        const r1 = Bun.spawnSync(['/usr/sbin/lsof', '-iTCP:10001-59999', '-sTCP:LISTEN', '-P', '-n', '-F', 'pn'], { stderr: 'pipe' });
         const lines1 = r1.stdout.toString().split('\n');
         const pidPortPairs: { pid: string; port: number }[] = [];
         let curPid = '';
@@ -1177,13 +1190,18 @@ const server = Bun.serve({
           }
         }
         // 2) 각 고유 PID의 CWD가 folderPath 와 일치하는지 확인
+        // 워크트리 서버는 항상 spawn 시 cwd: folderPath로 기동되므로(execute-command/
+        // force-restart-command 참고) 프로세스 cwd는 folderPath와 같거나 그 하위(모노레포
+        // 서브패키지)여야 한다. 반대 방향(folderPath가 cwd의 하위, 즉 cwd가 folderPath의
+        // 조상)까지 허용하면 folderPath와 무관한 프로세스(cwd가 상위 디렉터리인 아무 백그라운드
+        // 프로세스)가 넓어진 lsof 포트 범위(10001-59999)에서 false-positive로 매칭될 수 있어 제외.
         const uniquePids = [...new Set(pidPortPairs.map(e => e.pid))];
         for (const pid of uniquePids) {
           const r2 = Bun.spawnSync(['/usr/sbin/lsof', '-a', '-p', pid, '-d', 'cwd', '-Fn'], { stderr: 'pipe' });
           const cwdLine = r2.stdout.toString().split('\n').find(l => l.startsWith('n'));
           if (!cwdLine) continue;
           const cwd = cwdLine.slice(1).trim();
-          if (cwd === folderPath || cwd.startsWith(folderPath + '/') || folderPath.startsWith(cwd + '/')) {
+          if (cwd === folderPath || cwd.startsWith(folderPath + '/')) {
             const port = pidPortPairs.find(e => e.pid === pid)?.port ?? null;
             if (port) {
               devLog(`[FindWorktreePort] ${folderPath} → port ${port} (pid ${pid} cwd=${cwd})`);

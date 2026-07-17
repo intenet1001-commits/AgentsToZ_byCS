@@ -1669,6 +1669,24 @@ function App() {
     const name = wt.path.split('/').pop();
     setDeleteWorktreeConfirm(null);
     try {
+      // 워크트리 디렉토리를 지우기 전, 그 위에서 돌고 있는 dev 서버가 있으면 먼저 중지
+      // (git worktree remove가 디렉토리를 삭제하면 cwd가 사라진 채 프로세스만 남는 고아 상태가 됨)
+      const wtPortEntry = portsRef.current.find(p =>
+        p.worktreePath === wt.path ||
+        (wt.branch && p.worktreePath === wt.branch) ||
+        (p.worktreePath && wt.path.endsWith('/' + p.worktreePath.replace(/^\/+/, ''))) ||
+        p.folderPath === wt.path
+      );
+      if (wtPortEntry?.port) {
+        const stillRunning = await API.checkPortStatus(wtPortEntry.port).catch(() => false);
+        if (stillRunning) {
+          try {
+            await API.stopCommand(wtPortEntry.id, wtPortEntry.port ?? 0);
+          } catch (e) {
+            showToast('서버 중지 실패, 계속 진행합니다', 'error');
+          }
+        }
+      }
       await API.gitWorktreeRemove(wt.path);
       showToast(`워크트리 제거됨: ${name}`, 'success');
       // 워크트리 "실행" 시 자동 등록됐던 프로젝트 카드도 함께 정리 (폴더가 사라진 카드가 남지 않도록)
@@ -4686,7 +4704,7 @@ function App() {
               ['starred',t(lang,'filterStarred'),   v3Ports.filter(p=>p.favorite).length],
               ['wt',     t(lang,'filterWorktrees'), v3Ports.filter(p=>p.worktreePath).length],
             ] as [string,string,number][]).map(([id,label,count])=>(
-              <button key={id} onClick={()=>setSidebarSection(id)} style={{
+              <button key={id} onClick={()=>setSidebarSection(id)} title={id==='wt' ? '실행한 적 있는 워크트리 수 (git worktree 전체 개수와 다를 수 있음)' : undefined} style={{
                 padding:'2px 7px',borderRadius:4,fontSize:11,cursor:'pointer',
                 fontFamily:'Inter Tight, system-ui, sans-serif',
                 background:sidebarSection===id?'rgba(232,165,87,0.12)':'transparent',
@@ -6407,7 +6425,7 @@ function App() {
                 {id:'wt',     label: t(lang,'sectionWorktrees'),  count: ports.filter((p:PortInfo)=>!!p.worktreePath).length, Icon: GitBranch},
                 {id:'stale',  label: t(lang,'sectionStale'),      count: (() => { const cutoff = Date.now() - 14*86400000; return ports.filter((p:PortInfo)=>{ const last = lastActivityFor(p.id); return !last || last < cutoff; }).length; })(), Icon: Clock},
               ] as const).map(({id,label,count,Icon}) => (
-                <button key={id} data-help-key={`sidebar-${id === 'wt' ? 'worktrees' : id}`} onClick={() => setSidebarSection(id)} style={{
+                <button key={id} data-help-key={`sidebar-${id === 'wt' ? 'worktrees' : id}`} onClick={() => setSidebarSection(id)} title={id==='wt' ? '실행한 적 있는 워크트리 수 (git worktree 전체 개수와 다를 수 있음)' : undefined} style={{
                   display:'flex',alignItems:'center',gap:8,
                   padding:'6px 8px',margin:'0 4px',borderRadius:5,cursor:'pointer',
                   background: sidebarSection === id ? '#221f1b' : 'transparent',
