@@ -48,6 +48,7 @@ struct SpawnArgs<'a> {
     is_file_path: bool,
     folder_path: Option<&'a str>,
     log_file: &'a std::path::Path,
+    port: Option<u16>,
 }
 
 fn build_path_env() -> String {
@@ -147,6 +148,10 @@ fn spawn_process(args: SpawnArgs) -> Result<u32, String> {
     cmd.stdout(log_out).stderr(log_err)
         .env("PATH", &new_path)
         .env("HOME", &home);
+
+    if let Some(p) = args.port {
+        cmd.env("PORT", p.to_string());
+    }
 
     #[cfg(unix)]
     {
@@ -336,6 +341,7 @@ fn execute_command(
     port_id: String,
     command_path: String,
     folder_path: Option<String>,
+    port: Option<u16>,
     state: State<AppState>,
     app_handle: tauri::AppHandle,
 ) -> Result<String, String> {
@@ -388,6 +394,7 @@ fn execute_command(
         is_file_path,
         folder_path: folder_path.as_deref(),
         log_file: &log_file,
+        port,
     })?;
 
     let mut processes = state.processes.lock().unwrap_or_else(|e| e.into_inner());
@@ -652,6 +659,7 @@ fn force_restart_command(
         is_file_path,
         folder_path: folder_path.as_deref(),
         log_file: &log_file,
+        port: Some(port),
     })?;
 
     let mut processes = state.processes.lock().unwrap_or_else(|e| e.into_inner());

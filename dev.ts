@@ -11,11 +11,13 @@
  * 4. vite의 exit code로 종료
  */
 
-const API_PORT = 3001;
-const VITE_PORT = 9000;
+const API_PORT = Number(process.env.API_PORT) || 3001;
+const VITE_PORT = Number(process.env.PORT) || 9000;
 
-// 시작 전: 포트 3001(api-server) + 9000(vite) 기존 리스너 정리 (macOS만 — win32는 스킵)
-// vite는 strictPort라 9000이 점유되면 즉시 실패 — 고아 vite가 9001/9002로 쌓이는 메모리 누수 방지
+// 시작 전: API_PORT/VITE_PORT(override 반영된 실제 타겟 포트)의 기존 리스너 정리 (macOS만 — win32는 스킵)
+// vite는 strictPort라 대상 포트가 점유되면 즉시 실패 — 고아 프로세스가 쌓이는 것 방지
+// PORT/API_PORT가 override된 경우(워크트리 실행 등)에도 API_PORT/VITE_PORT는 override 값을 담고 있으므로
+// 아래 루프는 항상 "실제로 이번 세션이 쓰려는 포트"만 정리한다 — 다른 세션의 리스너는 건드리지 않음
 if (process.platform === "darwin") {
   for (const port of [API_PORT, VITE_PORT]) {
     try {
