@@ -3,7 +3,7 @@
  * 사용: `node tests/smoke.mjs`
  *
  * 옵션 환경변수:
- *   TARGET=local   → http://localhost:9001 (기본)  — 로컬 App.tsx 전체 (ports + portal)
+ *   TARGET=local   → http://localhost:9000 (기본)  — 로컬 App.tsx 전체 (ports + portal)
  *   TARGET=vercel  → https://portmanager-portal.vercel.app — 포털 전용
  *   TARGET=<url>   → 임의 URL (자동 감지)
  *   VIEWPORT=mobile → 375x812 (iPhone SE 세로)
@@ -14,7 +14,7 @@ const TARGET = process.env.TARGET === 'vercel'
   ? 'https://portmanager-portal.vercel.app'
   : process.env.TARGET && process.env.TARGET.startsWith('http')
     ? process.env.TARGET
-    : 'http://localhost:9001';
+    : 'http://localhost:9000';
 
 const isVercelPortal = TARGET.includes('portmanager-portal.vercel.app');
 const isLocalFullApp = TARGET.startsWith('http://localhost');
@@ -65,13 +65,13 @@ function check(name, ok, detail = '') {
           await page.getByRole('button', { name: /프로젝트 추가/ }).count() === 0);
       }
     } else if (isLocalFullApp) {
-      const addBtn = await page.getByRole('button', { name: /프로젝트 추가/ }).count();
+      const addBtn = await page.getByRole('button', { name: /프로젝트 추가|New project/ }).count();
       check('Local: 프로젝트 추가 버튼 노출', addBtn > 0);
 
       if (addBtn > 0) {
-        await page.getByRole('button', { name: /프로젝트 추가/ }).first().click();
+        await page.getByRole('button', { name: /프로젝트 추가|New project/ }).first().click();
         await page.waitForTimeout(500);
-        check('Local: "기존 폴더 연결" 탭', await page.getByRole('button', { name: /기존 폴더 연결/ }).count() > 0);
+        check('Local: "기존 폴더 등록" 탭', await page.getByRole('button', { name: /기존 폴더 (연결|등록)/ }).count() > 0);
         check('Local: "새 폴더 만들기" 탭', await page.getByRole('button', { name: /새 폴더 만들기/ }).count() > 0);
         await page.getByRole('button', { name: /새 폴더 만들기/ }).click();
         await page.waitForTimeout(300);

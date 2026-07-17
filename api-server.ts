@@ -265,7 +265,7 @@ async function getPidsByPort(port: number): Promise<string[]> {
       const localAddr = parts[1];
       if (!localAddr?.endsWith(portSuffix)) continue;
       const pid = parts[parts.length - 1];
-      if (/^\d+$/.test(pid) && pid !== '0' && !pids.includes(pid)) {
+      if (pid && /^\d+$/.test(pid) && pid !== '0' && !pids.includes(pid)) {
         pids.push(pid);
       }
     }
@@ -298,8 +298,9 @@ async function getListeningPortsSnapshot(): Promise<Set<number>> {
         const parts = line.trim().split(/\s+/);
         if (parts.length < 4) continue;
         const localAddr = parts[1];
-        const idx = localAddr?.lastIndexOf(':');
-        if (idx !== undefined && idx !== -1) {
+        if (!localAddr) continue;
+        const idx = localAddr.lastIndexOf(':');
+        if (idx !== -1) {
           const n = Number(localAddr.slice(idx + 1));
           if (Number.isInteger(n) && n >= 1 && n <= 65535) listening.add(n);
         }

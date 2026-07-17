@@ -2301,15 +2301,20 @@ function App() {
     if (cleanupRanRef.current || ports.length === 0) return;
     cleanupRanRef.current = true;
     const baseUrl = isTauri() ? 'http://localhost:3001' : '';
-    ports.forEach(p => {
-      if (p.folderPath) {
-        fetch(`${baseUrl}/api/cleanup-stale-worktrees`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ folderPath: p.folderPath }),
-        }).catch(() => {});
+    // folderPath 중복 제거 + 순차 실행 — 프로젝트 수만큼 동시 POST가 몰리면
+    // 서버가 폴더당 git 프로세스 2~4개를 한꺼번에 spawn하는 부팅 폭주가 발생
+    const folders = [...new Set(ports.map(p => p.folderPath).filter((f): f is string => !!f))];
+    (async () => {
+      for (const folderPath of folders) {
+        try {
+          await fetch(`${baseUrl}/api/cleanup-stale-worktrees`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folderPath }),
+          });
+        } catch { /* best-effort */ }
       }
-    });
+    })();
   }, [ports]);
 
   // 10초 간격 포트 상태 자동 폴링 (portsRef로 최신 ports 참조 — dependency loop 방지)
