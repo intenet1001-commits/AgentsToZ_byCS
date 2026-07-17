@@ -344,6 +344,24 @@ const API = {
     }
   },
 
+  // 워크트리 카드처럼 폴더 존재 여부만으로 유효성을 판단해야 하는 경우를 위한 일괄 확인
+  async checkPathsBatch(paths: string[]): Promise<{ path: string; exists: boolean }[]> {
+    if (paths.length === 0) return [];
+    if (isTauri()) {
+      return invoke<{ path: string; exists: boolean }[]>('check_paths_batch', { paths });
+    } else {
+      const response = await fetch('/api/check-paths-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paths }),
+        signal: AbortSignal.timeout(8000),
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error);
+      return result.results;
+    }
+  },
+
   async openLog(portId: string): Promise<void> {
     if (isTauri()) {
       return invoke('open_log', { portId });
@@ -1569,6 +1587,17 @@ function App() {
       if (list.some(wt => !wt.is_main)) {
         setExpandedWorktreeIds(prev => { const next = new Set(prev); next.add(portId); return next; });
       }
+      // git이 알고 있는 실제 워크트리 목록을 기준으로, 이 프로젝트의 "실행" 시
+      // 자동 등록됐던 워크트리 카드 중 더 이상 존재하지 않는 것을 정리 —
+      // 패널을 열 때마다 최신 상태로 맞춰 유령 카드가 남지 않도록 한다.
+      const livePaths = new Set(list.map(wt => wt.path));
+      setPorts(prev => {
+        const next = prev.filter(p =>
+          !(p.id.startsWith(`${portId}_wt_`) && p.worktreePath && !livePaths.has(p.worktreePath))
+        );
+        if (next.length !== prev.length) API.savePorts(next).catch(() => {});
+        return next.length !== prev.length ? next : prev;
+      });
       // Check actual port status for each non-main worktree
       const usedPortsSnap = new Set(
         (JSON.parse(localStorage.getItem('ports_cache') || '[]') as {port?:number}[])
@@ -2342,6 +2371,30 @@ function App() {
           });
         } catch { /* best-effort */ }
       }
+
+      // 위 정리는 git worktree 메타/디스크만 정리할 뿐, "실행" 시 자동 등록됐던
+      // 워크트리 카드(PortInfo)는 그대로 남는다 — 앱 밖에서(예: 워크트리 PR 머지 후
+      // 정리 도구로) 폴더가 사라진 경우 카드만 유령처럼 계속 목록에 남아 혼동을 준다.
+      // 워크트리 카드만 골라 폴더 존재 여부를 일괄 확인 후, 사라진 폴더의 카드는 제거.
+      try {
+        const wtEntries = portsRef.current.filter(p => p.worktreePath && p.folderPath);
+        const uniquePaths = [...new Set(wtEntries.map(p => p.folderPath!))];
+        if (uniquePaths.length > 0) {
+          const results = await API.checkPathsBatch(uniquePaths);
+          const missing = new Set(results.filter(r => !r.exists).map(r => r.path));
+          if (missing.size > 0) {
+            setPorts(prev => {
+              const next = prev.filter(p => !(p.worktreePath && p.folderPath && missing.has(p.folderPath)));
+              const removedCount = prev.length - next.length;
+              if (removedCount > 0) {
+                API.savePorts(next).catch(() => {});
+                showToast(`존재하지 않는 워크트리 카드 ${removedCount}개를 정리했습니다`, 'success');
+              }
+              return removedCount > 0 ? next : prev;
+            });
+          }
+        }
+      } catch { /* best-effort — 다음 시작 때 재시도 */ }
     })();
   }, [ports]);
 
