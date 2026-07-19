@@ -1312,7 +1312,9 @@ function App() {
   const [editGithubUrl, setEditGithubUrl] = useState('');
   const [editWorktreePath, setEditWorktreePath] = useState('');
   const [editCategory, setEditCategory] = useState('');
+  const [editAiName, setEditAiName] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const [aiSuggestingId, setAiSuggestingId] = useState<string | null>(null);
   const [category, setCategory] = useState('');
   const [description, setDescription] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
@@ -2767,6 +2769,7 @@ function App() {
     setEditGithubUrl(item.githubUrl || '');
     setEditWorktreePath(item.worktreePath || '');
     setEditCategory(item.category || '');
+    setEditAiName(item.aiName || '');
     setEditDescription(item.description || '');
   };
 
@@ -2781,6 +2784,7 @@ function App() {
     setEditGithubUrl('');
     setEditWorktreePath('');
     setEditCategory('');
+    setEditAiName('');
     setEditDescription('');
   };
 
@@ -2797,7 +2801,7 @@ function App() {
 
       setPorts(ports.map(p =>
         p.id === editingId
-          ? { ...p, name: editName, port: editPort ? parseInt(editPort) : undefined, commandPath: editCommandPath || undefined, terminalCommand: editTerminalCommand || undefined, folderPath: autoFolderPath || undefined, deployUrl: editDeployUrl || undefined, githubUrl: editGithubUrl || undefined, worktreePath: editWorktreePath || undefined, category: editCategory || undefined, description: editDescription || undefined }
+          ? { ...p, name: editName, port: editPort ? parseInt(editPort) : undefined, commandPath: editCommandPath || undefined, terminalCommand: editTerminalCommand || undefined, folderPath: autoFolderPath || undefined, deployUrl: editDeployUrl || undefined, githubUrl: editGithubUrl || undefined, worktreePath: editWorktreePath || undefined, category: editCategory || undefined, aiName: editAiName || undefined, description: editDescription || undefined }
           : p
       ));
       cancelEdit();
@@ -2810,11 +2814,29 @@ function App() {
     await API.savePorts(updated);
   }, [ports]);
 
-  const saveInlineUrl = useCallback(async (id: string, field: 'deployUrl' | 'githubUrl' | 'description', value: string) => {
+  const saveInlineUrl = useCallback(async (id: string, field: 'deployUrl' | 'githubUrl' | 'description' | 'category' | 'aiName', value: string) => {
     const trimmed = value.trim();
     const updated = ports.map(p => p.id === id ? { ...p, [field]: trimmed || undefined } : p);
     setPorts(updated);
     try { await API.savePorts(updated); } catch (e) { console.warn('[saveInlineUrl] persist failed:', e); }
+  }, [ports]);
+
+  // 선택한 프로젝트 1개에 대해서만 AI 이름/카테고리를 (재)생성
+  const handleAiSuggestSingle = useCallback(async (item: PortInfo) => {
+    if (!item.folderPath) { showToast('AI 생성에는 폴더 경로가 필요합니다', 'error'); return; }
+    setAiSuggestingId(item.id);
+    try {
+      const { name: aiName, category } = await API.suggestNameAndCategory(item.folderPath, item.name);
+      if (!aiName && !category) { showToast('AI 제안 생성 실패', 'error'); return; }
+      const updated = ports.map(p => p.id === item.id
+        ? { ...p, aiName: aiName ?? p.aiName, category: category ?? p.category }
+        : p);
+      setPorts(updated);
+      try { await API.savePorts(updated); } catch (e) { console.warn('[handleAiSuggestSingle] persist failed:', e); }
+      showToast('AI 이름/카테고리 생성 완료', 'success');
+    } finally {
+      setAiSuggestingId(null);
+    }
   }, [ports]);
 
   // 9000번대에서 등록되지 않고 실제로도 열려있지 않은 첫 빈 포트를 찾는다.
@@ -4889,9 +4911,10 @@ function App() {
               <input type="text" value={editDeployUrl} onChange={e=>setEditDeployUrl(e.target.value)} onKeyDown={handleEditKeyPress} style={inpV3} placeholder="배포 주소" />
               <input type="text" value={editGithubUrl} onChange={e=>setEditGithubUrl(e.target.value)} onKeyDown={handleEditKeyPress} style={inpV3} placeholder="GitHub 주소" />
               <div style={{display:'flex',gap:6}}>
+                <input type="text" value={editAiName} onChange={e=>setEditAiName(e.target.value)} onKeyDown={handleEditKeyPress} style={{...inpV3,flex:1}} placeholder="AI 이름 (별칭)" />
                 <input type="text" value={editCategory} onChange={e=>setEditCategory(e.target.value)} onKeyDown={handleEditKeyPress} style={{...inpV3,flex:1}} placeholder="카테고리" />
-                <input type="text" value={editDescription} onChange={e=>setEditDescription(e.target.value)} onKeyDown={handleEditKeyPress} style={{...inpV3,flex:2}} placeholder="프로젝트 설명" />
               </div>
+              <input type="text" value={editDescription} onChange={e=>setEditDescription(e.target.value)} onKeyDown={handleEditKeyPress} style={inpV3} placeholder="프로젝트 설명" />
             </div>
           ) : (
           <div style={{flex:1,overflowY:'auto',padding:'28px 32px'}}>
@@ -4944,6 +4967,20 @@ function App() {
               <InlineUrlRow label="deploy" value={sel.deployUrl} onSave={(v) => saveInlineUrl(sel.id, 'deployUrl', v)} placeholder="배포 주소 입력" mobile={isMobile} />
               <InlineUrlRow label="github" value={sel.githubUrl} onSave={(v) => saveInlineUrl(sel.id, 'githubUrl', v)} placeholder="GitHub 주소 입력" mobile={isMobile} />
               <InlineUrlRow label="메모" value={sel.description} onSave={(v) => saveInlineUrl(sel.id, 'description', v)} placeholder="이 프로젝트가 뭔지 메모 (나중에 헷갈리지 않도록)" mobile={isMobile} />
+              <div style={{display:'flex',alignItems:'center',gap:10}}>
+                <div style={{flex:1}}>
+                  <InlineUrlRow label="AI 이름" value={sel.aiName} onSave={(v) => saveInlineUrl(sel.id, 'aiName', v)} placeholder="AI 추천 별칭 입력" mobile={isMobile} />
+                </div>
+                <button
+                  onClick={() => handleAiSuggestSingle(sel)}
+                  disabled={aiSuggestingId === sel.id || !sel.folderPath}
+                  title={sel.folderPath ? 'AI로 이름/카테고리 (재)생성' : '폴더 경로가 있어야 AI 생성 가능'}
+                  style={{padding:'3px 8px',background:'rgba(200,168,240,0.10)',border:'1px solid rgba(200,168,240,0.25)',borderRadius:5,color:'#c8a8f0',cursor:sel.folderPath?'pointer':'not-allowed',opacity:sel.folderPath?1:0.4,fontSize:11,display:'flex',alignItems:'center',gap:4,flexShrink:0}}
+                >
+                  <Sparkles style={{width:11,height:11}}/>{aiSuggestingId === sel.id ? '생성 중…' : 'AI 생성'}
+                </button>
+              </div>
+              <InlineUrlRow label="카테고리" value={sel.category} onSave={(v) => saveInlineUrl(sel.id, 'category', v)} placeholder="카테고리 입력" mobile={isMobile} />
             </div>
 
             {/* 실행 제어 */}
