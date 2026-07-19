@@ -237,6 +237,7 @@ CREATE INDEX IF NOT EXISTS idx_portmgr_ports_device_id ON portmgr_ports(device_i
 - **최적화된 창 크기**: MacBook 14인치 기준 세로 최대화 (1000x1050)
 - **터미널 스플릿뷰 수정/삭제 컨트롤**: 헤더 우측 아이콘 버튼(`Pencil`/`Trash2`)으로 배치 (App.tsx:3935–3941) — 워크트리 패널 버튼과의 혼동 방지
 - **Claude 버튼 레이블**: 이모지 없이 텍스트만 사용 (`Claude 열기` / `새창`) — 🤖 재추가 금지
+- **프로젝트 상세 패널 AI 이름/카테고리**: `aiName`/`category`를 InlineUrlRow로 표시+클릭 수정, "AI 생성" 버튼(Sparkles 아이콘)으로 단일 프로젝트만 재생성 가능 (`handleAiSuggestSingle`, App.tsx) — 폴더 경로 없는 프로젝트는 버튼 비활성화
 
 ### Tauri 빌드 & 배포
 - **앱 빌드 (macOS)**: .app 번들 생성 (Applications 폴더 설치용)
