@@ -158,7 +158,7 @@ For more information, read the Bun API docs in `node_modules/bun-types/docs/**.m
   - `portmgr_workspace_roots` (id, device_id, name, path) — 프로젝트 관리 탭 Push/Pull
   - `portmgr_portal_items` (id, device_id, name, type, url, path, category, description, pinned, visit_count, last_visited, created_at)
   - `portmgr_portal_categories` (id, device_id, name, color, order)
-  - `portmgr_devices` (id, name, last_push_at)
+  - `portmgr_devices` (id, name, last_push_at, **handoff_note**, **handoff_updated_at**) — 핸드오프 메모 (기기 간 인수인계용, nullable)
   - `portmgr_push_snapshots` (id, created_at, table_name, device_id, device_name, row_count, snapshot)
 - RLS: anon key 읽기/쓰기 허용 또는 비활성화 필요
 - SetupGuide 컴포넌트: 설정 모달 내 접이식 Claude 프롬프트 복사 가이드 (`PortalManager.tsx`)
@@ -207,6 +207,10 @@ UPDATE portmgr_portal_categories SET device_id = '__shared__';
 
 -- 인덱스 추가 (성능)
 CREATE INDEX IF NOT EXISTS idx_portmgr_ports_device_id ON portmgr_ports(device_id);
+
+-- 핸드오프 메모 (기기 간 인수인계 노트) — portmgr_devices에 컬럼 추가
+ALTER TABLE portmgr_devices ADD COLUMN IF NOT EXISTS handoff_note text;
+ALTER TABLE portmgr_devices ADD COLUMN IF NOT EXISTS handoff_updated_at timestamptz;
 ```
 
 ### 자동화

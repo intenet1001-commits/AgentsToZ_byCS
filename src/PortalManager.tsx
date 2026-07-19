@@ -42,6 +42,7 @@ export interface PortalData {
   supabaseAnonKey?: string;
   deviceId?: string;
   deviceName?: string;
+  handoffNote?: string; // 이 기기의 핸드오프 메모 (local-first, portmgr_devices.handoff_note와 동기화)
   viewingDeviceId?: string; // if set, Pull shows this device's data
   lastSynced?: string;
 }
@@ -322,7 +323,7 @@ interface AdvancedSettingsProps {
   deviceId?: string;
   deviceName?: string;
   viewingDeviceId: string;
-  knownDevices: {device_id: string; device_name?: string}[];
+  knownDevices: {device_id: string; device_name?: string; handoff_note?: string; handoff_updated_at?: string}[];
   isFetchingDevices: boolean;
   onFetchDevices: () => void;
   onSelectDevice: (id: string) => void;
@@ -331,12 +332,31 @@ interface AdvancedSettingsProps {
   onChangeDeviceId: (id: string) => void;
   onDeleteDevice: (id: string) => Promise<void>;
   deletingDeviceId: string | null;
+  handoffNote: string;
+  onChangeHandoffNote: (note: string) => void;
+  onSaveHandoffNote: () => void;
+  isSavingHandoffNote: boolean;
 }
 
-function AdvancedSettings({ deviceId, deviceName, viewingDeviceId, knownDevices, isFetchingDevices, onFetchDevices, onSelectDevice, onResetDevice, onCopyDeviceId, onChangeDeviceId, onDeleteDevice, deletingDeviceId }: AdvancedSettingsProps) {
+function relativeTimeFromNow(iso?: string): string {
+  if (!iso) return '';
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const diffMs = Date.now() - then;
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return '방금 업데이트';
+  if (mins < 60) return `${mins}분 전 업데이트`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}시간 전 업데이트`;
+  const days = Math.floor(hours / 24);
+  return `${days}일 전 업데이트`;
+}
+
+function AdvancedSettings({ deviceId, deviceName, viewingDeviceId, knownDevices, isFetchingDevices, onFetchDevices, onSelectDevice, onResetDevice, onCopyDeviceId, onChangeDeviceId, onDeleteDevice, deletingDeviceId, handoffNote, onChangeHandoffNote, onSaveHandoffNote, isSavingHandoffNote }: AdvancedSettingsProps) {
   const [open, setOpen] = React.useState(false);
   const [editingId, setEditingId] = React.useState(false);
   const [editIdVal, setEditIdVal] = React.useState('');
+  const viewingDevice = viewingDeviceId ? knownDevices.find(d => d.device_id === viewingDeviceId) : undefined;
   return (
     <div className="mb-3">
       <button
@@ -382,6 +402,26 @@ function AdvancedSettings({ deviceId, deviceName, viewingDeviceId, knownDevices,
               </div>
             )}
           </div>
+          {/* Handoff note — 이 기기 전용 (조회 중인 기기가 아닌, 항상 현재 기기의 메모) */}
+          <div>
+            <label className="block text-[10px] text-zinc-500 mb-1">핸드오프 메모 (이 기기)</label>
+            <textarea
+              value={handoffNote}
+              onChange={e => onChangeHandoffNote(e.target.value)}
+              placeholder="예: X 작업 중, Y 확인 필요…"
+              rows={2}
+              className="w-full px-2.5 py-1.5 text-xs bg-black/30 border border-stone-700/50 text-zinc-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all resize-none"
+            />
+            <div className="flex justify-end mt-1">
+              <button
+                onClick={onSaveHandoffNote}
+                disabled={isSavingHandoffNote}
+                className="px-2.5 py-1 text-[10px] bg-[#221f1b] hover:bg-[#2a2520] text-zinc-400 border border-stone-700/50 rounded-lg transition-all disabled:opacity-50"
+              >
+                {isSavingHandoffNote ? '저장 중…' : '메모 저장'}
+              </button>
+            </div>
+          </div>
           {/* Device switch */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
@@ -420,6 +460,14 @@ function AdvancedSettings({ deviceId, deviceName, viewingDeviceId, knownDevices,
                 {viewingDeviceId && viewingDeviceId !== deviceId && (
                   <div className="mt-1.5 space-y-1">
                     <p className="text-[10px] text-amber-400">⚠ Pull 시 선택한 기기 데이터 적용됨</p>
+                    {viewingDevice?.handoff_note && (
+                      <div className="px-2 py-1.5 bg-amber-500/10 border border-amber-500/25 rounded-lg">
+                        <p className="text-[11px] text-amber-200 whitespace-pre-wrap">{viewingDevice.handoff_note}</p>
+                        {viewingDevice.handoff_updated_at && (
+                          <p className="text-[9.5px] text-amber-400/70 mt-0.5">{relativeTimeFromNow(viewingDevice.handoff_updated_at)}</p>
+                        )}
+                      </div>
+                    )}
                     <div className="flex items-center gap-2">
                       <button onClick={onResetDevice} className="text-[10px] text-zinc-500 hover:text-[#ede7dd]/90 underline">내 기기로 복귀</button>
                       <span className="text-[10px] text-zinc-700">|</span>
@@ -741,10 +789,12 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
   const [sbUrl, setSbUrl] = useState('');
   const [sbKey, setSbKey] = useState('');
   const [deviceName, setDeviceName] = useState('');
+  const [handoffNote, setHandoffNote] = useState('');
+  const [isSavingHandoffNote, setIsSavingHandoffNote] = useState(false);
   const [viewingDeviceId, setViewingDeviceId] = useState(
     () => localStorage.getItem('portal-viewing-device') ?? ''
   );
-  const [knownDevices, setKnownDevices] = useState<{device_id: string; device_name?: string}[]>([]);
+  const [knownDevices, setKnownDevices] = useState<{device_id: string; device_name?: string; handoff_note?: string; handoff_updated_at?: string}[]>([]);
   const [isFetchingDevices, setIsFetchingDevices] = useState(false);
   const [deletingDeviceId, setDeletingDeviceId] = useState<string | null>(null);
 
@@ -792,6 +842,7 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
       }
 
       setDeviceName(loaded.deviceName ?? (loaded as any)._hostname ?? '');
+      setHandoffNote(loaded.handoffNote ?? '');
       setViewingDeviceId(loaded.viewingDeviceId ?? '');
       setIsLoading(false);
       // Persist migrated deviceId / auto-fetched name back to portal.json
@@ -1155,8 +1206,15 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
       // Register this device in devices table (non-blocking)
       // 사용자가 방금 입력한 deviceName(useState)을 data.deviceName(stale closure)보다 우선
       const finalDeviceName = (deviceName?.trim()) || data.deviceName || null;
+      // 현재 로컬 핸드오프 메모도 함께 실어보냄 (optional — 컬럼 없으면 조용히 실패, 아래 catch에서 흡수)
+      const finalHandoffNote = (handoffNote?.trim()) || data.handoffNote || null;
       supabase.from('portmgr_devices').upsert(
-        { id: deviceId, name: finalDeviceName, last_push_at: new Date().toISOString() },
+        {
+          id: deviceId,
+          name: finalDeviceName,
+          last_push_at: new Date().toISOString(),
+          ...(finalHandoffNote ? { handoff_note: finalHandoffNote, handoff_updated_at: new Date().toISOString() } : {}),
+        },
         { onConflict: 'id' }
       ).then(() => {}, () => {});
 
@@ -1304,15 +1362,25 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
       }
 
       // devices 테이블이 있으면 그것을 기준으로 필터링 (삭제된 기기 제외)
-      const { data: deviceRows } = await supabase
-        .from('portmgr_devices').select('id, name');
+      // handoff_note/handoff_updated_at 컬럼이 아직 없는 설치(pre-migration)에서는
+      // PostgREST가 "column does not exist" 에러를 반환하므로 select('id, name')로 폴백.
+      let deviceRows: { id: string; name?: string; handoff_note?: string; handoff_updated_at?: string }[] | null = null;
+      const wideRes = await supabase.from('portmgr_devices').select('id, name, handoff_note, handoff_updated_at');
+      if (!wideRes.error) {
+        deviceRows = wideRes.data as any;
+      } else {
+        const narrowRes = await supabase.from('portmgr_devices').select('id, name');
+        deviceRows = narrowRes.data as any;
+      }
       const registeredIds = deviceRows && deviceRows.length > 0
         ? new Set(deviceRows.map((r: { id: string }) => r.id))
         : null;
       // devices 테이블 name이 최우선
+      const noteMap = new Map<string, { handoff_note?: string; handoff_updated_at?: string }>();
       if (deviceRows) {
         for (const r of deviceRows) {
           if (r.name) nameMap.set(r.id, r.name);
+          noteMap.set(r.id, { handoff_note: r.handoff_note, handoff_updated_at: r.handoff_updated_at });
         }
       }
 
@@ -1324,6 +1392,8 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
       const devices = allIds.map(id => ({
         device_id: id,
         device_name: nameMap.get(id),
+        handoff_note: noteMap.get(id)?.handoff_note,
+        handoff_updated_at: noteMap.get(id)?.handoff_updated_at,
       }));
 
       setKnownDevices(devices);
@@ -1364,6 +1434,42 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
       showToast('삭제 실패: ' + e.message, 'error');
     } finally {
       setDeletingDeviceId(null);
+    }
+  }
+
+  async function saveHandoffNote() {
+    // Local-first: 항상 로컬(data.handoffNote)에 반영 — Supabase 미설정이어도 동작
+    const trimmed = handoffNote.trim();
+    const next: PortalData = { ...data, handoffNote: trimmed || undefined };
+    await persist(next);
+
+    if (!sbUrl || !sbKey || !data.deviceId) {
+      showToast('메모 저장됨 (로컬)', 'success');
+      return;
+    }
+    setIsSavingHandoffNote(true);
+    try {
+      const supabase = getSupabaseClient(sbUrl, sbKey);
+      const finalDeviceName = (deviceName?.trim()) || data.deviceName || null;
+      const { error } = await supabase.from('portmgr_devices').upsert(
+        {
+          id: data.deviceId,
+          name: finalDeviceName,
+          handoff_note: trimmed || null,
+          handoff_updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'id' }
+      );
+      if (error) throw error;
+      showToast('핸드오프 메모 저장됨', 'success');
+    } catch (e: any) {
+      // 컬럼 미존재(pre-migration) 등 — CLAUDE.md의 ALTER TABLE DDL 안내
+      showToast(
+        '메모는 로컬에 저장됐지만 Supabase 동기화에 실패했습니다. portmgr_devices 테이블에 handoff_note/handoff_updated_at 컬럼이 없을 수 있습니다 — CLAUDE.md의 ALTER TABLE 안내를 참고해 컬럼을 추가하세요. (' + (e?.message ?? e) + ')',
+        'error'
+      );
+    } finally {
+      setIsSavingHandoffNote(false);
     }
   }
 
@@ -1517,18 +1623,31 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
               style={{width:'100%',padding:'8px 10px 8px 30px',background:'var(--pm-bg,#1c1916)',border:'1px solid var(--pm-border,rgba(255,240,220,0.07))',borderRadius:7,color:'var(--pm-text,#ede7dd)',fontSize:12.5,outline:'none',fontFamily:'inherit',boxSizing:'border-box'}}
             />
           </div>
-          {viewingDeviceId && viewingDeviceId !== data.deviceId && (
-            <div style={{display:'flex',alignItems:'center',gap:6,padding:'6px 10px',background:'rgba(232,165,87,0.08)',border:'1px solid rgba(232,165,87,0.25)',borderRadius:7,flexShrink:0,maxWidth:140,minWidth:0}}>
-              <span style={{color:'#e8a557',fontSize:10.5,fontWeight:500,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>
-                📱 {knownDevices.find(d => d.device_id === viewingDeviceId)?.device_name ?? viewingDeviceId.slice(0, 6) + '…'}
-              </span>
-              <button
-                onClick={() => { setViewingDeviceId(''); setData(d => ({ ...d, viewingDeviceId: undefined })); }}
-                style={{color:'#e8a557',background:'transparent',border:'none',cursor:'pointer',fontSize:12,lineHeight:1}}
-                title="내 기기로 복귀"
-              >✕</button>
-            </div>
-          )}
+          {viewingDeviceId && viewingDeviceId !== data.deviceId && (() => {
+            const viewedDevice = knownDevices.find(d => d.device_id === viewingDeviceId);
+            return (
+              <div style={{display:'flex',flexDirection:'column',gap:4,padding:'6px 10px',background:'rgba(232,165,87,0.08)',border:'1px solid rgba(232,165,87,0.25)',borderRadius:7,flexShrink:0,maxWidth:260,minWidth:0}}>
+                <div style={{display:'flex',alignItems:'center',gap:6}}>
+                  <span style={{color:'#e8a557',fontSize:10.5,fontWeight:500,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',flex:1}}>
+                    📱 {viewedDevice?.device_name ?? viewingDeviceId.slice(0, 6) + '…'}
+                  </span>
+                  <button
+                    onClick={() => { setViewingDeviceId(''); setData(d => ({ ...d, viewingDeviceId: undefined })); }}
+                    style={{color:'#e8a557',background:'transparent',border:'none',cursor:'pointer',fontSize:12,lineHeight:1}}
+                    title="내 기기로 복귀"
+                  >✕</button>
+                </div>
+                {viewedDevice?.handoff_note && (
+                  <div style={{padding:'4px 6px',background:'rgba(232,165,87,0.12)',border:'1px solid rgba(232,165,87,0.3)',borderRadius:5}}>
+                    <p style={{margin:0,color:'#f0c98a',fontSize:11,whiteSpace:'pre-wrap'}}>{viewedDevice.handoff_note}</p>
+                    {viewedDevice.handoff_updated_at && (
+                      <p style={{margin:'2px 0 0',color:'rgba(232,165,87,0.7)',fontSize:9.5}}>{relativeTimeFromNow(viewedDevice.handoff_updated_at)}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           <button
             data-help-key="portal-add-item"
             onClick={() => openAddModal(selectedCat !== 'all' ? selectedCat : undefined)}
@@ -1814,6 +1933,10 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
             }}
             onDeleteDevice={deleteKnownDevice}
             deletingDeviceId={deletingDeviceId}
+            handoffNote={handoffNote}
+            onChangeHandoffNote={setHandoffNote}
+            onSaveHandoffNote={saveHandoffNote}
+            isSavingHandoffNote={isSavingHandoffNote}
           />
         </Modal>
       )}

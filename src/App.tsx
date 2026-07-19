@@ -2816,10 +2816,13 @@ function App() {
 
   const saveInlineUrl = useCallback(async (id: string, field: 'deployUrl' | 'githubUrl' | 'description' | 'category' | 'aiName', value: string) => {
     const trimmed = value.trim();
-    const updated = ports.map(p => p.id === id ? { ...p, [field]: trimmed || undefined } : p);
-    setPorts(updated);
+    let updated: PortInfo[] = [];
+    setPorts(prev => {
+      updated = prev.map(p => p.id === id ? { ...p, [field]: trimmed || undefined } : p);
+      return updated;
+    });
     try { await API.savePorts(updated); } catch (e) { console.warn('[saveInlineUrl] persist failed:', e); }
-  }, [ports]);
+  }, []);
 
   // 선택한 프로젝트 1개에 대해서만 AI 이름/카테고리를 (재)생성
   const handleAiSuggestSingle = useCallback(async (item: PortInfo) => {
@@ -2828,16 +2831,18 @@ function App() {
     try {
       const { name: aiName, category } = await API.suggestNameAndCategory(item.folderPath, item.name);
       if (!aiName && !category) { showToast('AI 제안 생성 실패', 'error'); return; }
-      const updated = ports.map(p => p.id === item.id
-        ? { ...p, aiName: aiName ?? p.aiName, category: category ?? p.category }
-        : p);
-      setPorts(updated);
-      try { await API.savePorts(updated); } catch (e) { console.warn('[handleAiSuggestSingle] persist failed:', e); }
+      setPorts(prev => {
+        const updated = prev.map(p => p.id === item.id
+          ? { ...p, aiName: aiName ?? p.aiName, category: category ?? p.category }
+          : p);
+        API.savePorts(updated).catch(e => console.warn('[handleAiSuggestSingle] persist failed:', e));
+        return updated;
+      });
       showToast('AI 이름/카테고리 생성 완료', 'success');
     } finally {
       setAiSuggestingId(null);
     }
-  }, [ports]);
+  }, []);
 
   // 9000번대에서 등록되지 않고 실제로도 열려있지 않은 첫 빈 포트를 찾는다.
   const suggestPort = useCallback(async (setter: (v: string) => void, base = 9000, max = 9999) => {
