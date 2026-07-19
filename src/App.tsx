@@ -1567,6 +1567,21 @@ function App() {
     try {
       const list = await API.listGitWorktrees(folderPath);
       setWorktreeLists(prev => ({ ...prev, [portId]: list }));
+      // 살아있는 워크트리 경로 목록을 기준으로, 외부에서(git CLI 등) 삭제되어 더 이상
+      // 존재하지 않는 워크트리를 가리키는 _wt_ 파생 포트 행을 정리 (성공 경로에서만 실행)
+      const liveWorktreePaths = new Set(list.map(wt => wt.path));
+      let prunedPorts: PortInfo[] | null = null;
+      setPorts(prev => {
+        const next = prev.filter(p => {
+          if (!p.id.startsWith(portId + '_wt_')) return true;
+          return !!p.worktreePath && liveWorktreePaths.has(p.worktreePath);
+        });
+        if (next.length !== prev.length) prunedPorts = next;
+        return next;
+      });
+      if (prunedPorts) {
+        API.savePorts(prunedPorts).catch(e => console.warn('[loadWorktrees] prune persist failed:', e));
+      }
       // 워크트리가 있으면 패널 자동 확장 (non-main 워크트리가 1개 이상)
       if (list.some(wt => !wt.is_main)) {
         setExpandedWorktreeIds(prev => { const next = new Set(prev); next.add(portId); return next; });
@@ -4244,6 +4259,7 @@ function App() {
   const displayedPorts = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     let filtered = q ? ports.filter(p => matchesSearch(p, q)) : ports;
+    filtered = filtered.filter(p => !p.worktreePath && !/_wt_/.test(p.id));
 
     // Apply filter
     if (filterType === 'with-port') {
@@ -4297,6 +4313,7 @@ function App() {
       list = [...list].sort((a, b) => (lastActivityFor(b.id) || 0) - (lastActivityFor(a.id) || 0));
     }
     else if (sidebarSection.startsWith('tag:')) list = list.filter(p => p.category === sidebarSection.slice(4));
+    else list = list.filter(p => !p.worktreePath && !/_wt_/.test(p.id));
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter(p =>
