@@ -1218,7 +1218,7 @@ function App() {
   // Windows에서 macOS 전용 terminalApp이 저장된 경우 자동 수정 (HMR 후에도 동작)
   useEffect(() => {
     if (!isWindows()) return;
-    const macOnly: TerminalApp[] = ['cmux', 'iterm', 'terminal'];
+    const macOnly: TerminalApp[] = ['cmux', 'orca', 'iterm', 'terminal'];
     if (macOnly.includes(terminalApp)) {
       setTerminalApp('powershell');
       localStorage.setItem('portmanager-terminalApp', 'powershell');
@@ -1259,7 +1259,7 @@ function App() {
   const [bypassPermissions, setBypassPermissions] = useState(
     () => localStorage.getItem('portmanager-bypassPermissions') !== 'false'
   );
-  type TerminalApp = 'cmux' | 'iterm' | 'terminal' | 'powershell' | 'wsl';
+  type TerminalApp = 'cmux' | 'orca' | 'iterm' | 'terminal' | 'powershell' | 'wsl';
   const [terminalApp, setTerminalApp] = useState<TerminalApp>(
     () => {
       const saved = localStorage.getItem('portmanager-terminalApp') as TerminalApp | null;
@@ -1920,6 +1920,47 @@ function App() {
     return data?.message ?? 'OK';
   };
 
+  // Orca(onorca.dev) 호출 — Tauri는 Rust 커맨드, 브라우저는 api-server 폴백.
+  // agent: 'claude' | 'codex' | 'agy' | 'terminal'. Orca는 git 저장소만 지원.
+  const callOrca = async (
+    agent: 'claude' | 'codex' | 'agy' | 'terminal',
+    item: PortInfo,
+    worktreePath?: string,
+  ): Promise<string> => {
+    const body = {
+      agent,
+      name: getSessionName(item),
+      folderPath: item.folderPath,
+      worktreePath,
+      bypass: bypassPermissions,
+    };
+    if (isTauri()) {
+      return await invoke<string>('open_orca_agent', body as any);
+    }
+    const res = await fetch('http://localhost:3001/api/open-orca-agent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok || data?.success === false) throw new Error(data?.error ?? `HTTP ${res.status}`);
+    return data?.message ?? 'OK';
+  };
+
+  const orcaMacOnlyToast = () => showToast('Orca는 macOS 전용입니다 — Windows에서는 ⌄ 메뉴의 "tmux" 사용', 'error');
+
+  const openOrcaAgent = async (agent: 'claude' | 'codex' | 'agy' | 'terminal', item: PortInfo, worktreePath?: string) => {
+    if (isWindows()) { orcaMacOnlyToast(); return; }
+    recordVisit(item.id);
+    try {
+      const msg = await callOrca(agent, item, worktreePath);
+      showToast(msg, 'success');
+    } catch (e: any) {
+      const raw = typeof e === 'string' ? e : (e?.message ?? String(e));
+      showToast(`Orca 실행 실패: ${raw}`, 'error');
+    }
+  };
+
   // cmux 는 macOS 전용 (Swift+AppKit) — Linux/WSL 빌드 자체가 존재하지 않아 대안 불가.
   // Windows 사용자는 카드 ⌄ 메뉴의 'tmux'/'tmux ↺ 새창' 항목 사용.
   const cmuxMacOnlyToast = () => showToast('cmux는 macOS 전용입니다 — Windows에서는 ⌄ 메뉴의 "tmux" 사용', 'error');
@@ -2091,6 +2132,10 @@ function App() {
         if (isWindows()) { cmuxMacOnlyToast(); return; }
         const msg = await callCmux('open_cmux_codex', '/api/open-cmux-codex', { name: sessionName, folderPath: item.folderPath, worktreePath, bypass: bypassPermissions });
         showToast(msg, 'success');
+      } else if (terminalApp === 'orca') {
+        if (isWindows()) { orcaMacOnlyToast(); return; }
+        const msg = await callOrca('codex', item, worktreePath);
+        showToast(msg, 'success');
       } else if (terminalApp === 'iterm' || terminalApp === 'wsl') {
         // iterm/wsl — tmux 세션으로 실행
         await API.openTmuxCodex(sessionName, item.folderPath, worktreePath, bypassPermissions);
@@ -2119,6 +2164,10 @@ function App() {
         if (isWindows()) { cmuxMacOnlyToast(); return; }
         const msg = await callCmux('open_cmux_agy', '/api/open-cmux-agy', { name: sessionName, folderPath: item.folderPath, worktreePath, bypass: bypassPermissions });
         showToast(msg, 'success');
+      } else if (terminalApp === 'orca') {
+        if (isWindows()) { orcaMacOnlyToast(); return; }
+        const msg = await callOrca('agy', item, worktreePath);
+        showToast(msg, 'success');
       } else if (terminalApp === 'iterm' || terminalApp === 'wsl') {
         // iterm/wsl — tmux 세션으로 실행
         await API.openTmuxAgy(sessionName, item.folderPath, worktreePath, bypassPermissions);
@@ -2144,6 +2193,9 @@ function App() {
     if (terminalApp === 'cmux') {
       if (isNew) await openCmuxClaudeNew(item, worktreePath);
       else await openCmuxClaude(item, worktreePath);
+    } else if (terminalApp === 'orca') {
+      // Orca는 terminal create가 항상 새 터미널 탭 — isNew 구분 불필요
+      await openOrcaAgent('claude', item, worktreePath);
     } else if (terminalApp === 'iterm' || terminalApp === 'wsl') {
       if (isNew) await openTmuxClaudeNew(item, worktreePath);
       else await openTmuxClaude(item, worktreePath);
@@ -5836,7 +5888,7 @@ function App() {
               <div style={{display:'flex', background:'#1a1a1c', border:'1px solid #3f3f46', borderRadius:6, overflow:'hidden'}}>
                 {(isWindows()
                   ? (['powershell','wsl'] as const)
-                  : (['cmux','iterm','terminal'] as const)
+                  : (['cmux','orca','iterm','terminal'] as const)
                 ).map(app => (
                   <button key={app} onClick={() => { setTerminalApp(app); localStorage.setItem('portmanager-terminalApp', app); }}
                     style={{ padding:'2px 6px', fontSize:10, background: terminalApp===app ? '#3f3f46' : 'transparent',

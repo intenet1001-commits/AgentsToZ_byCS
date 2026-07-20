@@ -146,6 +146,90 @@ async function cmuxSendNodeWithRetry(cli: string, payload: string): Promise<{ ok
   return { ok: false, stderr: lastErr || 'unknown' };
 }
 
+// ──────────────── Orca helpers (browser/web fallback path) ────────────────
+// Orca(https://www.onorca.dev)는 Electron 앱 + VS Code 스타일 CLI 런처를 번들.
+// 워크플로: orca open(런타임 대기, 멱등) → repo add(멱등) → terminal create.
+// git 저장소만 등록 가능 — 비 git 폴더는 명확한 에러로 안내.
+
+function resolveOrcaCli(): string | null {
+  const candidates = [
+    '/Applications/Orca.app/Contents/Resources/bin/orca',
+    `${homedir()}/Applications/Orca.app/Contents/Resources/bin/orca`,
+    '/opt/homebrew/bin/orca',
+    '/usr/local/bin/orca',
+  ];
+  for (const p of candidates) if (existsSync(p)) return p;
+  return null;
+}
+
+/** cmux와 동일한 osascript 우회 — Bun.serve 장기 실행 프로세스 트리에서 직접
+ *  spawn한 CLI 호출이 간헐 실패(Orca는 "Timed out waiting for terminal handle")
+ *  하므로 AppleScript 엔진을 경유해 완전히 분리된 컨텍스트에서 실행한다.
+ *  stderr는 stdout으로 합치고 exit 0을 보장 — 성공/실패 판정은 JSON의 ok 필드로. */
+function nodeOrcaRun(cli: string, args: string[], timeoutMs = 40000): { ok: boolean; stderr: string; stdout: string } {
+  const escape = (s: string) => s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  const shellEscape = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
+  const shellCmd = `${shellEscape(cli)} ${args.map(shellEscape).join(' ')} 2>&1; exit 0`;
+  const appleScript = `do shell script "${escape(shellCmd)}"`;
+  // 서버 프로세스 트리의 env(bun/npm/node_modules PATH 등)를 물려주면 Orca 데몬의
+  // 터미널 생성이 "Timed out waiting for terminal handle"로 실패 → 화이트리스트 env만 전달
+  const cleanEnv: Record<string, string> = {
+    HOME: homedir(),
+    USER: process.env.USER ?? '',
+    LOGNAME: process.env.LOGNAME ?? process.env.USER ?? '',
+    SHELL: process.env.SHELL ?? '/bin/zsh',
+    TMPDIR: process.env.TMPDIR ?? '/tmp',
+    LANG: process.env.LANG ?? 'en_US.UTF-8',
+    PATH: '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
+  };
+  const r = nodeSpawnSync('osascript', ['-e', appleScript], {
+    encoding: 'utf-8',
+    timeout: timeoutMs,
+    env: cleanEnv,
+  });
+  return {
+    ok: r.status === 0,
+    stderr: (r.stderr ?? '').toString().trim(),
+    stdout: (r.stdout ?? '').toString().trim(),
+  };
+}
+
+/** JSON 출력 커맨드 실행 — CLI는 실패도 exit 0 + {ok:false}로 반환하므로 둘 다 검사 */
+function nodeOrcaRunJson(cli: string, args: string[], timeoutMs = 15000): { ok: boolean; error: string; result: any } {
+  const r = nodeOrcaRun(cli, [...args, '--json'], timeoutMs);
+  if (!r.ok) return { ok: false, error: r.stderr || r.stdout || 'unknown', result: null };
+  try {
+    const parsed = JSON.parse(r.stdout);
+    if (parsed?.ok === false) return { ok: false, error: parsed?.error?.message ?? 'unknown', result: null };
+    return { ok: true, error: '', result: parsed?.result ?? null };
+  } catch {
+    return { ok: false, error: `JSON 파싱 실패: ${r.stdout.slice(0, 200)}`, result: null };
+  }
+}
+
+/** Orca 앱 실행 + 런타임 대기 (`orca open`은 멱등 — 이미 떠 있으면 ~150ms에 반환) */
+function ensureOrcaReady(cli: string): { ok: boolean; error: string } {
+  const r = nodeOrcaRunJson(cli, ['open'], 30000);
+  if (!r.ok) return { ok: false, error: `Orca 실행 실패: ${r.error}` };
+  // 창을 앞으로 가져오기 (open은 런타임만 보장)
+  nodeSpawnSync('open', ['-a', 'Orca'], { stdio: 'pipe' });
+  return { ok: true, error: '' };
+}
+
+/** repo add — 멱등 (이미 등록된 경로면 기존 repo 반환). 비 git 폴더면 명확한 안내. */
+function orcaEnsureRepo(cli: string, repoPath: string): { ok: boolean; error: string } {
+  const r = nodeOrcaRunJson(cli, ['repo', 'add', '--path', repoPath]);
+  if (r.ok) return { ok: true, error: '' };
+  if (/not a valid git repository/i.test(r.error)) {
+    return { ok: false, error: `Orca는 git 저장소만 지원합니다 (${repoPath})\n일반 폴더는 cmux/iterm 터미널을 사용하세요.` };
+  }
+  return { ok: false, error: `Orca repo 등록 실패: ${r.error}` };
+}
+
+function orcaInstallError(): string {
+  return 'Orca가 설치되지 않았습니다.\n설치: https://www.onorca.dev 에서 다운로드 후 /Applications에 설치하세요.';
+}
+
 /** WSL distro 목록 캐시 (빈 결과도 캐시해서 registry 반복 쿼리 방지) */
 let _cachedDistros: string[] | null = null;
 let _distrosCached = false;
@@ -1775,6 +1859,64 @@ end try`);
         const ws = nodeCmuxRun(cliPath, ['new-workspace', '--cwd', cdPath, '--command', agyCli, '--name', title]);
         if (!ws.ok) return new Response(JSON.stringify({ success: false, error: cmuxAccessHelp(`cmux new-workspace 실패: ${ws.stderr || 'unknown'}`) }), { status: 500, headers });
         return new Response(JSON.stringify({ success: true, message: `cmux Antigravity${bypass ? ' ⚡' : ''} 실행 중` }), { headers });
+      } catch (error: any) {
+        return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers });
+      }
+    }
+
+    // Orca endpoint — terminalApp='orca' 선택 시 Claude/Codex/agy를 Orca 터미널로 실행.
+    // Tauri 앱은 invoke('open_orca_agent') (src-tauri/src/lib.rs)를 우선 사용.
+    if (url.pathname === "/api/open-orca-agent" && req.method === "POST") {
+      if (IS_WIN) return new Response(JSON.stringify({ error: 'Orca는 맥에서만 가능합니다' }), { status: 400, headers });
+      try {
+        const { agent = 'claude', folderPath, worktreePath, name = '', bypass = false } = await req.json();
+        const expand = (p: string) => p.replace(/^~(?=\/|$)/, homedir());
+        const repoPath = folderPath ? expand(String(folderPath).trim()) : null;
+        const wtRaw = worktreePath ? (String(worktreePath).split(',')[0] ?? '').trim() : '';
+        const wtFirst = wtRaw ? expand(wtRaw) : null;
+        const cdPath = wtFirst || repoPath;
+        if (!cdPath) return new Response(JSON.stringify({ success: false, error: '프로젝트 경로가 없습니다.' }), { status: 400, headers });
+
+        const cli = resolveOrcaCli();
+        if (!cli) return new Response(JSON.stringify({ error: orcaInstallError() }), { status: 400, headers });
+
+        const ready = ensureOrcaReady(cli);
+        if (!ready.ok) return new Response(JSON.stringify({ success: false, error: ready.error }), { status: 500, headers });
+
+        // 워크트리 터미널도 메인 repo가 등록되어 있어야 path: 셀렉터가 해석됨
+        const reg = orcaEnsureRepo(cli, repoPath ?? cdPath);
+        if (!reg.ok) return new Response(JSON.stringify({ success: false, error: reg.error }), { status: 400, headers });
+
+        const cmdMap: Record<string, { cmd: string | null; label: string }> = {
+          claude: { cmd: bypass ? 'claude --dangerously-skip-permissions' : 'claude', label: 'Claude' },
+          codex: { cmd: bypass ? 'codex --dangerously-bypass-approvals-and-sandbox' : 'codex', label: 'Codex' },
+          agy: { cmd: bypass ? 'agy --dangerously-skip-permissions' : 'agy', label: 'Antigravity' },
+          terminal: { cmd: null, label: '터미널' },
+        };
+        const spec = cmdMap[agent] ?? cmdMap.claude!;
+        const title = agent === 'terminal'
+          ? `🪟 ${(name && String(name).trim()) || cdPath.split('/').filter(Boolean).pop() || 'terminal'}`
+          : buildCmuxTitle(name || agent, wtFirst ?? undefined, bypass);
+
+        // ⚠️ 숨김 상태의 외부 워크트리에서 `--command`로 TUI(claude/codex)를 직접
+        // 실행하면 항상 "Timed out waiting for terminal handle"로 실패 (Orca 버그).
+        // → 커맨드 없이 터미널만 생성(안정적) 후 terminal send로 명령 입력.
+        // --focus도 같은 이유로 create 타임아웃 유발 → 생성 후 terminal switch 사용.
+        const args = ['terminal', 'create', '--worktree', `path:${cdPath}`, '--title', title];
+        let t = nodeOrcaRunJson(cli, args);
+        for (let attempt = 0; !t.ok && /timed out waiting for terminal handle/i.test(t.error) && attempt < 2; attempt++) {
+          await new Promise(r => setTimeout(r, 1000));
+          t = nodeOrcaRunJson(cli, args);
+        }
+        if (!t.ok) return new Response(JSON.stringify({ success: false, error: `Orca terminal create 실패: ${t.error}` }), { status: 500, headers });
+        const handle = t.result?.terminal?.handle;
+        if (spec.cmd && handle) {
+          await new Promise(r => setTimeout(r, 300));
+          const s = nodeOrcaRunJson(cli, ['terminal', 'send', '--terminal', handle, '--text', spec.cmd, '--enter']);
+          if (!s.ok) return new Response(JSON.stringify({ success: false, error: `Orca terminal send 실패: ${s.error}` }), { status: 500, headers });
+        }
+        if (handle) nodeOrcaRunJson(cli, ['terminal', 'switch', '--terminal', handle], 5000);
+        return new Response(JSON.stringify({ success: true, message: `Orca ${spec.label}${bypass && spec.cmd ? ' ⚡' : ''} 실행 중` }), { headers });
       } catch (error: any) {
         return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers });
       }

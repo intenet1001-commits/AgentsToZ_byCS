@@ -2661,6 +2661,122 @@ fn open_cmux_project_agents(folder_path: Option<String>, name: String) -> Result
     Ok(format!("cmux Agent View 열림 ({})", base_name))
 }
 
+// ──────────────── Orca (https://www.onorca.dev) ────────────────
+// Electron 앱 + VS Code 스타일 CLI. 워크플로: orca open(멱등, 런타임 대기)
+// → repo add(멱등) → terminal create. git 저장소만 등록 가능.
+
+fn resolve_orca_cli() -> Option<String> {
+    use std::path::Path;
+    if Path::new("/Applications/Orca.app/Contents/Resources/bin/orca").exists() {
+        return Some("/Applications/Orca.app/Contents/Resources/bin/orca".into());
+    }
+    if let Some(home) = std::env::var_os("HOME") {
+        let home_app = format!("{}/Applications/Orca.app/Contents/Resources/bin/orca", home.to_string_lossy());
+        if Path::new(&home_app).exists() { return Some(home_app); }
+    }
+    for p in &["/opt/homebrew/bin/orca", "/usr/local/bin/orca"] {
+        if Path::new(p).exists() { return Some((*p).into()); }
+    }
+    None
+}
+
+fn orca_install_error() -> String {
+    "Orca가 설치되지 않았습니다.\n설치: https://www.onorca.dev 에서 다운로드 후 /Applications에 설치하세요.".to_string()
+}
+
+/// CLI는 실패도 exit 0 + {ok:false}로 반환하므로 JSON의 ok 필드까지 검사
+fn orca_run_json(cli: &str, args: &[&str]) -> Result<serde_json::Value, String> {
+    let mut full: Vec<&str> = args.to_vec();
+    full.push("--json");
+    let out = Command::new(cli)
+        .args(&full)
+        .output()
+        .map_err(|e| format!("orca 실행 실패: {}", e))?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+        return Err(if stderr.is_empty() { "unknown".into() } else { stderr });
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(stdout.trim())
+        .map_err(|_| format!("JSON 파싱 실패: {}", stdout.chars().take(200).collect::<String>()))?;
+    if parsed.get("ok").and_then(|v| v.as_bool()) == Some(false) {
+        let msg = parsed.pointer("/error/message").and_then(|v| v.as_str()).unwrap_or("unknown");
+        return Err(msg.to_string());
+    }
+    Ok(parsed)
+}
+
+#[tauri::command]
+fn open_orca_agent(agent: Option<String>, name: Option<String>, folder_path: Option<String>, worktree_path: Option<String>, bypass: Option<bool>) -> Result<String, String> {
+    if cfg!(windows) { return Err("Orca는 맥에서만 가능합니다".into()); }
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/".into());
+    let expand = |p: &str| -> String {
+        if p == "~" { home.clone() }
+        else if let Some(rest) = p.strip_prefix("~/") { format!("{}/{}", home, rest) }
+        else { p.to_string() }
+    };
+    let repo_path = folder_path.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(expand);
+    let wt_first = first_worktree(&worktree_path).map(|s| expand(&s));
+    let cd_path = wt_first.clone().or_else(|| repo_path.clone())
+        .ok_or_else(|| "프로젝트 경로가 없습니다.".to_string())?;
+
+    let cli = resolve_orca_cli().ok_or_else(orca_install_error)?;
+    // orca open — 앱 실행 + 런타임 대기 (이미 떠 있으면 ~150ms)
+    orca_run_json(&cli, &["open"]).map_err(|e| format!("Orca 실행 실패: {}", e))?;
+    let _ = Command::new("open").args(["-a", "Orca"]).status();
+
+    // 워크트리 터미널도 메인 repo가 등록되어 있어야 path: 셀렉터가 해석됨
+    let reg_target = repo_path.as_deref().unwrap_or(&cd_path);
+    if let Err(e) = orca_run_json(&cli, &["repo", "add", "--path", reg_target]) {
+        if e.to_lowercase().contains("not a valid git repository") {
+            return Err(format!("Orca는 git 저장소만 지원합니다 ({})\n일반 폴더는 cmux/iterm 터미널을 사용하세요.", reg_target));
+        }
+        return Err(format!("Orca repo 등록 실패: {}", e));
+    }
+
+    let use_bypass = bypass.unwrap_or(false);
+    let agent_kind = agent.as_deref().unwrap_or("claude");
+    let (cmd, label): (Option<&str>, &str) = match agent_kind {
+        "codex" => (Some(if use_bypass { "codex --dangerously-bypass-approvals-and-sandbox" } else { "codex" }), "Codex"),
+        "agy" => (Some(if use_bypass { "agy --dangerously-skip-permissions" } else { "agy" }), "Antigravity"),
+        "terminal" => (None, "터미널"),
+        _ => (Some(if use_bypass { "claude --dangerously-skip-permissions" } else { "claude" }), "Claude"),
+    };
+    let session_name = name.as_deref().map(str::trim).filter(|s| !s.is_empty()).unwrap_or(agent_kind);
+    let title = if agent_kind == "terminal" {
+        format!("🪟 {}", session_name)
+    } else {
+        build_window_title(session_name, wt_first.as_deref(), true, use_bypass, false)
+    };
+
+    // ⚠️ 숨김 상태의 외부 워크트리에서 `--command`로 TUI(claude/codex)를 직접
+    // 실행하면 항상 "Timed out waiting for terminal handle"로 실패 (Orca 버그).
+    // → 커맨드 없이 터미널만 생성(안정적) 후 terminal send로 명령 입력.
+    // --focus도 같은 이유로 create 타임아웃 유발 → 생성 후 terminal switch 사용.
+    let worktree_sel = format!("path:{}", cd_path);
+    let args: Vec<&str> = vec!["terminal", "create", "--worktree", &worktree_sel, "--title", &title];
+    let mut created = orca_run_json(&cli, &args);
+    for _ in 0..2 {
+        match &created {
+            Err(e) if e.to_lowercase().contains("timed out waiting for terminal handle") => {
+                std::thread::sleep(std::time::Duration::from_millis(1000));
+                created = orca_run_json(&cli, &args);
+            }
+            _ => break,
+        }
+    }
+    let created = created.map_err(|e| format!("Orca terminal create 실패: {}", e))?;
+    if let Some(handle) = created.pointer("/result/terminal/handle").and_then(|v| v.as_str()) {
+        if let Some(c) = cmd {
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            orca_run_json(&cli, &["terminal", "send", "--terminal", handle, "--text", c, "--enter"])
+                .map_err(|e| format!("Orca terminal send 실패: {}", e))?;
+        }
+        let _ = orca_run_json(&cli, &["terminal", "switch", "--terminal", handle]);
+    }
+    Ok(format!("Orca {}{} 실행 중", label, if use_bypass && cmd.is_some() { " ⚡" } else { "" }))
+}
+
 #[tauri::command]
 fn open_claude_bg(folder_path: Option<String>, name: String, bypass: Option<bool>) -> Result<String, String> {
     if cfg!(windows) { return Err("claude --bg는 맥에서만 가능합니다".into()); }
@@ -2874,6 +2990,7 @@ pub fn run() {
         open_cmux_agent_view,
         open_terminal_agent_view,
         open_cmux_project_agents,
+        open_orca_agent,
         open_claude_bg,
         get_global_shortcut,
         set_global_shortcut,
