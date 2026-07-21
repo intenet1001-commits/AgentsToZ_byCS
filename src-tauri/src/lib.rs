@@ -2782,6 +2782,23 @@ fn open_orca_agent(agent: Option<String>, name: Option<String>, folder_path: Opt
     Ok(format!("Orca {}{} 실행 중", label, if use_bypass && cmd.is_some() { " ⚡" } else { "" }))
 }
 
+/// Orca 워크스페이스만 연다 (repo add, terminal create 없음) — 순수 앱 실행 용도.
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+fn open_orca_app() -> Result<String, String> {
+    Err("Orca는 macOS 전용입니다".to_string())
+}
+
+#[cfg(target_os = "macos")]
+#[tauri::command]
+fn open_orca_app() -> Result<String, String> {
+    let cli = resolve_orca_cli().ok_or_else(bootstrap_orca_install)?;
+    orca_run_json(&cli, &["open"]).map_err(|e| format!("Orca 실행 실패: {}", e))?;
+    Command::new("open").args(["-a", "Orca"]).spawn().map(reap_detached)
+        .map_err(|e| format!("Orca 앱 열기 실패: {}", e))?;
+    Ok("Orca 워크스페이스를 열었습니다".into())
+}
+
 #[tauri::command]
 fn open_claude_bg(folder_path: Option<String>, name: String, bypass: Option<bool>) -> Result<String, String> {
     if cfg!(windows) { return Err("claude --bg는 맥에서만 가능합니다".into()); }
@@ -2996,6 +3013,7 @@ pub fn run() {
         open_terminal_agent_view,
         open_cmux_project_agents,
         open_orca_agent,
+        open_orca_app,
         open_claude_bg,
         get_global_shortcut,
         set_global_shortcut,
