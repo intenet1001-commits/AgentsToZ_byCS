@@ -1,0 +1,58 @@
+- generic [ref=f2e4]:
+  - generic [ref=f2e5]:
+    - generic [ref=f2e6]:
+      - generic [ref=f2e7]:
+        - button "프로젝트·폴더" [ref=f2e8] [cursor=pointer]
+        - button "포털" [ref=f2e12] [cursor=pointer]
+      - button "내보내기" [ref=f2e16] [cursor=pointer]
+      - button "불러오기" [ref=f2e20] [cursor=pointer]
+      - button "새로고침" [ref=f2e24] [cursor=pointer]
+      - generic [ref=f2e30]:
+        - button "Push" [ref=f2e31] [cursor=pointer]
+        - button "Pull" [ref=f2e36] [cursor=pointer]
+      - button "Push 히스토리 / 복원" [ref=f2e42] [cursor=pointer]
+      - button "Supabase / 단말 설정" [ref=f2e46] [cursor=pointer]
+    - generic [ref=f2e50]:
+      - generic [ref=f2e51]:
+        - button "cmux" [ref=f2e52] [cursor=pointer]
+        - button "iterm" [ref=f2e53] [cursor=pointer]
+        - button "terminal" [ref=f2e54] [cursor=pointer]
+      - button "bg" [ref=f2e55] [cursor=pointer]
+      - button "tmux" [ref=f2e56] [cursor=pointer]
+      - button "ON" [ref=f2e57] [cursor=pointer]
+    - generic [ref=f2e60]:
+      - button "세팅" [ref=f2e61] [cursor=pointer]
+      - button "가이드" [ref=f2e67] [cursor=pointer]
+      - button "More options" [ref=f2e71] [cursor=pointer]
+  - generic [ref=f2e77]:
+    - generic [ref=f2e78]:
+      - heading "전체 프로젝트" [level=1] [ref=f2e79]
+      - generic [ref=f2e80]: 0 프로젝트
+      - button "cmux" [ref=f2e81] [cursor=pointer]
+      - button "agents" [ref=f2e85] [cursor=pointer]
+      - button "Claude 열기" [ref=f2e89] [cursor=pointer]
+      - button "앱 빌드" [ref=f2e93] [cursor=pointer]
+      - button "DMG" [ref=f2e96] [cursor=pointer]
+      - button "폴더 열기" [ref=f2e101] [cursor=pointer]
+      - button "New project" [ref=f2e104] [cursor=pointer]
+    - generic [ref=f2e106]:
+      - generic [ref=f2e107]:
+        - generic [ref=f2e108]:
+          - button "All 0" [ref=f2e109] [cursor=pointer]:
+            - text: All
+            - generic [ref=f2e110]: "0"
+          - button "실행 중 0" [ref=f2e111] [cursor=pointer]:
+            - text: 실행 중
+            - generic [ref=f2e112]: "0"
+          - button "즐겨찾기 0" [ref=f2e113] [cursor=pointer]:
+            - text: 즐겨찾기
+            - generic [ref=f2e114]: "0"
+          - button "워크트리 0" [ref=f2e115] [cursor=pointer]:
+            - text: 워크트리
+            - generic [ref=f2e116]: "0"
+        - textbox "프로젝트 검색…" [ref=f2e122]
+        - generic [ref=f2e123]: 프로젝트 없음
+        - button "작업 루트 6" [ref=f2e126] [cursor=pointer]:
+          - generic [ref=f2e129]: 작업 루트
+          - generic [ref=f2e130]: "6"
+      - paragraph [ref=f2e135]: select a project

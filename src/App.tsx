@@ -2209,8 +2209,8 @@ function App() {
 
   // 통합 터미널 핸들러 — terminalApp / bgMode / tmuxMode / bypassPermissions 조합으로 라우팅
   const openClaudeMain = async (item: PortInfo, isNew = false, worktreePath?: string) => {
-    if (bgMode) { await openClaudeBg(item, worktreePath); return; }
     if (terminalApp === 'cmux') {
+      if (bgMode) { await openClaudeBg(item, worktreePath); return; }
       if (isNew) await openCmuxClaudeNew(item, worktreePath);
       else await openCmuxClaude(item, worktreePath);
     } else if (terminalApp === 'orca') {

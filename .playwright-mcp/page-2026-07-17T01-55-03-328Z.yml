@@ -1,0 +1,767 @@
+- generic [ref=f2e4]:
+  - generic [ref=f2e5]:
+    - generic [ref=f2e6]:
+      - generic [ref=f2e7]:
+        - button "프로젝트·폴더" [ref=f2e8] [cursor=pointer]
+        - button "포털" [ref=f2e12] [cursor=pointer]
+      - button "내보내기" [ref=f2e16] [cursor=pointer]
+      - button "불러오기" [ref=f2e20] [cursor=pointer]
+      - button "새로고침" [ref=f2e24] [cursor=pointer]
+      - generic [ref=f2e30]:
+        - button "Push" [ref=f2e31] [cursor=pointer]
+        - button "Pull" [ref=f2e36] [cursor=pointer]
+      - button "Push 히스토리 / 복원" [ref=f2e42] [cursor=pointer]
+      - button "Supabase / 단말 설정" [ref=f2e46] [cursor=pointer]
+    - generic [ref=f2e50]:
+      - generic [ref=f2e51]:
+        - button "cmux" [ref=f2e52] [cursor=pointer]
+        - button "iterm" [ref=f2e53] [cursor=pointer]
+        - button "terminal" [ref=f2e54] [cursor=pointer]
+      - button "bg" [ref=f2e55] [cursor=pointer]
+      - button "tmux" [ref=f2e56] [cursor=pointer]
+      - button "ON" [ref=f2e57] [cursor=pointer]
+    - generic [ref=f2e60]:
+      - button "세팅" [ref=f2e61] [cursor=pointer]
+      - button "가이드" [ref=f2e67] [cursor=pointer]
+      - button "More options" [ref=f2e71] [cursor=pointer]
+  - generic [ref=f2e77]:
+    - generic [ref=f2e78]:
+      - heading "전체 프로젝트" [level=1] [ref=f2e79]
+      - generic [ref=f2e80]: 99 프로젝트
+      - button "cmux" [ref=f2e81] [cursor=pointer]
+      - button "agents" [ref=f2e85] [cursor=pointer]
+      - button "Claude 열기" [ref=f2e89] [cursor=pointer]
+      - button "앱 빌드" [ref=f2e93] [cursor=pointer]
+      - button "DMG" [ref=f2e96] [cursor=pointer]
+      - button "폴더 열기" [ref=f2e101] [cursor=pointer]
+      - button "New project" [ref=f2e104] [cursor=pointer]
+    - generic [ref=f2e106]:
+      - generic [ref=f2e107]:
+        - generic [ref=f2e108]:
+          - button "All 99" [ref=f2e136] [cursor=pointer]:
+            - text: All
+            - generic [ref=f2e110]: "99"
+          - button "실행 중 3" [ref=f2e137] [cursor=pointer]:
+            - text: 실행 중
+            - generic [ref=f2e112]: "3"
+          - button "즐겨찾기 12" [ref=f2e138] [cursor=pointer]:
+            - text: 즐겨찾기
+            - generic [ref=f2e114]: "12"
+          - button "워크트리 0" [ref=f2e115] [cursor=pointer]:
+            - text: 워크트리
+            - generic [ref=f2e116]: "0"
+        - textbox "프로젝트 검색…" [ref=f2e122]
+        - generic [ref=f2e123]:
+          - generic [ref=f2e139]: 실행 중 · 3
+          - generic [ref=f2e141] [cursor=pointer]:
+            - generic [ref=f2e142]: ●
+            - generic [ref=f2e143]:
+              - generic [ref=f2e144]: mac-health
+              - generic [ref=f2e145]: Mac Health Monitor
+            - generic [ref=f2e146]: —
+          - generic [ref=f2e147] [cursor=pointer]:
+            - generic [ref=f2e148]: ●
+            - generic [ref=f2e149]:
+              - generic [ref=f2e150]: youtube_auto1
+              - generic [ref=f2e151]: YouTube Auto Bot
+            - generic [ref=f2e152]: —
+          - generic [ref=f2e153] [cursor=pointer]:
+            - generic [ref=f2e154]: ●
+            - generic [ref=f2e155]:
+              - generic [ref=f2e156]: 프로젝트관리
+              - generic [ref=f2e157]: port manager
+            - generic [ref=f2e158]: :9000
+          - generic [ref=f2e159]: 유휴 · 96
+          - generic [ref=f2e161]: 최근 사용 (7일 이내) · 15
+          - generic [ref=f2e162] [cursor=pointer]:
+            - generic [ref=f2e163]: ●
+            - generic [ref=f2e164]:
+              - generic [ref=f2e165]: nhdesign3
+              - generic [ref=f2e166]: 14시간 전
+            - generic [ref=f2e167]: —
+          - generic [ref=f2e168] [cursor=pointer]:
+            - generic [ref=f2e169]: ●
+            - generic [ref=f2e170]:
+              - generic [ref=f2e171]: nhdesign2
+              - generic [ref=f2e172]: 15시간 전
+            - generic [ref=f2e173]: —
+          - generic [ref=f2e174] [cursor=pointer]:
+            - generic [ref=f2e175]: ●
+            - generic [ref=f2e176]:
+              - generic [ref=f2e177]: Right1
+              - generic [ref=f2e178]: 20시간 전
+            - generic [ref=f2e179]: —
+          - generic [ref=f2e180] [cursor=pointer]:
+            - generic [ref=f2e181]: ●
+            - generic [ref=f2e182]:
+              - generic [ref=f2e183]: nh_plugins for ga
+              - generic [ref=f2e184]: ga plugins
+              - generic [ref=f2e185]: 23시간 전
+            - generic [ref=f2e186]: —
+          - generic [ref=f2e187] [cursor=pointer]:
+            - generic [ref=f2e188]: ●
+            - generic [ref=f2e189]:
+              - generic [ref=f2e190]: csdesign
+              - generic [ref=f2e191]: 1일 전
+            - generic [ref=f2e192]: —
+          - generic [ref=f2e193] [cursor=pointer]:
+            - generic [ref=f2e194]: ●
+            - generic [ref=f2e195]:
+              - generic [ref=f2e196]: Ordering1
+              - generic [ref=f2e197]: 2일 전
+            - generic [ref=f2e198]: —
+          - generic [ref=f2e199] [cursor=pointer]:
+            - generic [ref=f2e200]: ●
+            - generic [ref=f2e201]:
+              - generic [ref=f2e202]: Studio
+              - generic [ref=f2e203]: 4일 전
+            - generic [ref=f2e204]: :8881
+          - generic [ref=f2e205] [cursor=pointer]:
+            - generic [ref=f2e206]: ●
+            - generic [ref=f2e207]:
+              - generic [ref=f2e208]: dash1-v2
+              - generic [ref=f2e209]: MAU Analytics Dashboard
+              - generic [ref=f2e210]: 4일 전
+            - generic [ref=f2e211]: :9500
+          - generic [ref=f2e212] [cursor=pointer]:
+            - generic [ref=f2e213]: ●
+            - generic [ref=f2e214]:
+              - generic [ref=f2e215]: class
+              - generic [ref=f2e216]: 4일 전
+            - generic [ref=f2e217]: :9003
+          - generic [ref=f2e218] [cursor=pointer]:
+            - generic [ref=f2e219]: ●
+            - generic [ref=f2e220]:
+              - generic [ref=f2e221]: freeparking_1
+              - generic [ref=f2e222]: free parking
+              - generic [ref=f2e223]: 5일 전
+            - generic [ref=f2e224]: :9026
+          - generic [ref=f2e225] [cursor=pointer]:
+            - generic [ref=f2e226]: ●
+            - generic [ref=f2e227]:
+              - generic [ref=f2e228]: Vedio1
+              - generic [ref=f2e229]: 5일 전
+            - generic [ref=f2e230]: —
+          - generic [ref=f2e231] [cursor=pointer]:
+            - generic [ref=f2e232]: ●
+            - generic [ref=f2e233]:
+              - generic [ref=f2e234]: vibe2
+              - generic [ref=f2e235]: vibe claude guide
+              - generic [ref=f2e236]: 5일 전
+            - generic [ref=f2e237]: :9009
+          - generic [ref=f2e238] [cursor=pointer]:
+            - generic [ref=f2e239]: ●
+            - generic [ref=f2e240]:
+              - generic [ref=f2e241]: 먹고공부하자
+              - generic [ref=f2e242]: study food app
+              - generic [ref=f2e243]: 5일 전
+            - generic [ref=f2e244]: :9024
+          - generic [ref=f2e245] [cursor=pointer]:
+            - generic [ref=f2e246]: ●
+            - generic [ref=f2e247]:
+              - generic [ref=f2e248]: Gwc-help-bycs
+              - generic [ref=f2e249]: GWC Help Site
+              - generic [ref=f2e250]: 5일 전
+            - generic [ref=f2e251]: :9027
+          - generic [ref=f2e252] [cursor=pointer]:
+            - generic [ref=f2e253]: ●
+            - generic [ref=f2e254]:
+              - generic [ref=f2e255]: linksv1
+              - generic [ref=f2e256]: Links Landing Page
+              - generic [ref=f2e257]: 5일 전
+            - generic [ref=f2e258]: :9007
+          - generic [ref=f2e259]:
+            - generic [ref=f2e260]: 오래됨 (30일+/기록 없음) · 81
+            - button "정리 검토" [ref=f2e261] [cursor=pointer]
+          - generic [ref=f2e262] [cursor=pointer]:
+            - generic [ref=f2e263]: ●
+            - generic [ref=f2e264]:
+              - generic [ref=f2e265]: 본인정보
+              - generic [ref=f2e266]: 실행 이력 없음
+            - generic [ref=f2e267]: —
+          - generic [ref=f2e268] [cursor=pointer]:
+            - generic [ref=f2e269]: ●
+            - generic [ref=f2e270]:
+              - generic [ref=f2e271]: Blog1
+              - generic [ref=f2e272]: 실행 이력 없음
+            - generic [ref=f2e273]: —
+          - generic [ref=f2e274] [cursor=pointer]:
+            - generic [ref=f2e275]: ●
+            - generic [ref=f2e276]:
+              - generic [ref=f2e277]: Derivative1
+              - generic [ref=f2e278]: 실행 이력 없음
+            - generic [ref=f2e279]: :9051
+          - generic [ref=f2e280] [cursor=pointer]:
+            - generic [ref=f2e281]: ●
+            - generic [ref=f2e282]:
+              - generic [ref=f2e283]: Options1
+              - generic [ref=f2e284]: 실행 이력 없음
+            - generic [ref=f2e285]: —
+          - generic [ref=f2e286] [cursor=pointer]:
+            - generic [ref=f2e287]: ●
+            - generic [ref=f2e288]:
+              - generic [ref=f2e289]: Deck
+              - generic [ref=f2e290]: 실행 이력 없음
+            - generic [ref=f2e291]: —
+          - generic [ref=f2e292] [cursor=pointer]:
+            - generic [ref=f2e293]: ●
+            - generic [ref=f2e294]:
+              - generic [ref=f2e295]: Coffee_v1
+              - generic [ref=f2e296]: 실행 이력 없음
+            - generic [ref=f2e297]: —
+          - generic [ref=f2e298] [cursor=pointer]:
+            - generic [ref=f2e299]: ●
+            - generic [ref=f2e300]:
+              - generic [ref=f2e301]: CS_V7_eng
+              - generic [ref=f2e302]: 실행 이력 없음
+            - generic [ref=f2e303]: —
+          - generic [ref=f2e304] [cursor=pointer]:
+            - generic [ref=f2e305]: ●
+            - generic [ref=f2e306]:
+              - generic [ref=f2e307]: Doll2
+              - generic [ref=f2e308]: 실행 이력 없음
+            - generic [ref=f2e309]: —
+          - generic [ref=f2e310] [cursor=pointer]:
+            - generic [ref=f2e311]: ●
+            - generic [ref=f2e312]:
+              - generic [ref=f2e313]: Doll1
+              - generic [ref=f2e314]: 실행 이력 없음
+            - generic [ref=f2e315]: —
+          - generic [ref=f2e316] [cursor=pointer]:
+            - generic [ref=f2e317]: ●
+            - generic [ref=f2e318]:
+              - generic [ref=f2e319]: Easytest1
+              - generic [ref=f2e320]: 실행 이력 없음
+            - generic [ref=f2e321]: —
+          - generic [ref=f2e322] [cursor=pointer]:
+            - generic [ref=f2e323]: ●
+            - generic [ref=f2e324]:
+              - generic [ref=f2e325]: Outlook
+              - generic [ref=f2e326]: Empty Project
+              - generic [ref=f2e327]: 실행 이력 없음
+            - generic [ref=f2e328]: —
+          - generic [ref=f2e329] [cursor=pointer]:
+            - generic [ref=f2e330]: ●
+            - generic [ref=f2e331]:
+              - generic [ref=f2e332]: 국가별약정수수료
+              - generic [ref=f2e333]: Minimal Workspace
+              - generic [ref=f2e334]: 실행 이력 없음
+            - generic [ref=f2e335]: —
+          - generic [ref=f2e336] [cursor=pointer]:
+            - generic [ref=f2e337]: ●
+            - generic [ref=f2e338]:
+              - generic [ref=f2e339]: Agent-class
+              - generic [ref=f2e340]: Medical Certificate Tool
+              - generic [ref=f2e341]: 실행 이력 없음
+            - generic [ref=f2e342]: —
+          - generic [ref=f2e343] [cursor=pointer]:
+            - generic [ref=f2e344]: ●
+            - generic [ref=f2e345]:
+              - generic [ref=f2e346]: MTS
+              - generic [ref=f2e347]: Trading UI Mockup
+              - generic [ref=f2e348]: 실행 이력 없음
+            - generic [ref=f2e349]: —
+          - generic [ref=f2e350] [cursor=pointer]:
+            - generic [ref=f2e351]: ●
+            - generic [ref=f2e352]:
+              - generic [ref=f2e353]: sprint_guide
+              - generic [ref=f2e354]: Sprint Planning Hub
+              - generic [ref=f2e355]: 실행 이력 없음
+            - generic [ref=f2e356]: —
+          - generic [ref=f2e357] [cursor=pointer]:
+            - generic [ref=f2e358]: ●
+            - generic [ref=f2e359]:
+              - generic [ref=f2e360]: Opendesign
+              - generic [ref=f2e361]: Browser Test Env
+              - generic [ref=f2e362]: 실행 이력 없음
+            - generic [ref=f2e363]: :7456
+          - generic [ref=f2e364] [cursor=pointer]:
+            - generic [ref=f2e365]: ●
+            - generic [ref=f2e366]:
+              - generic [ref=f2e367]: KIS
+              - generic [ref=f2e368]: KIS API Trader
+              - generic [ref=f2e369]: 실행 이력 없음
+            - generic [ref=f2e370]: :9028
+          - generic [ref=f2e371] [cursor=pointer]:
+            - generic [ref=f2e372]: ●
+            - generic [ref=f2e373]:
+              - generic [ref=f2e374]: My order
+              - generic [ref=f2e375]: Bare Workspace
+              - generic [ref=f2e376]: 실행 이력 없음
+            - generic [ref=f2e377]: —
+          - generic [ref=f2e378] [cursor=pointer]:
+            - generic [ref=f2e379]: ●
+            - generic [ref=f2e380]:
+              - generic [ref=f2e381]: myschedule
+              - generic [ref=f2e382]: Schedule Web App
+              - generic [ref=f2e383]: 실행 이력 없음
+            - generic [ref=f2e384]: :9027
+          - generic [ref=f2e385] [cursor=pointer]:
+            - generic [ref=f2e386]: ●
+            - generic [ref=f2e387]:
+              - generic [ref=f2e388]: CS_V7
+              - generic [ref=f2e389]: Obsidian Knowledge Vault
+              - generic [ref=f2e390]: 실행 이력 없음
+            - generic [ref=f2e391]: —
+          - generic [ref=f2e392] [cursor=pointer]:
+            - generic [ref=f2e393]: ●
+            - generic [ref=f2e394]:
+              - generic [ref=f2e395]: showme_skills1
+              - generic [ref=f2e396]: Claude Config Home
+              - generic [ref=f2e397]: 실행 이력 없음
+            - generic [ref=f2e398]: —
+          - generic [ref=f2e399] [cursor=pointer]:
+            - generic [ref=f2e400]: ●
+            - generic [ref=f2e401]:
+              - generic [ref=f2e402]: CSnShowmeCompany
+              - generic [ref=f2e403]: 실행 이력 없음
+            - generic [ref=f2e404]: —
+          - generic [ref=f2e405] [cursor=pointer]:
+            - generic [ref=f2e406]: ●
+            - generic [ref=f2e407]:
+              - generic [ref=f2e408]: General
+              - generic [ref=f2e409]: Empty Workspace
+              - generic [ref=f2e410]: 실행 이력 없음
+            - generic [ref=f2e411]: —
+          - generic [ref=f2e412] [cursor=pointer]:
+            - generic [ref=f2e413]: ●
+            - generic [ref=f2e414]:
+              - generic [ref=f2e415]: 나만의스케줄
+              - generic [ref=f2e416]: 실행 이력 없음
+            - generic [ref=f2e417]: —
+          - generic [ref=f2e418] [cursor=pointer]:
+            - generic [ref=f2e419]: ●
+            - generic [ref=f2e420]:
+              - generic [ref=f2e421]: CS-youtube-builder
+              - generic [ref=f2e422]: Automation Templates Repo
+              - generic [ref=f2e423]: 실행 이력 없음
+            - generic [ref=f2e424]: —
+          - generic [ref=f2e425] [cursor=pointer]:
+            - generic [ref=f2e426]: ●
+            - generic [ref=f2e427]:
+              - generic [ref=f2e428]: study_finance
+              - generic [ref=f2e429]: Global Study Portal
+              - generic [ref=f2e430]: 실행 이력 없음
+            - generic [ref=f2e431]: —
+          - generic [ref=f2e432] [cursor=pointer]:
+            - generic [ref=f2e433]: ●
+            - generic [ref=f2e434]:
+              - generic [ref=f2e435]: CS볼트V5
+              - generic [ref=f2e436]: Obsidian Main Vault
+              - generic [ref=f2e437]: 실행 이력 없음
+            - generic [ref=f2e438]: —
+          - generic [ref=f2e439] [cursor=pointer]:
+            - generic [ref=f2e440]: ●
+            - generic [ref=f2e441]:
+              - generic [ref=f2e442]: ice-manual
+              - generic [ref=f2e443]: Static HTML Site
+              - generic [ref=f2e444]: 실행 이력 없음
+            - generic [ref=f2e445]: —
+          - generic [ref=f2e446] [cursor=pointer]:
+            - generic [ref=f2e447]: ●
+            - generic [ref=f2e448]:
+              - generic [ref=f2e449]: CS-all
+              - generic [ref=f2e450]: 실행 이력 없음
+            - generic [ref=f2e451]: :9031
+          - generic [ref=f2e452] [cursor=pointer]:
+            - generic [ref=f2e453]: ●
+            - generic [ref=f2e454]:
+              - generic [ref=f2e455]: meter
+              - generic [ref=f2e456]: 실행 이력 없음
+            - generic [ref=f2e457]: —
+          - generic [ref=f2e458] [cursor=pointer]:
+            - generic [ref=f2e459]: ●
+            - generic [ref=f2e460]:
+              - generic [ref=f2e461]: piano1
+              - generic [ref=f2e462]: 실행 이력 없음
+            - generic [ref=f2e463]: —
+          - generic [ref=f2e464] [cursor=pointer]:
+            - generic [ref=f2e465]: ●
+            - generic [ref=f2e466]:
+              - generic [ref=f2e467]: CSnCompany_2-0
+              - generic [ref=f2e468]: Claude Plugin Marketplace
+              - generic [ref=f2e469]: 실행 이력 없음
+            - generic [ref=f2e470]: —
+          - generic [ref=f2e471] [cursor=pointer]:
+            - generic [ref=f2e472]: ●
+            - generic [ref=f2e473]:
+              - generic [ref=f2e474]: 되나
+              - generic [ref=f2e475]: 실행 이력 없음
+            - generic [ref=f2e476]: —
+          - generic [ref=f2e477] [cursor=pointer]:
+            - generic [ref=f2e478]: ●
+            - generic [ref=f2e479]:
+              - generic [ref=f2e480]: Desktop
+              - generic [ref=f2e481]: CS Manager App
+              - generic [ref=f2e482]: 실행 이력 없음
+            - generic [ref=f2e483]: —
+          - generic [ref=f2e484] [cursor=pointer]:
+            - generic [ref=f2e485]: ●
+            - generic [ref=f2e486]:
+              - generic [ref=f2e487]: test2
+              - generic [ref=f2e488]: Blank OMC Project
+              - generic [ref=f2e489]: 실행 이력 없음
+            - generic [ref=f2e490]: —
+          - generic [ref=f2e491] [cursor=pointer]:
+            - generic [ref=f2e492]: ●
+            - generic [ref=f2e493]:
+              - generic [ref=f2e494]: 프로젝트관리2.0
+              - generic [ref=f2e495]: 실행 이력 없음
+            - generic [ref=f2e496]: —
+          - generic [ref=f2e497] [cursor=pointer]:
+            - generic [ref=f2e498]: ●
+            - generic [ref=f2e499]:
+              - generic [ref=f2e500]: auth converter3
+              - generic [ref=f2e501]: oauth converter
+              - generic [ref=f2e502]: 실행 이력 없음
+            - generic [ref=f2e503]: :9002
+          - generic [ref=f2e504] [cursor=pointer]:
+            - generic [ref=f2e505]: ●
+            - generic [ref=f2e506]:
+              - generic [ref=f2e507]: bookshelfmanagement
+              - generic [ref=f2e508]: bookshelf manager
+              - generic [ref=f2e509]: 실행 이력 없음
+            - generic [ref=f2e510]: :9019
+          - generic [ref=f2e511] [cursor=pointer]:
+            - generic [ref=f2e512]: ●
+            - generic [ref=f2e513]:
+              - generic [ref=f2e514]: capitalgaintax1
+              - generic [ref=f2e515]: capital gain tax
+              - generic [ref=f2e516]: 실행 이력 없음
+            - generic [ref=f2e517]: :9010
+          - generic [ref=f2e518] [cursor=pointer]:
+            - generic [ref=f2e519]: ●
+            - generic [ref=f2e520]:
+              - generic [ref=f2e521]: Claude Team Monitor
+              - generic [ref=f2e522]: team monitor
+              - generic [ref=f2e523]: 실행 이력 없음
+            - generic [ref=f2e524]: :9099
+          - generic [ref=f2e525] [cursor=pointer]:
+            - generic [ref=f2e526]: ●
+            - generic [ref=f2e527]:
+              - generic [ref=f2e528]: cocard_auto_1
+              - generic [ref=f2e529]: cocard automation
+              - generic [ref=f2e530]: 실행 이력 없음
+            - generic [ref=f2e531]: —
+          - generic [ref=f2e532] [cursor=pointer]:
+            - generic [ref=f2e533]: ●
+            - generic [ref=f2e534]:
+              - generic [ref=f2e535]: CSnCOMPANY
+              - generic [ref=f2e536]: claude code plugins
+              - generic [ref=f2e537]: 실행 이력 없음
+            - generic [ref=f2e538]: —
+          - generic [ref=f2e539] [cursor=pointer]:
+            - generic [ref=f2e540]: ●
+            - generic [ref=f2e541]:
+              - generic [ref=f2e542]: EasyConversion Web
+              - generic [ref=f2e543]: file converter web
+              - generic [ref=f2e544]: 실행 이력 없음
+            - generic [ref=f2e545]: :9005
+          - generic [ref=f2e546] [cursor=pointer]:
+            - generic [ref=f2e547]: ●
+            - generic [ref=f2e548]:
+              - generic [ref=f2e549]: inboundtradingv2
+              - generic [ref=f2e550]: inbound trading v2
+              - generic [ref=f2e551]: 실행 이력 없음
+            - generic [ref=f2e552]: :9014
+          - generic [ref=f2e553] [cursor=pointer]:
+            - generic [ref=f2e554]: ●
+            - generic [ref=f2e555]:
+              - generic [ref=f2e556]: inboundtradngv1
+              - generic [ref=f2e557]: inbound trading v1
+              - generic [ref=f2e558]: 실행 이력 없음
+            - generic [ref=f2e559]: :9013
+          - generic [ref=f2e560] [cursor=pointer]:
+            - generic [ref=f2e561]: ●
+            - generic [ref=f2e562]:
+              - generic [ref=f2e563]: JSON 관리
+              - generic [ref=f2e564]: json manager
+              - generic [ref=f2e565]: 실행 이력 없음
+            - generic [ref=f2e566]: :9006
+          - generic [ref=f2e567] [cursor=pointer]:
+            - generic [ref=f2e568]: ●
+            - generic [ref=f2e569]:
+              - generic [ref=f2e570]: Lecture Auto Next
+              - generic [ref=f2e571]: lecture auto next
+              - generic [ref=f2e572]: 실행 이력 없음
+            - generic [ref=f2e573]: :9004
+          - generic [ref=f2e574] [cursor=pointer]:
+            - generic [ref=f2e575]: ●
+            - generic [ref=f2e576]:
+              - generic [ref=f2e577]: marketing
+              - generic [ref=f2e578]: marketing site
+              - generic [ref=f2e579]: 실행 이력 없음
+            - generic [ref=f2e580]: :9015
+          - generic [ref=f2e581] [cursor=pointer]:
+            - generic [ref=f2e582]: ●
+            - generic [ref=f2e583]:
+              - generic [ref=f2e584]: Monitoring1
+              - generic [ref=f2e585]: monitoring dashboard
+              - generic [ref=f2e586]: 실행 이력 없음
+            - generic [ref=f2e587]: —
+          - generic [ref=f2e588] [cursor=pointer]:
+            - generic [ref=f2e589]: ●
+            - generic [ref=f2e590]:
+              - generic [ref=f2e591]: mwc
+              - generic [ref=f2e592]: mwc checklist
+              - generic [ref=f2e593]: 실행 이력 없음
+            - generic [ref=f2e594]: :9021
+          - generic [ref=f2e595] [cursor=pointer]:
+            - generic [ref=f2e596]: ●
+            - generic [ref=f2e597]:
+              - generic [ref=f2e598]: NewsAgent
+              - generic [ref=f2e599]: news agent
+              - generic [ref=f2e600]: 실행 이력 없음
+            - generic [ref=f2e601]: :9012
+          - generic [ref=f2e602] [cursor=pointer]:
+            - generic [ref=f2e603]: ●
+            - generic [ref=f2e604]:
+              - generic [ref=f2e605]: problemsolving1
+              - generic [ref=f2e606]: problem solving ai
+              - generic [ref=f2e607]: 실행 이력 없음
+            - generic [ref=f2e608]: —
+          - generic [ref=f2e609] [cursor=pointer]:
+            - generic [ref=f2e610]: ●
+            - generic [ref=f2e611]:
+              - generic [ref=f2e612]: Sendingtest-1
+              - generic [ref=f2e613]: sending test
+              - generic [ref=f2e614]: 실행 이력 없음
+            - generic [ref=f2e615]: —
+          - generic [ref=f2e616] [cursor=pointer]:
+            - generic [ref=f2e617]: ●
+            - generic [ref=f2e618]:
+              - generic [ref=f2e619]: Skill_manager_1
+              - generic [ref=f2e620]: skill manager
+              - generic [ref=f2e621]: 실행 이력 없음
+            - generic [ref=f2e622]: :9025
+          - generic [ref=f2e623] [cursor=pointer]:
+            - generic [ref=f2e624]: ●
+            - generic [ref=f2e625]:
+              - generic [ref=f2e626]: Spaingogo
+              - generic [ref=f2e627]: spain travel guide
+              - generic [ref=f2e628]: 실행 이력 없음
+            - generic [ref=f2e629]: :9020
+          - generic [ref=f2e630] [cursor=pointer]:
+            - generic [ref=f2e631]: ●
+            - generic [ref=f2e632]:
+              - generic [ref=f2e633]: sq1분석연구소
+              - generic [ref=f2e634]: data analysis lab
+              - generic [ref=f2e635]: 실행 이력 없음
+            - generic [ref=f2e636]: —
+          - generic [ref=f2e637] [cursor=pointer]:
+            - generic [ref=f2e638]: ●
+            - generic [ref=f2e639]:
+              - generic [ref=f2e640]: test
+              - generic [ref=f2e641]: Test Project
+              - generic [ref=f2e642]: 실행 이력 없음
+            - generic [ref=f2e643]: —
+          - generic [ref=f2e644] [cursor=pointer]:
+            - generic [ref=f2e645]: ●
+            - generic [ref=f2e646]:
+              - generic [ref=f2e647]: test55
+              - generic [ref=f2e648]: test project
+              - generic [ref=f2e649]: 실행 이력 없음
+            - generic [ref=f2e650]: —
+          - generic [ref=f2e651] [cursor=pointer]:
+            - generic [ref=f2e652]: ●
+            - generic [ref=f2e653]:
+              - generic [ref=f2e654]: Tradingvolume1
+              - generic [ref=f2e655]: trading volume
+              - generic [ref=f2e656]: 실행 이력 없음
+            - generic [ref=f2e657]: —
+          - generic [ref=f2e658] [cursor=pointer]:
+            - generic [ref=f2e659]: ●
+            - generic [ref=f2e660]:
+              - generic [ref=f2e661]: translator1
+              - generic [ref=f2e662]: translator
+              - generic [ref=f2e663]: 실행 이력 없음
+            - generic [ref=f2e664]: :9018
+          - generic [ref=f2e665] [cursor=pointer]:
+            - generic [ref=f2e666]: ●
+            - generic [ref=f2e667]:
+              - generic [ref=f2e668]: vibe
+              - generic [ref=f2e669]: vibe site
+              - generic [ref=f2e670]: 실행 이력 없음
+            - generic [ref=f2e671]: :9008
+          - generic [ref=f2e672] [cursor=pointer]:
+            - generic [ref=f2e673]: ●
+            - generic [ref=f2e674]:
+              - generic [ref=f2e675]: wmc_receipt
+              - generic [ref=f2e676]: receipt manager
+              - generic [ref=f2e677]: 실행 이력 없음
+            - generic [ref=f2e678]: :9022
+          - generic [ref=f2e679] [cursor=pointer]:
+            - generic [ref=f2e680]: ●
+            - generic [ref=f2e681]:
+              - generic [ref=f2e682]: 권오상파이낸스
+              - generic [ref=f2e683]: Kwon Finance
+              - generic [ref=f2e684]: 실행 이력 없음
+            - generic [ref=f2e685]: —
+          - generic [ref=f2e686] [cursor=pointer]:
+            - generic [ref=f2e687]: ●
+            - generic [ref=f2e688]:
+              - generic [ref=f2e689]: 나스닥
+              - generic [ref=f2e690]: Nasdaq
+              - generic [ref=f2e691]: 실행 이력 없음
+            - generic [ref=f2e692]: —
+          - generic [ref=f2e693] [cursor=pointer]:
+            - generic [ref=f2e694]: ●
+            - generic [ref=f2e695]:
+              - generic [ref=f2e696]: 노션_사업부
+              - generic [ref=f2e697]: Notion Business Unit
+              - generic [ref=f2e698]: 실행 이력 없음
+            - generic [ref=f2e699]: —
+          - generic [ref=f2e700] [cursor=pointer]:
+            - generic [ref=f2e701]: ●
+            - generic [ref=f2e702]:
+              - generic [ref=f2e703]: 노션api
+              - generic [ref=f2e704]: notion api
+              - generic [ref=f2e705]: 실행 이력 없음
+            - generic [ref=f2e706]: —
+          - generic [ref=f2e707] [cursor=pointer]:
+            - generic [ref=f2e708]: ●
+            - generic [ref=f2e709]:
+              - generic [ref=f2e710]: 대학원
+              - generic [ref=f2e711]: graduate school
+              - generic [ref=f2e712]: 실행 이력 없음
+            - generic [ref=f2e713]: —
+          - generic [ref=f2e714] [cursor=pointer]:
+            - generic [ref=f2e715]: ●
+            - generic [ref=f2e716]:
+              - generic [ref=f2e717]: 대학원과제
+              - generic [ref=f2e718]: Graduate School Assignment
+              - generic [ref=f2e719]: 실행 이력 없음
+            - generic [ref=f2e720]: —
+          - generic [ref=f2e721] [cursor=pointer]:
+            - generic [ref=f2e722]: ●
+            - generic [ref=f2e723]:
+              - generic [ref=f2e724]: 백로그6
+              - generic [ref=f2e725]: backlog 6
+              - generic [ref=f2e726]: 실행 이력 없음
+            - generic [ref=f2e727]: —
+          - generic [ref=f2e728] [cursor=pointer]:
+            - generic [ref=f2e729]: ●
+            - generic [ref=f2e730]:
+              - generic [ref=f2e731]: 볼트6
+              - generic [ref=f2e732]: Vault 6
+              - generic [ref=f2e733]: 실행 이력 없음
+            - generic [ref=f2e734]: —
+          - generic [ref=f2e735] [cursor=pointer]:
+            - generic [ref=f2e736]: ●
+            - generic [ref=f2e737]:
+              - generic [ref=f2e738]: 볼트6_finance
+              - generic [ref=f2e739]: Vault 6 Finance
+              - generic [ref=f2e740]: 실행 이력 없음
+            - generic [ref=f2e741]: —
+          - generic [ref=f2e742] [cursor=pointer]:
+            - generic [ref=f2e743]: ●
+            - generic [ref=f2e744]:
+              - generic [ref=f2e745]: 브라우저 컨트롤러
+              - generic [ref=f2e746]: browser controller
+              - generic [ref=f2e747]: 실행 이력 없음
+            - generic [ref=f2e748]: :9011
+          - generic [ref=f2e749] [cursor=pointer]:
+            - generic [ref=f2e750]: ●
+            - generic [ref=f2e751]:
+              - generic [ref=f2e752]: 블로그
+              - generic [ref=f2e753]: blog
+              - generic [ref=f2e754]: 실행 이력 없음
+            - generic [ref=f2e755]: —
+          - generic [ref=f2e756] [cursor=pointer]:
+            - generic [ref=f2e757]: ●
+            - generic [ref=f2e758]:
+              - generic [ref=f2e759]: 오토서치스킬연구소
+              - generic [ref=f2e760]: auto search research
+              - generic [ref=f2e761]: 실행 이력 없음
+            - generic [ref=f2e762]: —
+          - generic [ref=f2e763] [cursor=pointer]:
+            - generic [ref=f2e764]: ●
+            - generic [ref=f2e765]:
+              - generic [ref=f2e766]: 진도표
+              - generic [ref=f2e767]: progress tracker
+              - generic [ref=f2e768]: 실행 이력 없음
+            - generic [ref=f2e769]: :9001
+          - generic [ref=f2e770] [cursor=pointer]:
+            - generic [ref=f2e771]: ●
+            - generic [ref=f2e772]:
+              - generic [ref=f2e773]: 클로드폴더
+              - generic [ref=f2e774]: claude config folder
+              - generic [ref=f2e775]: 실행 이력 없음
+            - generic [ref=f2e776]: —
+          - generic [ref=f2e777] [cursor=pointer]:
+            - generic [ref=f2e778]: ●
+            - generic [ref=f2e779]:
+              - generic [ref=f2e780]: 페이퍼클립
+              - generic [ref=f2e781]: paperclip app
+              - generic [ref=f2e782]: 실행 이력 없음
+            - generic [ref=f2e783]: :3100
+          - generic [ref=f2e784] [cursor=pointer]:
+            - generic [ref=f2e785]: ●
+            - generic [ref=f2e786]:
+              - generic [ref=f2e787]: 피그마
+              - generic [ref=f2e788]: figma workspace
+              - generic [ref=f2e789]: 실행 이력 없음
+            - generic [ref=f2e790]: :3055
+          - generic [ref=f2e791] [cursor=pointer]:
+            - generic [ref=f2e792]: ●
+            - generic [ref=f2e793]:
+              - generic [ref=f2e794]: skil
+              - generic [ref=f2e795]: 실행 이력 없음
+            - generic [ref=f2e796]: —
+          - generic [ref=f2e797] [cursor=pointer]:
+            - generic [ref=f2e798]: ●
+            - generic [ref=f2e799]:
+              - generic [ref=f2e800]: 노션_사업부
+              - generic [ref=f2e801]: Env Config Workspace
+              - generic [ref=f2e802]: 실행 이력 없음
+            - generic [ref=f2e803]: —
+          - generic [ref=f2e804] [cursor=pointer]:
+            - generic [ref=f2e805]: ●
+            - generic [ref=f2e806]:
+              - generic [ref=f2e807]: 워크트리
+              - generic [ref=f2e808]: New Empty Project
+              - generic [ref=f2e809]: 실행 이력 없음
+            - generic [ref=f2e810]: —
+        - button "작업 루트 6" [ref=f2e126] [cursor=pointer]:
+          - generic [ref=f2e129]: 작업 루트
+          - generic [ref=f2e130]: "6"
+      - generic [ref=f2e131]:
+        - generic [ref=f2e811]:
+          - heading "프로젝트관리" [level=2] [ref=f2e813]
+          - generic [ref=f2e814]: :9000
+          - generic [ref=f2e817]:
+            - button "수정" [ref=f2e818] [cursor=pointer]
+            - button "삭제" [ref=f2e822] [cursor=pointer]
+        - generic [ref=f2e826]:
+          - generic [ref=f2e827]:
+            - generic [ref=f2e828]: folder
+            - generic [ref=f2e829]: /Users/gwanli/product_2026/portmanagement
+          - generic [ref=f2e830]:
+            - generic [ref=f2e831]: command
+            - generic [ref=f2e832]: /Users/gwanli/product_2026/portmanagement/실행.command
+          - generic "클릭하여 수정" [ref=f2e833]:
+            - generic [ref=f2e834]: deploy
+            - generic [ref=f2e835]: https://portmanager-portal.vercel.app/
+          - generic "클릭하여 수정" [ref=f2e836]:
+            - generic [ref=f2e837]: github
+            - generic [ref=f2e838]: https://github.com/intenet1001-commits/portmanagement
+          - generic "클릭하여 수정" [ref=f2e839]:
+            - generic [ref=f2e840]: 메모
+            - generic [ref=f2e841]: + 이 프로젝트가 뭔지 메모 (나중에 헷갈리지 않도록)
+        - generic [ref=f2e842]:
+          - button "Stop" [ref=f2e843] [cursor=pointer]
+          - button "강제 재실행" [ref=f2e846] [cursor=pointer]
+          - button "워크트리" [ref=f2e850] [cursor=pointer]
+        - generic [ref=f2e855]:
+          - button "폴더 열기" [ref=f2e856] [cursor=pointer]
+          - button "로그 보기" [ref=f2e859] [cursor=pointer]
+          - button "localhost" [ref=f2e863] [cursor=pointer]
+          - button "cmux localhost" [ref=f2e866] [cursor=pointer]
+          - button "배포 주소" [ref=f2e869] [cursor=pointer]
+          - button "GitHub" [ref=f2e873] [cursor=pointer]
+          - button "즐겨찾기" [ref=f2e877] [cursor=pointer]
+        - generic [ref=f2e880]:
+          - button "Claude 열기" [ref=f2e881] [cursor=pointer]
+          - button "새창" [ref=f2e882] [cursor=pointer]
+          - button "Codex 열기" [ref=f2e883] [cursor=pointer]
+          - button "AGY 열기" [ref=f2e884] [cursor=pointer]
