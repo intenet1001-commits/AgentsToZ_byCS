@@ -226,8 +226,13 @@ function orcaEnsureRepo(cli: string, repoPath: string): { ok: boolean; error: st
   return { ok: false, error: `Orca repo 등록 실패: ${r.error}` };
 }
 
-function orcaInstallError(): string {
-  return 'Orca가 설치되지 않았습니다.\n설치: https://www.onorca.dev 에서 다운로드 후 /Applications에 설치하세요.';
+/** Orca.app이 없을 때 — 설치를 "시작"시켜 준다. Orca CLI는 앱 번들에만 포함되어
+ *  있고 정식 배포 채널(brew cask 'orca'는 완전히 다른 앱 — plotly의 이미지 툴)이
+ *  없으므로 headless 자동 설치는 불가능. 대신 공식 다운로드 페이지를 자동으로 열어
+ *  사용자가 바로 설치를 이어갈 수 있게 한다 (파일 다운로드/실행은 사용자가 직접). */
+function bootstrapOrcaInstall(): string {
+  nodeSpawnSync('open', ['https://www.onorca.dev'], { stdio: 'pipe' });
+  return 'Orca가 설치되지 않아 다운로드 페이지를 열었습니다 (https://www.onorca.dev).\n설치 후 다시 시도해주세요.';
 }
 
 /** WSL distro 목록 캐시 (빈 결과도 캐시해서 registry 반복 쿼리 방지) */
@@ -1878,7 +1883,7 @@ end try`);
         if (!cdPath) return new Response(JSON.stringify({ success: false, error: '프로젝트 경로가 없습니다.' }), { status: 400, headers });
 
         const cli = resolveOrcaCli();
-        if (!cli) return new Response(JSON.stringify({ error: orcaInstallError() }), { status: 400, headers });
+        if (!cli) return new Response(JSON.stringify({ success: false, error: bootstrapOrcaInstall() }), { status: 400, headers });
 
         const ready = ensureOrcaReady(cli);
         if (!ready.ok) return new Response(JSON.stringify({ success: false, error: ready.error }), { status: 500, headers });
