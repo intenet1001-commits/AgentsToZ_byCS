@@ -2680,8 +2680,13 @@ fn resolve_orca_cli() -> Option<String> {
     None
 }
 
-fn orca_install_error() -> String {
-    "Orca가 설치되지 않았습니다.\n설치: https://www.onorca.dev 에서 다운로드 후 /Applications에 설치하세요.".to_string()
+/// Orca.app이 없을 때 — 설치를 "시작"시켜 준다. Orca CLI는 앱 번들에만 포함되어
+/// 있고 정식 배포 채널(brew cask 'orca'는 완전히 다른 앱 — plotly의 이미지 툴)이
+/// 없으므로 headless 자동 설치는 불가능. 대신 공식 다운로드 페이지를 자동으로 열어
+/// 사용자가 바로 설치를 이어갈 수 있게 한다 (파일 다운로드/실행은 사용자가 직접).
+fn bootstrap_orca_install() -> String {
+    let _ = Command::new("open").arg("https://www.onorca.dev").status();
+    "Orca가 설치되지 않아 다운로드 페이지를 열었습니다 (https://www.onorca.dev).\n설치 후 다시 시도해주세요.".to_string()
 }
 
 /// CLI는 실패도 exit 0 + {ok:false}로 반환하므로 JSON의 ok 필드까지 검사
@@ -2720,7 +2725,7 @@ fn open_orca_agent(agent: Option<String>, name: Option<String>, folder_path: Opt
     let cd_path = wt_first.clone().or_else(|| repo_path.clone())
         .ok_or_else(|| "프로젝트 경로가 없습니다.".to_string())?;
 
-    let cli = resolve_orca_cli().ok_or_else(orca_install_error)?;
+    let cli = resolve_orca_cli().ok_or_else(bootstrap_orca_install)?;
     // orca open — 앱 실행 + 런타임 대기 (이미 떠 있으면 ~150ms)
     orca_run_json(&cli, &["open"]).map_err(|e| format!("Orca 실행 실패: {}", e))?;
     let _ = Command::new("open").args(["-a", "Orca"]).status();
