@@ -1927,6 +1927,25 @@ end try`);
       }
     }
 
+    // Orca app endpoint — terminalApp='orca' 선택 시 Orca.app만 열기 (repo/terminal 생성 없음)
+    if (url.pathname === "/api/open-orca-app" && req.method === "POST") {
+      if (IS_WIN) return new Response(JSON.stringify({ success: false, error: 'Orca는 맥에서만 가능합니다' }), { status: 400, headers });
+      try {
+        const cli = resolveOrcaCli();
+        if (!cli) return new Response(JSON.stringify({ success: false, error: bootstrapOrcaInstall() }), { status: 400, headers });
+
+        const ready = ensureOrcaReady(cli);
+        if (!ready.ok) return new Response(JSON.stringify({ success: false, error: ready.error }), { status: 500, headers });
+
+        const open = nodeOrcaRunJson(cli, ['open']);
+        if (!open.ok) return new Response(JSON.stringify({ success: false, error: `Orca open 실패: ${open.error}` }), { status: 500, headers });
+
+        return new Response(JSON.stringify({ success: true, message: 'Orca 워크스페이스를 열었습니다' }), { headers });
+      } catch (error: any) {
+        return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers });
+      }
+    }
+
     // tmux codex/agy endpoints — iterm/terminal 모드에서 tmux 세션으로 실행
     if (url.pathname === "/api/open-tmux-codex" && req.method === "POST") {
       try {

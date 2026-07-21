@@ -1961,6 +1961,21 @@ function App() {
     }
   };
 
+  // Orca 앱 실행 — Tauri 커맨드 또는 api-server 폴백
+  const openOrcaApp = async (): Promise<string> => {
+    if (isTauri()) {
+      return await invoke<string>('open_orca_app');
+    }
+    const res = await fetch('http://localhost:3001/api/open-orca-app', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    const data = await res.json();
+    if (!res.ok || data?.success === false) throw new Error(data?.error ?? `HTTP ${res.status}`);
+    return data?.message ?? 'OK';
+  };
+
   // cmux 는 macOS 전용 (Swift+AppKit) — Linux/WSL 빌드 자체가 존재하지 않아 대안 불가.
   // Windows 사용자는 카드 ⌄ 메뉴의 'tmux'/'tmux ↺ 새창' 항목 사용.
   const cmuxMacOnlyToast = () => showToast('cmux는 macOS 전용입니다 — Windows에서는 ⌄ 메뉴의 "tmux" 사용', 'error');
@@ -2070,13 +2085,18 @@ function App() {
       return;
     }
     try {
-      const msg = await callCmux('open_cmux_agent_view', '/api/open-cmux-agent-view', {
-        bypass: bypassPermissions,
-      }, { retry: 1 });
-      showToast(msg, 'success');
+      if (terminalApp === 'orca') {
+        const msg = await openOrcaApp();
+        showToast(msg, 'success');
+      } else {
+        const msg = await callCmux('open_cmux_agent_view', '/api/open-cmux-agent-view', {
+          bypass: bypassPermissions,
+        }, { retry: 1 });
+        showToast(msg, 'success');
+      }
     } catch (e: any) {
       const raw = typeof e === 'string' ? e : (e?.message ?? String(e));
-      showToast(`cmux Agent View 실패: ${raw}`, 'error');
+      showToast(`Agent View 실패: ${raw}`, 'error');
     }
   };
 
