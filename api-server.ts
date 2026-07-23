@@ -195,7 +195,7 @@ function nodeOrcaRun(cli: string, args: string[], timeoutMs = 40000): { ok: bool
 }
 
 /** JSON 출력 커맨드 실행 — CLI는 실패도 exit 0 + {ok:false}로 반환하므로 둘 다 검사 */
-function nodeOrcaRunJson(cli: string, args: string[], timeoutMs = 15000): { ok: boolean; error: string; result: any } {
+function nodeOrcaRunJson(cli: string, args: string[], timeoutMs = 25000): { ok: boolean; error: string; result: any } {
   const r = nodeOrcaRun(cli, [...args, '--json'], timeoutMs);
   if (!r.ok) return { ok: false, error: r.stderr || r.stdout || 'unknown', result: null };
   try {
@@ -205,6 +205,28 @@ function nodeOrcaRunJson(cli: string, args: string[], timeoutMs = 15000): { ok: 
   } catch {
     return { ok: false, error: `JSON 파싱 실패: ${r.stdout.slice(0, 200)}`, result: null };
   }
+}
+
+/** 확정적 실패(재시도해도 결과가 같음) — repo 등록 거부 등. 이 패턴이면 즉시 반환하고 재시도 안 함. */
+const ORCA_TERMINAL_ERROR_RE = /not a valid git repository/i;
+
+/** 데몬 부하로 인한 일시적 컨텐션(osascript/Apple Event 직렬화, 터미널 핸들 지연 등)을
+ *  흡수하는 재시도 래퍼. 실측: 동시 요청 시 단일 CLI 호출이 정상 0.6~1.6s에서
+ *  드물게 7~10s까지 튀며, 타임아웃/일시 실패로 이어짐 — 확정적 에러가 아니면 백오프 재시도. */
+async function nodeOrcaRunJsonRetry(
+  cli: string,
+  args: string[],
+  opts?: { timeoutMs?: number; attempts?: number; backoffMs?: number },
+): Promise<{ ok: boolean; error: string; result: any }> {
+  const attempts = opts?.attempts ?? 3;
+  const backoffMs = opts?.backoffMs ?? 900;
+  const timeoutMs = opts?.timeoutMs ?? 25000;
+  let last = nodeOrcaRunJson(cli, args, timeoutMs);
+  for (let i = 1; i < attempts && !last.ok && !ORCA_TERMINAL_ERROR_RE.test(last.error); i++) {
+    await new Promise((res) => setTimeout(res, backoffMs * i));
+    last = nodeOrcaRunJson(cli, args, timeoutMs);
+  }
+  return last;
 }
 
 /** Orca 앱 실행 + 런타임 대기 (`orca open`은 멱등 — 이미 떠 있으면 ~150ms에 반환) */
@@ -217,10 +239,10 @@ function ensureOrcaReady(cli: string): { ok: boolean; error: string } {
 }
 
 /** repo add — 멱등 (이미 등록된 경로면 기존 repo 반환). 비 git 폴더면 명확한 안내. */
-function orcaEnsureRepo(cli: string, repoPath: string): { ok: boolean; error: string } {
-  const r = nodeOrcaRunJson(cli, ['repo', 'add', '--path', repoPath]);
+async function orcaEnsureRepo(cli: string, repoPath: string): Promise<{ ok: boolean; error: string }> {
+  const r = await nodeOrcaRunJsonRetry(cli, ['repo', 'add', '--path', repoPath]);
   if (r.ok) return { ok: true, error: '' };
-  if (/not a valid git repository/i.test(r.error)) {
+  if (ORCA_TERMINAL_ERROR_RE.test(r.error)) {
     return { ok: false, error: `Orca는 git 저장소만 지원합니다 (${repoPath})\n일반 폴더는 cmux/iterm 터미널을 사용하세요.` };
   }
   return { ok: false, error: `Orca repo 등록 실패: ${r.error}` };
@@ -1889,7 +1911,7 @@ end try`);
         if (!ready.ok) return new Response(JSON.stringify({ success: false, error: ready.error }), { status: 500, headers });
 
         // 워크트리 터미널도 메인 repo가 등록되어 있어야 path: 셀렉터가 해석됨
-        const reg = orcaEnsureRepo(cli, repoPath ?? cdPath);
+        const reg = await orcaEnsureRepo(cli, repoPath ?? cdPath);
         if (!reg.ok) return new Response(JSON.stringify({ success: false, error: reg.error }), { status: 400, headers });
 
         const cmdMap: Record<string, { cmd: string | null; label: string }> = {
@@ -1908,19 +1930,15 @@ end try`);
         // → 커맨드 없이 터미널만 생성(안정적) 후 terminal send로 명령 입력.
         // --focus도 같은 이유로 create 타임아웃 유발 → 생성 후 terminal switch 사용.
         const args = ['terminal', 'create', '--worktree', `path:${cdPath}`, '--title', title];
-        let t = nodeOrcaRunJson(cli, args);
-        for (let attempt = 0; !t.ok && /timed out waiting for terminal handle/i.test(t.error) && attempt < 2; attempt++) {
-          await new Promise(r => setTimeout(r, 1000));
-          t = nodeOrcaRunJson(cli, args);
-        }
+        const t = await nodeOrcaRunJsonRetry(cli, args, { attempts: 3, backoffMs: 1000 });
         if (!t.ok) return new Response(JSON.stringify({ success: false, error: `Orca terminal create 실패: ${t.error}` }), { status: 500, headers });
         const handle = t.result?.terminal?.handle;
         if (spec.cmd && handle) {
           await new Promise(r => setTimeout(r, 300));
-          const s = nodeOrcaRunJson(cli, ['terminal', 'send', '--terminal', handle, '--text', spec.cmd, '--enter']);
+          const s = await nodeOrcaRunJsonRetry(cli, ['terminal', 'send', '--terminal', handle, '--text', spec.cmd, '--enter']);
           if (!s.ok) return new Response(JSON.stringify({ success: false, error: `Orca terminal send 실패: ${s.error}` }), { status: 500, headers });
         }
-        if (handle) nodeOrcaRunJson(cli, ['terminal', 'switch', '--terminal', handle], 5000);
+        if (handle) nodeOrcaRunJsonRetry(cli, ['terminal', 'switch', '--terminal', handle], { timeoutMs: 5000, attempts: 1 });
         return new Response(JSON.stringify({ success: true, message: `Orca ${spec.label}${bypass && spec.cmd ? ' ⚡' : ''} 실행 중` }), { headers });
       } catch (error: any) {
         return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers });
