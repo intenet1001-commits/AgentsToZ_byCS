@@ -151,6 +151,17 @@ async function cmuxSendNodeWithRetry(cli: string, payload: string): Promise<{ ok
 // 워크플로: orca open(런타임 대기, 멱등) → repo add(멱등) → terminal create.
 // git 저장소만 등록 가능 — 비 git 폴더는 명확한 에러로 안내.
 
+/** 모든 Orca CLI 호출을 직렬화하는 락. 실측: 더블클릭 등으로 요청 2~3개가 겹치면
+ *  osascript 경유 nodeSpawnSync(완전 블로킹) 호출이 겹쳐 쌓이면서 Bun 자체가
+ *  세그폴트로 죽는 것을 확인(Bun 1.3.1 자체 버그로 보이나 우리 쪽에서 유발).
+ *  Orca 작업은 항상 이 락을 통해 한 번에 하나씩만 실행 — 동시 요청은 대기열로 직렬화. */
+let orcaLock: Promise<unknown> = Promise.resolve();
+function withOrcaLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = orcaLock.then(fn, fn);
+  orcaLock = run.then(() => undefined, () => undefined);
+  return run;
+}
+
 function resolveOrcaCli(): string | null {
   const candidates = [
     '/Applications/Orca.app/Contents/Resources/bin/orca',
@@ -194,8 +205,11 @@ function nodeOrcaRun(cli: string, args: string[], timeoutMs = 40000): { ok: bool
   };
 }
 
-/** JSON 출력 커맨드 실행 — CLI는 실패도 exit 0 + {ok:false}로 반환하므로 둘 다 검사 */
-function nodeOrcaRunJson(cli: string, args: string[], timeoutMs = 25000): { ok: boolean; error: string; result: any } {
+/** JSON 출력 커맨드 실행 — CLI는 실패도 exit 0 + {ok:false}로 반환하므로 둘 다 검사
+ *  timeoutMs 기본값은 15s — 관측된 데몬 부하 스파이크(7~10s)보다 여유 있게 크지만,
+ *  요청 하나가 open→repo add→terminal create→send→switch 5단계를 재시도까지 포함해
+ *  순차 실행하므로 Bun.serve idleTimeout(90s로 상향, 아래 참고)을 넘기지 않도록 억제. */
+function nodeOrcaRunJson(cli: string, args: string[], timeoutMs = 15000): { ok: boolean; error: string; result: any } {
   const r = nodeOrcaRun(cli, [...args, '--json'], timeoutMs);
   if (!r.ok) return { ok: false, error: r.stderr || r.stdout || 'unknown', result: null };
   try {
@@ -230,8 +244,8 @@ async function nodeOrcaRunJsonRetry(
 }
 
 /** Orca 앱 실행 + 런타임 대기 (`orca open`은 멱등 — 이미 떠 있으면 ~150ms에 반환) */
-function ensureOrcaReady(cli: string): { ok: boolean; error: string } {
-  const r = nodeOrcaRunJson(cli, ['open'], 30000);
+async function ensureOrcaReady(cli: string): Promise<{ ok: boolean; error: string }> {
+  const r = await nodeOrcaRunJsonRetry(cli, ['open'], { timeoutMs: 30000, attempts: 3 });
   if (!r.ok) return { ok: false, error: `Orca 실행 실패: ${r.error}` };
   // 창을 앞으로 가져오기 (open은 런타임만 보장)
   nodeSpawnSync('open', ['-a', 'Orca'], { stdio: 'pipe' });
@@ -740,6 +754,9 @@ if (IS_WIN) {
 const server = Bun.serve({
   port: Number(process.env.API_PORT) || 3001,
   hostname: "127.0.0.1",
+  // 기본 10s — Orca 재시도 체인(repo add → terminal create → send → switch, 각 단계
+  // 블로킹 spawnSync + 최대 3회 재시도)이 데몬 부하 시 이를 넘겨 연결이 끊길 수 있어 상향.
+  idleTimeout: 90,
   async fetch(req) {
     const url = new URL(req.url);
 
@@ -1907,39 +1924,43 @@ end try`);
         const cli = resolveOrcaCli();
         if (!cli) return new Response(JSON.stringify({ success: false, error: bootstrapOrcaInstall() }), { status: 400, headers });
 
-        const ready = ensureOrcaReady(cli);
-        if (!ready.ok) return new Response(JSON.stringify({ success: false, error: ready.error }), { status: 500, headers });
+        // 동시 요청(더블클릭 등)이 겹치면 블로킹 CLI 호출이 쌓이며 Bun 자체가 죽는 현상을
+        // 확인 — Orca 작업 전체를 락으로 직렬화해 한 번에 하나씩만 실행되게 한다.
+        return await withOrcaLock(async () => {
+          const ready = await ensureOrcaReady(cli);
+          if (!ready.ok) return new Response(JSON.stringify({ success: false, error: ready.error }), { status: 500, headers });
 
-        // 워크트리 터미널도 메인 repo가 등록되어 있어야 path: 셀렉터가 해석됨
-        const reg = await orcaEnsureRepo(cli, repoPath ?? cdPath);
-        if (!reg.ok) return new Response(JSON.stringify({ success: false, error: reg.error }), { status: 400, headers });
+          // 워크트리 터미널도 메인 repo가 등록되어 있어야 path: 셀렉터가 해석됨
+          const reg = await orcaEnsureRepo(cli, repoPath ?? cdPath);
+          if (!reg.ok) return new Response(JSON.stringify({ success: false, error: reg.error }), { status: 400, headers });
 
-        const cmdMap: Record<string, { cmd: string | null; label: string }> = {
-          claude: { cmd: bypass ? 'claude --dangerously-skip-permissions' : 'claude', label: 'Claude' },
-          codex: { cmd: bypass ? 'codex --dangerously-bypass-approvals-and-sandbox' : 'codex', label: 'Codex' },
-          agy: { cmd: bypass ? 'agy --dangerously-skip-permissions' : 'agy', label: 'Antigravity' },
-          terminal: { cmd: null, label: '터미널' },
-        };
-        const spec = cmdMap[agent] ?? cmdMap.claude!;
-        const title = agent === 'terminal'
-          ? `🪟 ${(name && String(name).trim()) || cdPath.split('/').filter(Boolean).pop() || 'terminal'}`
-          : buildCmuxTitle(name || agent, wtFirst ?? undefined, bypass);
+          const cmdMap: Record<string, { cmd: string | null; label: string }> = {
+            claude: { cmd: bypass ? 'claude --dangerously-skip-permissions' : 'claude', label: 'Claude' },
+            codex: { cmd: bypass ? 'codex --dangerously-bypass-approvals-and-sandbox' : 'codex', label: 'Codex' },
+            agy: { cmd: bypass ? 'agy --dangerously-skip-permissions' : 'agy', label: 'Antigravity' },
+            terminal: { cmd: null, label: '터미널' },
+          };
+          const spec = cmdMap[agent] ?? cmdMap.claude!;
+          const title = agent === 'terminal'
+            ? `🪟 ${(name && String(name).trim()) || cdPath.split('/').filter(Boolean).pop() || 'terminal'}`
+            : buildCmuxTitle(name || agent, wtFirst ?? undefined, bypass);
 
-        // ⚠️ 숨김 상태의 외부 워크트리에서 `--command`로 TUI(claude/codex)를 직접
-        // 실행하면 항상 "Timed out waiting for terminal handle"로 실패 (Orca 버그).
-        // → 커맨드 없이 터미널만 생성(안정적) 후 terminal send로 명령 입력.
-        // --focus도 같은 이유로 create 타임아웃 유발 → 생성 후 terminal switch 사용.
-        const args = ['terminal', 'create', '--worktree', `path:${cdPath}`, '--title', title];
-        const t = await nodeOrcaRunJsonRetry(cli, args, { attempts: 3, backoffMs: 1000 });
-        if (!t.ok) return new Response(JSON.stringify({ success: false, error: `Orca terminal create 실패: ${t.error}` }), { status: 500, headers });
-        const handle = t.result?.terminal?.handle;
-        if (spec.cmd && handle) {
-          await new Promise(r => setTimeout(r, 300));
-          const s = await nodeOrcaRunJsonRetry(cli, ['terminal', 'send', '--terminal', handle, '--text', spec.cmd, '--enter']);
-          if (!s.ok) return new Response(JSON.stringify({ success: false, error: `Orca terminal send 실패: ${s.error}` }), { status: 500, headers });
-        }
-        if (handle) nodeOrcaRunJsonRetry(cli, ['terminal', 'switch', '--terminal', handle], { timeoutMs: 5000, attempts: 1 });
-        return new Response(JSON.stringify({ success: true, message: `Orca ${spec.label}${bypass && spec.cmd ? ' ⚡' : ''} 실행 중` }), { headers });
+          // ⚠️ 숨김 상태의 외부 워크트리에서 `--command`로 TUI(claude/codex)를 직접
+          // 실행하면 항상 "Timed out waiting for terminal handle"로 실패 (Orca 버그).
+          // → 커맨드 없이 터미널만 생성(안정적) 후 terminal send로 명령 입력.
+          // --focus도 같은 이유로 create 타임아웃 유발 → 생성 후 terminal switch 사용.
+          const args = ['terminal', 'create', '--worktree', `path:${cdPath}`, '--title', title];
+          const t = await nodeOrcaRunJsonRetry(cli, args, { attempts: 3, backoffMs: 1000 });
+          if (!t.ok) return new Response(JSON.stringify({ success: false, error: `Orca terminal create 실패: ${t.error}` }), { status: 500, headers });
+          const handle = t.result?.terminal?.handle;
+          if (spec.cmd && handle) {
+            await new Promise(r => setTimeout(r, 300));
+            const s = await nodeOrcaRunJsonRetry(cli, ['terminal', 'send', '--terminal', handle, '--text', spec.cmd, '--enter']);
+            if (!s.ok) return new Response(JSON.stringify({ success: false, error: `Orca terminal send 실패: ${s.error}` }), { status: 500, headers });
+          }
+          if (handle) await nodeOrcaRunJsonRetry(cli, ['terminal', 'switch', '--terminal', handle], { timeoutMs: 5000, attempts: 2 });
+          return new Response(JSON.stringify({ success: true, message: `Orca ${spec.label}${bypass && spec.cmd ? ' ⚡' : ''} 실행 중` }), { headers });
+        });
       } catch (error: any) {
         return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers });
       }
@@ -1952,13 +1973,12 @@ end try`);
         const cli = resolveOrcaCli();
         if (!cli) return new Response(JSON.stringify({ success: false, error: bootstrapOrcaInstall() }), { status: 400, headers });
 
-        const ready = ensureOrcaReady(cli);
-        if (!ready.ok) return new Response(JSON.stringify({ success: false, error: ready.error }), { status: 500, headers });
+        return await withOrcaLock(async () => {
+          const ready = await ensureOrcaReady(cli);
+          if (!ready.ok) return new Response(JSON.stringify({ success: false, error: ready.error }), { status: 500, headers });
 
-        const open = nodeOrcaRunJson(cli, ['open']);
-        if (!open.ok) return new Response(JSON.stringify({ success: false, error: `Orca open 실패: ${open.error}` }), { status: 500, headers });
-
-        return new Response(JSON.stringify({ success: true, message: 'Orca 워크스페이스를 열었습니다' }), { headers });
+          return new Response(JSON.stringify({ success: true, message: 'Orca 워크스페이스를 열었습니다' }), { headers });
+        });
       } catch (error: any) {
         return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers });
       }
