@@ -2689,6 +2689,28 @@ fn bootstrap_orca_install() -> String {
     "Orca가 설치되지 않아 다운로드 페이지를 열었습니다 (https://www.onorca.dev).\n설치 후 다시 시도해주세요.".to_string()
 }
 
+/// 확정적 실패(재시도해도 결과가 같음) — repo 등록 거부 등. 이 패턴이면 재시도하지 않는다.
+fn orca_is_terminal_error(e: &str) -> bool {
+    e.to_lowercase().contains("not a valid git repository")
+}
+
+/// 데몬 부하로 인한 일시적 컨텐션(터미널 핸들 등록 지연, IPC 응답 지연 등)을 흡수하는
+/// 재시도 래퍼. 실측: 동시 요청 시 단일 CLI 호출이 정상 0.6~1.6s에서 드물게 7~10s까지
+/// 튀며 일시 실패로 이어짐 — 확정적 에러가 아니면 백오프 후 재시도.
+fn orca_run_json_retry(cli: &str, args: &[&str], attempts: u32) -> Result<serde_json::Value, String> {
+    let mut last = orca_run_json(cli, args);
+    for i in 1..attempts {
+        match &last {
+            Err(e) if !orca_is_terminal_error(e) => {
+                std::thread::sleep(std::time::Duration::from_millis(900 * i as u64));
+                last = orca_run_json(cli, args);
+            }
+            _ => break,
+        }
+    }
+    last
+}
+
 /// CLI는 실패도 exit 0 + {ok:false}로 반환하므로 JSON의 ok 필드까지 검사
 fn orca_run_json(cli: &str, args: &[&str]) -> Result<serde_json::Value, String> {
     let mut full: Vec<&str> = args.to_vec();
@@ -2727,13 +2749,13 @@ fn open_orca_agent(agent: Option<String>, name: Option<String>, folder_path: Opt
 
     let cli = resolve_orca_cli().ok_or_else(bootstrap_orca_install)?;
     // orca open — 앱 실행 + 런타임 대기 (이미 떠 있으면 ~150ms)
-    orca_run_json(&cli, &["open"]).map_err(|e| format!("Orca 실행 실패: {}", e))?;
+    orca_run_json_retry(&cli, &["open"], 2).map_err(|e| format!("Orca 실행 실패: {}", e))?;
     let _ = Command::new("open").args(["-a", "Orca"]).status();
 
     // 워크트리 터미널도 메인 repo가 등록되어 있어야 path: 셀렉터가 해석됨
     let reg_target = repo_path.as_deref().unwrap_or(&cd_path);
-    if let Err(e) = orca_run_json(&cli, &["repo", "add", "--path", reg_target]) {
-        if e.to_lowercase().contains("not a valid git repository") {
+    if let Err(e) = orca_run_json_retry(&cli, &["repo", "add", "--path", reg_target], 3) {
+        if orca_is_terminal_error(&e) {
             return Err(format!("Orca는 git 저장소만 지원합니다 ({})\n일반 폴더는 cmux/iterm 터미널을 사용하세요.", reg_target));
         }
         return Err(format!("Orca repo 등록 실패: {}", e));
@@ -2760,24 +2782,15 @@ fn open_orca_agent(agent: Option<String>, name: Option<String>, folder_path: Opt
     // --focus도 같은 이유로 create 타임아웃 유발 → 생성 후 terminal switch 사용.
     let worktree_sel = format!("path:{}", cd_path);
     let args: Vec<&str> = vec!["terminal", "create", "--worktree", &worktree_sel, "--title", &title];
-    let mut created = orca_run_json(&cli, &args);
-    for _ in 0..2 {
-        match &created {
-            Err(e) if e.to_lowercase().contains("timed out waiting for terminal handle") => {
-                std::thread::sleep(std::time::Duration::from_millis(1000));
-                created = orca_run_json(&cli, &args);
-            }
-            _ => break,
-        }
-    }
-    let created = created.map_err(|e| format!("Orca terminal create 실패: {}", e))?;
+    let created = orca_run_json_retry(&cli, &args, 3)
+        .map_err(|e| format!("Orca terminal create 실패: {}", e))?;
     if let Some(handle) = created.pointer("/result/terminal/handle").and_then(|v| v.as_str()) {
         if let Some(c) = cmd {
             std::thread::sleep(std::time::Duration::from_millis(300));
-            orca_run_json(&cli, &["terminal", "send", "--terminal", handle, "--text", c, "--enter"])
+            orca_run_json_retry(&cli, &["terminal", "send", "--terminal", handle, "--text", c, "--enter"], 3)
                 .map_err(|e| format!("Orca terminal send 실패: {}", e))?;
         }
-        let _ = orca_run_json(&cli, &["terminal", "switch", "--terminal", handle]);
+        let _ = orca_run_json_retry(&cli, &["terminal", "switch", "--terminal", handle], 2);
     }
     Ok(format!("Orca {}{} 실행 중", label, if use_bypass && cmd.is_some() { " ⚡" } else { "" }))
 }
@@ -2793,7 +2806,7 @@ fn open_orca_app() -> Result<String, String> {
 #[tauri::command]
 fn open_orca_app() -> Result<String, String> {
     let cli = resolve_orca_cli().ok_or_else(bootstrap_orca_install)?;
-    orca_run_json(&cli, &["open"]).map_err(|e| format!("Orca 실행 실패: {}", e))?;
+    orca_run_json_retry(&cli, &["open"], 2).map_err(|e| format!("Orca 실행 실패: {}", e))?;
     Command::new("open").args(["-a", "Orca"]).spawn().map(reap_detached)
         .map_err(|e| format!("Orca 앱 열기 실패: {}", e))?;
     Ok("Orca 워크스페이스를 열었습니다".into())
