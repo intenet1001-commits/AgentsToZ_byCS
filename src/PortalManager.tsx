@@ -55,7 +55,7 @@ const COLORS: Record<ColorKey, { bg: string; text: string; border: string; dot: 
   blue:   { bg: 'bg-blue-500/10',   text: 'text-blue-400',   border: 'border-blue-500/30',   dot: 'bg-blue-500',   activeBg: 'bg-blue-500/20',   hairline: 'rgba(59,130,246,0.55)',  tint: 'rgba(59,130,246,0.06)' },
   green:  { bg: 'bg-green-500/10',  text: 'text-green-400',  border: 'border-green-500/30',  dot: 'bg-green-500',  activeBg: 'bg-green-500/20',  hairline: 'rgba(34,197,94,0.55)',   tint: 'rgba(34,197,94,0.06)' },
   purple: { bg: 'bg-purple-500/10', text: 'text-purple-400', border: 'border-purple-500/30', dot: 'bg-purple-500', activeBg: 'bg-purple-500/20', hairline: 'rgba(168,85,247,0.55)',  tint: 'rgba(168,85,247,0.06)' },
-  amber:  { bg: 'bg-amber-500/10',  text: 'text-amber-400',  border: 'border-amber-500/30',  dot: 'bg-amber-500',  activeBg: 'bg-amber-500/20',  hairline: 'rgba(245,158,11,0.55)', tint: 'rgba(245,158,11,0.06)' },
+  amber:  { bg: 'bg-amber-500/10',  text: 'text-amber-400',  border: 'border-amber-500/30',  dot: 'bg-amber-500',  activeBg: 'bg-amber-500/20',  hairline: 'rgba(94,234,212,0.55)', tint: 'rgba(94,234,212,0.06)' },
   rose:   { bg: 'bg-rose-500/10',   text: 'text-rose-400',   border: 'border-rose-500/30',   dot: 'bg-rose-500',   activeBg: 'bg-rose-500/20',   hairline: 'rgba(244,63,94,0.55)',   tint: 'rgba(244,63,94,0.06)' },
   cyan:   { bg: 'bg-cyan-500/10',   text: 'text-cyan-400',   border: 'border-cyan-500/30',   dot: 'bg-cyan-500',   activeBg: 'bg-cyan-500/20',   hairline: 'rgba(6,182,212,0.55)',   tint: 'rgba(6,182,212,0.06)' },
   orange: { bg: 'bg-orange-500/10', text: 'text-orange-400', border: 'border-orange-500/30', dot: 'bg-orange-500', activeBg: 'bg-orange-500/20', hairline: 'rgba(249,115,22,0.55)',  tint: 'rgba(249,115,22,0.06)' },
@@ -361,7 +361,7 @@ function AdvancedSettings({ deviceId, deviceName, viewingDeviceId, knownDevices,
     <div className="mb-3">
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-3 py-2 bg-[#221f1b]/60 border border-stone-700/50 rounded-lg text-xs text-zinc-400 hover:border-stone-700/60 transition-all"
+        className="w-full flex items-center justify-between px-3 py-2 bg-[#18181b]/60 border border-stone-700/50 rounded-lg text-xs text-zinc-400 hover:border-stone-700/60 transition-all"
       >
         <span className="flex items-center gap-1.5">
           <Settings2 className="w-3.5 h-3.5 text-zinc-500" />
@@ -373,7 +373,7 @@ function AdvancedSettings({ deviceId, deviceName, viewingDeviceId, knownDevices,
         <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="mt-2 bg-[#1c1916]/60 border border-stone-700/40 rounded-lg p-3 space-y-3">
+        <div className="mt-2 bg-[#111113]/60 border border-stone-700/40 rounded-lg p-3 space-y-3">
           {/* Device ID */}
           <div>
             <label className="block text-[10px] text-zinc-500 mb-1">Device ID</label>
@@ -389,16 +389,16 @@ function AdvancedSettings({ deviceId, deviceName, viewingDeviceId, knownDevices,
                 <button onClick={() => { if (editIdVal.trim()) { onChangeDeviceId(editIdVal.trim()); setEditingId(false); } }}
                   className="px-2.5 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all">저장</button>
                 <button onClick={() => setEditingId(false)}
-                  className="px-2.5 py-1.5 text-xs bg-[#221f1b] text-zinc-400 border border-stone-700/50 rounded-lg transition-all">취소</button>
+                  className="px-2.5 py-1.5 text-xs bg-[#18181b] text-zinc-400 border border-stone-700/50 rounded-lg transition-all">취소</button>
               </div>
             ) : (
               <div className="flex items-center gap-1.5">
                 <input readOnly value={deviceId ? `${deviceId.slice(0, 16)}…` : '—'}
                   className="flex-1 px-2.5 py-1.5 text-xs bg-black/30 border border-stone-700/50 text-zinc-500 rounded-lg cursor-default" />
                 <button onClick={onCopyDeviceId}
-                  className="px-2.5 py-1.5 text-xs bg-[#221f1b] hover:bg-[#2a2520] text-zinc-400 border border-stone-700/50 rounded-lg transition-all">복사</button>
+                  className="px-2.5 py-1.5 text-xs bg-[#18181b] hover:bg-[#202024] text-zinc-400 border border-stone-700/50 rounded-lg transition-all">복사</button>
                 <button onClick={() => { setEditIdVal(deviceId ?? ''); setEditingId(true); }}
-                  className="px-2.5 py-1.5 text-xs bg-[#221f1b] hover:bg-[#2a2520] text-zinc-400 border border-stone-700/50 rounded-lg transition-all">변경</button>
+                  className="px-2.5 py-1.5 text-xs bg-[#18181b] hover:bg-[#202024] text-zinc-400 border border-stone-700/50 rounded-lg transition-all">변경</button>
               </div>
             )}
           </div>
@@ -416,7 +416,7 @@ function AdvancedSettings({ deviceId, deviceName, viewingDeviceId, knownDevices,
               <button
                 onClick={onSaveHandoffNote}
                 disabled={isSavingHandoffNote}
-                className="px-2.5 py-1 text-[10px] bg-[#221f1b] hover:bg-[#2a2520] text-zinc-400 border border-stone-700/50 rounded-lg transition-all disabled:opacity-50"
+                className="px-2.5 py-1 text-[10px] bg-[#18181b] hover:bg-[#202024] text-zinc-400 border border-stone-700/50 rounded-lg transition-all disabled:opacity-50"
               >
                 {isSavingHandoffNote ? '저장 중…' : '메모 저장'}
               </button>
@@ -427,7 +427,7 @@ function AdvancedSettings({ deviceId, deviceName, viewingDeviceId, knownDevices,
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-[10px] text-zinc-500">다른 기기 데이터 보기</label>
               <button onClick={onFetchDevices} disabled={isFetchingDevices}
-                className="px-2 py-0.5 text-[10px] bg-[#221f1b] hover:bg-[#2a2520] text-zinc-400 border border-stone-700/50 rounded transition-all disabled:opacity-50">
+                className="px-2 py-0.5 text-[10px] bg-[#18181b] hover:bg-[#202024] text-zinc-400 border border-stone-700/50 rounded transition-all disabled:opacity-50">
                 {isFetchingDevices ? '조회 중…' : '단말 조회'}
               </button>
             </div>
@@ -469,7 +469,7 @@ function AdvancedSettings({ deviceId, deviceName, viewingDeviceId, knownDevices,
                       </div>
                     )}
                     <div className="flex items-center gap-2">
-                      <button onClick={onResetDevice} className="text-[10px] text-zinc-500 hover:text-[#ede7dd]/90 underline">내 기기로 복귀</button>
+                      <button onClick={onResetDevice} className="text-[10px] text-zinc-500 hover:text-[#f4f4f5]/90 underline">내 기기로 복귀</button>
                       <span className="text-[10px] text-zinc-700">|</span>
                       <button
                         onClick={() => { onChangeDeviceId(viewingDeviceId); onResetDevice(); }}
@@ -497,7 +497,7 @@ function AdvancedSettings({ deviceId, deviceName, viewingDeviceId, knownDevices,
                 )}
               </>
             ) : (
-              <p className="text-[10px] text-[#6b6459] italic">단말 조회 버튼으로 다른 기기 목록을 불러오세요</p>
+              <p className="text-[10px] text-[#71717a] italic">단말 조회 버튼으로 다른 기기 목록을 불러오세요</p>
             )}
           </div>
         </div>
@@ -633,12 +633,12 @@ vercel --prod
       title: '🆕 최초 세팅',
       content: (
         <div className="space-y-2">
-          <p className="text-[#ede7dd]/90 text-[11px]">Supabase CLI + MCP 방식으로 처음 설정하는 경우</p>
+          <p className="text-[#f4f4f5]/90 text-[11px]">Supabase CLI + MCP 방식으로 처음 설정하는 경우</p>
           <pre className="bg-black/40 rounded p-2 text-zinc-400 whitespace-pre-wrap text-[10px] max-h-52 overflow-y-auto leading-relaxed">{CLI_FIRST_SETUP}</pre>
           <div className="flex gap-2">
             <button
               onClick={() => { navigator.clipboard.writeText(CLI_FIRST_SETUP); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-              className="flex-1 py-1 rounded-lg border text-[10px] font-medium transition-all flex items-center justify-center gap-1.5 bg-[#221f1b] hover:bg-[#2a2520] text-zinc-400 border-stone-700/60"
+              className="flex-1 py-1 rounded-lg border text-[10px] font-medium transition-all flex items-center justify-center gap-1.5 bg-[#18181b] hover:bg-[#202024] text-zinc-400 border-stone-700/60"
             >
               <Database className="w-3 h-3" />
               가이드 복사
@@ -659,11 +659,11 @@ vercel --prod
       title: '💻 추가 단말 세팅',
       content: (
         <div className="space-y-2">
-          <p className="text-[#ede7dd]/90 text-[11px]">기존 Supabase 프로젝트에 새 맥/PC를 추가하는 경우</p>
+          <p className="text-[#f4f4f5]/90 text-[11px]">기존 Supabase 프로젝트에 새 맥/PC를 추가하는 경우</p>
           <pre className="bg-black/40 rounded p-2 text-zinc-400 whitespace-pre-wrap text-[10px] max-h-52 overflow-y-auto leading-relaxed">{CLI_ADDITIONAL_DEVICE}</pre>
           <button
             onClick={() => { navigator.clipboard.writeText(CLI_ADDITIONAL_DEVICE); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-            className="w-full py-1 rounded-lg border text-[10px] font-medium transition-all flex items-center justify-center gap-1.5 bg-[#221f1b] hover:bg-[#2a2520] text-zinc-400 border-stone-700/60"
+            className="w-full py-1 rounded-lg border text-[10px] font-medium transition-all flex items-center justify-center gap-1.5 bg-[#18181b] hover:bg-[#202024] text-zinc-400 border-stone-700/60"
           >
             <Database className="w-3 h-3" />
             가이드 복사
@@ -675,10 +675,10 @@ vercel --prod
       title: '🤖 AI 테이블 생성',
       content: (
         <div className="space-y-2">
-          <p className="text-[#ede7dd]/90 text-[11px]">Claude Code + Supabase MCP로 테이블 자동 생성</p>
+          <p className="text-[#f4f4f5]/90 text-[11px]">Claude Code + Supabase MCP로 테이블 자동 생성</p>
           <ol className="list-decimal list-inside space-y-1 text-zinc-400 text-[10px]">
             <li>Claude Code 터미널 열기</li>
-            <li>Supabase MCP 연결 확인 (<code className="text-[#ede7dd]/90 bg-black/30 px-0.5 rounded">/mcp-setup</code>)</li>
+            <li>Supabase MCP 연결 확인 (<code className="text-[#f4f4f5]/90 bg-black/30 px-0.5 rounded">/mcp-setup</code>)</li>
             <li>아래 프롬프트 복사 → Claude Code에 붙여넣기</li>
             <li>AI가 4개 테이블 + RLS 비활성화 자동 처리</li>
           </ol>
@@ -686,7 +686,7 @@ vercel --prod
           <button
             onClick={() => { navigator.clipboard.writeText(AI_TABLE_PROMPT).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); }}
             className={`w-full py-1.5 rounded-lg border text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
-              copied ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-[#221f1b] hover:bg-[#2a2520] text-[#ede7dd]/90 border-stone-700/60'
+              copied ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-[#18181b] hover:bg-[#202024] text-[#f4f4f5]/90 border-stone-700/60'
             }`}
           >
             {copied ? <Check className="w-3.5 h-3.5" /> : <Database className="w-3.5 h-3.5" />}
@@ -699,12 +699,12 @@ vercel --prod
       title: '🚀 Vercel 배포',
       content: (
         <div className="space-y-2">
-          <p className="text-[#ede7dd]/90 text-[11px]">포털 북마크를 웹에 배포 — 앱 없이 브라우저에서 접근 가능</p>
+          <p className="text-[#f4f4f5]/90 text-[11px]">포털 북마크를 웹에 배포 — 앱 없이 브라우저에서 접근 가능</p>
           <pre className="bg-black/40 rounded p-2 text-zinc-400 whitespace-pre-wrap text-[10px] max-h-52 overflow-y-auto leading-relaxed">{VERCEL_GUIDE}</pre>
           <button
             onClick={() => { navigator.clipboard.writeText(VERCEL_GUIDE); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
             className={`w-full py-1.5 rounded-lg border text-xs font-medium transition-all flex items-center justify-center gap-1.5 ${
-              copied ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-[#221f1b] hover:bg-[#2a2520] text-[#ede7dd]/90 border-stone-700/60'
+              copied ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-[#18181b] hover:bg-[#202024] text-[#f4f4f5]/90 border-stone-700/60'
             }`}
           >
             {copied ? <Check className="w-3.5 h-3.5" /> : <Globe className="w-3.5 h-3.5" />}
@@ -719,17 +719,17 @@ vercel --prod
     <div className="mb-4">
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-3 py-2 bg-[#221f1b]/60 border border-stone-700/50 rounded-lg text-xs text-zinc-400 hover:border-stone-700/60 transition-all"
+        className="w-full flex items-center justify-between px-3 py-2 bg-[#18181b]/60 border border-stone-700/50 rounded-lg text-xs text-zinc-400 hover:border-stone-700/60 transition-all"
       >
         <span className="flex items-center gap-1.5">
           <Database className="w-3.5 h-3.5 text-indigo-400" />
-          <span className="font-medium text-[#ede7dd]/90">초기 설정 가이드</span>
-          <span className="text-[#6b6459]">— 처음 사용 시</span>
+          <span className="font-medium text-[#f4f4f5]/90">초기 설정 가이드</span>
+          <span className="text-[#71717a]">— 처음 사용 시</span>
         </span>
         <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="mt-2 bg-[#1c1916]/60 border border-stone-700/40 rounded-lg overflow-hidden">
+        <div className="mt-2 bg-[#111113]/60 border border-stone-700/40 rounded-lg overflow-hidden">
           {/* Step tabs */}
           <div className="flex border-b border-stone-700/40 overflow-x-auto">
             {steps.map((s, i) => (
@@ -739,7 +739,7 @@ vercel --prod
                 className={`flex-shrink-0 px-3 py-2 text-[10px] font-medium transition-all border-b-2 ${
                   step === i
                     ? 'border-indigo-500 text-indigo-300 bg-indigo-500/5'
-                    : 'border-transparent text-zinc-500 hover:text-[#ede7dd]/90'
+                    : 'border-transparent text-zinc-500 hover:text-[#f4f4f5]/90'
                 }`}
               >
                 {s.title}
@@ -751,7 +751,7 @@ vercel --prod
             {steps[step]?.content}
             <div className="flex gap-2 mt-3">
               {step > 0 && (
-                <button onClick={() => setStep(s => s - 1)} className="flex-1 py-1 text-[10px] bg-[#221f1b] hover:bg-[#2a2520] text-zinc-400 rounded border border-stone-700/50 transition-all">← 이전</button>
+                <button onClick={() => setStep(s => s - 1)} className="flex-1 py-1 text-[10px] bg-[#18181b] hover:bg-[#202024] text-zinc-400 rounded border border-stone-700/50 transition-all">← 이전</button>
               )}
               {step < steps.length - 1 && (
                 <button onClick={() => setStep(s => s + 1)} className="flex-1 py-1 text-[10px] bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 rounded border border-indigo-500/30 transition-all">다음 →</button>
@@ -1514,7 +1514,7 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
       <div className="md:hidden flex flex-wrap gap-1.5 pb-1">
         <button
           onClick={() => setSelectedCat('all')}
-          className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${selectedCat === 'all' ? 'bg-[#2a2520] text-white' : 'bg-[#221f1b]/60 text-zinc-400 hover:text-[#ede7dd]'}`}
+          className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${selectedCat === 'all' ? 'bg-[#202024] text-white' : 'bg-[#18181b]/60 text-zinc-400 hover:text-[#f4f4f5]'}`}
         >
           <BookMarked className="w-3 h-3" />
           전체 <span className="text-zinc-500">{data.items.length}</span>
@@ -1526,7 +1526,7 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
             <button
               key={cat.id}
               onClick={() => setSelectedCat(cat.id)}
-              className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${selectedCat === cat.id ? 'bg-[#2a2520] text-white' : 'bg-[#221f1b]/60 text-zinc-400 hover:text-[#ede7dd]'}`}
+              className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${selectedCat === cat.id ? 'bg-[#202024] text-white' : 'bg-[#18181b]/60 text-zinc-400 hover:text-[#f4f4f5]'}`}
             >
               <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${c.dot}`} />
               {cat.name} <span className="text-zinc-500">{count}</span>
@@ -1535,7 +1535,7 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
         })}
         <button
           onClick={() => setShowCatModal(true)}
-          className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs text-zinc-500 bg-[#221f1b]/60 hover:text-[#ede7dd]/90 transition-colors"
+          className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs text-zinc-500 bg-[#18181b]/60 hover:text-[#f4f4f5]/90 transition-colors"
         >
           <Plus className="w-3 h-3" />
           추가
@@ -1543,21 +1543,21 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
       </div>
 
       {/* ── Left Sidebar (desktop only) ──────────────────────────────────────── */}
-      <div className="hidden md:flex flex-col flex-shrink-0" style={{width:220,padding:'14px 10px',borderRight:'1px solid var(--pm-border,rgba(255,240,220,0.07))',background:'var(--pm-bg,#1c1916)',gap:2,overflow:'hidden'}}>
+      <div className="hidden md:flex flex-col flex-shrink-0" style={{width:220,padding:'14px 10px',borderRight:'1px solid var(--pm-border,rgba(255,255,255,0.07))',background:'var(--pm-bg,#111113)',gap:2,overflow:'hidden'}}>
         {/* All */}
         <button
           data-help-key="portal-sidebar-all"
           onClick={() => setSelectedCat('all')}
           style={{
             display:'flex',alignItems:'center',gap:8,padding:'7px 10px',borderRadius:6,cursor:'pointer',border:'none',
-            background:selectedCat==='all' ? 'var(--pm-bg-hover,#221f1b)' : 'transparent',
-            color:selectedCat==='all' ? 'var(--pm-text,#ede7dd)' : 'var(--pm-text-muted,#a39a8c)',
+            background:selectedCat==='all' ? 'var(--pm-bg-hover,#18181b)' : 'transparent',
+            color:selectedCat==='all' ? 'var(--pm-text,#f4f4f5)' : 'var(--pm-text-muted,#a1a1aa)',
             fontSize:12.5,fontWeight:selectedCat==='all'?500:400,fontFamily:'inherit',
           }}
         >
           <BookMarked className="w-3 h-3 flex-shrink-0" />
           <span style={{flex:1,textAlign:'left'}}>전체</span>
-          <span style={{fontSize:10.5,color:'var(--pm-text-faint,#6b6459)',fontFamily:"'JetBrains Mono',monospace"}}>{data.items.length}</span>
+          <span style={{fontSize:10.5,color:'var(--pm-text-faint,#71717a)',fontFamily:"'JetBrains Mono',monospace"}}>{data.items.length}</span>
         </button>
 
         {data.categories.sort((a, b) => a.order - b.order).map(cat => {
@@ -1565,15 +1565,15 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
           const count = data.items.filter(i => i.category === cat.id).length;
           const active = selectedCat === cat.id;
           return (
-            <div key={cat.id} data-help-key="portal-sidebar-category" className="group" style={{display:'flex',alignItems:'center',gap:8,padding:'7px 10px',borderRadius:6,cursor:'pointer',background:active?'var(--pm-bg-hover,#221f1b)':'transparent',color:active?'var(--pm-text,#ede7dd)':'var(--pm-text-muted,#a39a8c)',fontSize:12.5}} onClick={() => setSelectedCat(cat.id)}>
+            <div key={cat.id} data-help-key="portal-sidebar-category" className="group" style={{display:'flex',alignItems:'center',gap:8,padding:'7px 10px',borderRadius:6,cursor:'pointer',background:active?'var(--pm-bg-hover,#18181b)':'transparent',color:active?'var(--pm-text,#f4f4f5)':'var(--pm-text-muted,#a1a1aa)',fontSize:12.5}} onClick={() => setSelectedCat(cat.id)}>
               <span className={`w-2 h-2 rounded-full flex-shrink-0 ${c.dot}`} />
               <span style={{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{cat.name}</span>
-              <span style={{fontSize:10.5,color:'var(--pm-text-faint,#6b6459)',fontFamily:"'JetBrains Mono',monospace"}}>{count}</span>
+              <span style={{fontSize:10.5,color:'var(--pm-text-faint,#71717a)',fontFamily:"'JetBrains Mono',monospace"}}>{count}</span>
               <span
                 role="button"
                 onClick={e => { e.stopPropagation(); deleteCategory(cat.id); }}
                 className="opacity-0 group-hover:opacity-100 hover:text-red-400 transition-opacity cursor-pointer"
-                style={{color:'var(--pm-text-faint,#6b6459)'}}
+                style={{color:'var(--pm-text-faint,#71717a)'}}
               >
                 <X className="w-3 h-3" />
               </span>
@@ -1585,7 +1585,7 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
         <button
           data-help-key="portal-add-category"
           onClick={() => setShowCatModal(true)}
-          style={{marginTop:6,padding:'7px 10px',borderRadius:6,color:'var(--pm-text-faint,#6b6459)',fontSize:12,display:'flex',alignItems:'center',gap:8,cursor:'pointer',border:'1px dashed var(--pm-border,rgba(255,240,220,0.07))',background:'transparent',fontFamily:'inherit'}}
+          style={{marginTop:6,padding:'7px 10px',borderRadius:6,color:'var(--pm-text-faint,#71717a)',fontSize:12,display:'flex',alignItems:'center',gap:8,cursor:'pointer',border:'1px dashed var(--pm-border,rgba(255,255,255,0.07))',background:'transparent',fontFamily:'inherit'}}
         >
           <Plus className="w-3 h-3" />
           카테고리 추가
@@ -1593,14 +1593,14 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
 
         {/* Sync status */}
         {data.lastSynced && (
-          <p data-help-key="portal-sync-status" style={{marginTop:'auto',padding:'6px 8px',fontSize:10.5,color:'var(--pm-text-faint,#6b6459)',fontFamily:"'JetBrains Mono',monospace"}}>
+          <p data-help-key="portal-sync-status" style={{marginTop:'auto',padding:'6px 8px',fontSize:10.5,color:'var(--pm-text-faint,#71717a)',fontFamily:"'JetBrains Mono',monospace"}}>
             동기화: {new Date(data.lastSynced).toLocaleDateString('ko-KR')}
           </p>
         )}
         <button
           data-help-key="portal-sidebar-history"
           onClick={openPortalHistory}
-          style={{marginTop:data.lastSynced?2:4,padding:'7px 10px',borderRadius:6,color:'var(--pm-text-faint,#6b6459)',fontSize:12,display:'flex',alignItems:'center',gap:6,cursor:'pointer',border:'1px solid var(--pm-border,rgba(255,240,220,0.07))',background:'transparent',fontFamily:'inherit',width:'100%'}}
+          style={{marginTop:data.lastSynced?2:4,padding:'7px 10px',borderRadius:6,color:'var(--pm-text-faint,#71717a)',fontSize:12,display:'flex',alignItems:'center',gap:6,cursor:'pointer',border:'1px solid var(--pm-border,rgba(255,255,255,0.07))',background:'transparent',fontFamily:'inherit',width:'100%'}}
           title="Push 히스토리 / 복원"
         >
           <Clock className="w-3 h-3 flex-shrink-0" />
@@ -1611,37 +1611,37 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
       {/* ── Main Content ─────────────────────────────────────────────────────── */}
       <div className="flex-1 min-w-0">
         {/* Search row */}
-        <div style={{padding:'14px 0 14px',display:'flex',flexWrap:'wrap',gap:8,borderBottom:'1px solid var(--pm-border,rgba(255,240,220,0.07))',marginBottom:14}}>
+        <div style={{padding:'14px 0 14px',display:'flex',flexWrap:'wrap',gap:8,borderBottom:'1px solid var(--pm-border,rgba(255,255,255,0.07))',marginBottom:14}}>
           <div style={{flex:'1 1 200px',position:'relative',minWidth:0}}>
-            <Search className="w-3.5 h-3.5" style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--pm-text-faint,#6b6459)'}} />
+            <Search className="w-3.5 h-3.5" style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--pm-text-faint,#71717a)'}} />
             <input
               data-help-key="portal-search"
               type="text"
               placeholder="검색…"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              style={{width:'100%',padding:'8px 10px 8px 30px',background:'var(--pm-bg,#1c1916)',border:'1px solid var(--pm-border,rgba(255,240,220,0.07))',borderRadius:7,color:'var(--pm-text,#ede7dd)',fontSize:12.5,outline:'none',fontFamily:'inherit',boxSizing:'border-box'}}
+              style={{width:'100%',padding:'8px 10px 8px 30px',background:'var(--pm-bg,#111113)',border:'1px solid var(--pm-border,rgba(255,255,255,0.07))',borderRadius:7,color:'var(--pm-text,#f4f4f5)',fontSize:12.5,outline:'none',fontFamily:'inherit',boxSizing:'border-box'}}
             />
           </div>
           {viewingDeviceId && viewingDeviceId !== data.deviceId && (() => {
             const viewedDevice = knownDevices.find(d => d.device_id === viewingDeviceId);
             return (
-              <div style={{display:'flex',flexDirection:'column',gap:4,padding:'6px 10px',background:'rgba(232,165,87,0.08)',border:'1px solid rgba(232,165,87,0.25)',borderRadius:7,flexShrink:0,maxWidth:260,minWidth:0}}>
+              <div style={{display:'flex',flexDirection:'column',gap:4,padding:'6px 10px',background:'rgba(94,234,212,0.08)',border:'1px solid rgba(94,234,212,0.25)',borderRadius:7,flexShrink:0,maxWidth:260,minWidth:0}}>
                 <div style={{display:'flex',alignItems:'center',gap:6}}>
-                  <span style={{color:'#e8a557',fontSize:10.5,fontWeight:500,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',flex:1}}>
+                  <span style={{color:'#5eead4',fontSize:10.5,fontWeight:500,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',flex:1}}>
                     📱 {viewedDevice?.device_name ?? viewingDeviceId.slice(0, 6) + '…'}
                   </span>
                   <button
                     onClick={() => { setViewingDeviceId(''); setData(d => ({ ...d, viewingDeviceId: undefined })); }}
-                    style={{color:'#e8a557',background:'transparent',border:'none',cursor:'pointer',fontSize:12,lineHeight:1}}
+                    style={{color:'#5eead4',background:'transparent',border:'none',cursor:'pointer',fontSize:12,lineHeight:1}}
                     title="내 기기로 복귀"
                   >✕</button>
                 </div>
                 {viewedDevice?.handoff_note && (
-                  <div style={{padding:'4px 6px',background:'rgba(232,165,87,0.12)',border:'1px solid rgba(232,165,87,0.3)',borderRadius:5}}>
+                  <div style={{padding:'4px 6px',background:'rgba(94,234,212,0.12)',border:'1px solid rgba(94,234,212,0.3)',borderRadius:5}}>
                     <p style={{margin:0,color:'#f0c98a',fontSize:11,whiteSpace:'pre-wrap'}}>{viewedDevice.handoff_note}</p>
                     {viewedDevice.handoff_updated_at && (
-                      <p style={{margin:'2px 0 0',color:'rgba(232,165,87,0.7)',fontSize:9.5}}>{relativeTimeFromNow(viewedDevice.handoff_updated_at)}</p>
+                      <p style={{margin:'2px 0 0',color:'rgba(94,234,212,0.7)',fontSize:9.5}}>{relativeTimeFromNow(viewedDevice.handoff_updated_at)}</p>
                     )}
                   </div>
                 )}
@@ -1651,7 +1651,7 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
           <button
             data-help-key="portal-add-item"
             onClick={() => openAddModal(selectedCat !== 'all' ? selectedCat : undefined)}
-            style={{padding:'8px 14px',background:'#e8a557',color:'#15120f',border:'none',borderRadius:7,fontSize:12.5,fontWeight:600,cursor:'pointer',display:'inline-flex',alignItems:'center',gap:5,fontFamily:'inherit',flexShrink:0}}
+            style={{padding:'8px 14px',background:'#5eead4',color:'#09090b',border:'none',borderRadius:7,fontSize:12.5,fontWeight:600,cursor:'pointer',display:'inline-flex',alignItems:'center',gap:5,fontFamily:'inherit',flexShrink:0}}
           >
             <Plus className="w-3 h-3" />추가
           </button>
@@ -1681,12 +1681,12 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
             const c = getColor(cat.color);
             return (
               <div key={cat.id} style={{marginBottom:20}}>
-                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10,fontSize:11.5,color:'var(--pm-text-muted,#a39a8c)'}}>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10,fontSize:11.5,color:'var(--pm-text-muted,#a1a1aa)'}}>
                   <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${c.dot}`} />
-                  <span style={{fontWeight:500,color:'var(--pm-text,#ede7dd)'}}>{cat.name}</span>
-                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10.5,color:'var(--pm-text-faint,#6b6459)'}}>{catItems.length}</span>
+                  <span style={{fontWeight:500,color:'var(--pm-text,#f4f4f5)'}}>{cat.name}</span>
+                  <span style={{fontFamily:"'JetBrains Mono',monospace",fontSize:10.5,color:'var(--pm-text-faint,#71717a)'}}>{catItems.length}</span>
                   <div style={{flex:1}}/>
-                  <button onClick={() => openAddModal(cat.id)} style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--pm-text-faint,#6b6459)',padding:4,display:'flex',alignItems:'center'}}>
+                  <button onClick={() => openAddModal(cat.id)} style={{background:'transparent',border:'none',cursor:'pointer',color:'var(--pm-text-faint,#71717a)',padding:4,display:'flex',alignItems:'center'}}>
                     <Plus className="w-3 h-3" />
                   </button>
                 </div>
@@ -1708,14 +1708,14 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
             </div>
           ) : (
             filteredItems.length === 0 && (
-              <div style={{background:'var(--pm-bg,#1c1916)',borderRadius:10,border:'1px solid var(--pm-border,rgba(255,240,220,0.07))',padding:'48px 24px',textAlign:'center'}}>
-                <BookMarked className="w-7 h-7 mx-auto mb-3" style={{color:'var(--pm-text-faint,#6b6459)'}} />
-                <p style={{fontSize:13,color:'var(--pm-text-muted,#a39a8c)',marginBottom:12}}>
+              <div style={{background:'var(--pm-bg,#111113)',borderRadius:10,border:'1px solid var(--pm-border,rgba(255,255,255,0.07))',padding:'48px 24px',textAlign:'center'}}>
+                <BookMarked className="w-7 h-7 mx-auto mb-3" style={{color:'var(--pm-text-faint,#71717a)'}} />
+                <p style={{fontSize:13,color:'var(--pm-text-muted,#a1a1aa)',marginBottom:12}}>
                   {search ? '검색 결과가 없습니다' : '항목이 없습니다'}
                 </p>
                 <button
                   onClick={() => openAddModal()}
-                  style={{padding:'7px 16px',background:'#e8a557',color:'#15120f',border:'none',borderRadius:7,fontSize:12.5,fontWeight:600,cursor:'pointer',display:'inline-flex',alignItems:'center',gap:5,fontFamily:'inherit'}}
+                  style={{padding:'7px 16px',background:'#5eead4',color:'#09090b',border:'none',borderRadius:7,fontSize:12.5,fontWeight:600,cursor:'pointer',display:'inline-flex',alignItems:'center',gap:5,fontFamily:'inherit'}}
                 >
                   <Plus className="w-3 h-3" />첫 항목 추가
                 </button>
@@ -1771,7 +1771,7 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
 
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input type="checkbox" checked={form.pinned} onChange={e => setForm(f => ({ ...f, pinned: e.target.checked }))} className="rounded" />
-            <span className="text-sm text-[#ede7dd]/90">고정 (즐겨찾기)</span>
+            <span className="text-sm text-[#f4f4f5]/90">고정 (즐겨찾기)</span>
           </label>
         </Modal>
       )}
@@ -1814,13 +1814,13 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
 
           {/* ── 1. 단말 이름 ─────────────────────────────────────────────────── */}
           <div style={{marginBottom:16}}>
-            <div style={{display:'flex',alignItems:'center',marginBottom:6,fontSize:11.5,color:'var(--pm-text-muted,#a39a8c)'}}>
-              <span>이 기기 이름{!deviceName && !data.deviceId && <span style={{color:'#e8a557',fontWeight:500,marginLeft:4}}>* 필수</span>}</span>
+            <div style={{display:'flex',alignItems:'center',marginBottom:6,fontSize:11.5,color:'var(--pm-text-muted,#a1a1aa)'}}>
+              <span>이 기기 이름{!deviceName && !data.deviceId && <span style={{color:'#5eead4',fontWeight:500,marginLeft:4}}>* 필수</span>}</span>
               <div style={{flex:1}}/>
               {deviceName
-                ? <span style={{fontSize:11,color:'#8fb96e',display:'inline-flex',alignItems:'center',gap:4}}><span style={{width:6,height:6,borderRadius:3,background:'#8fb96e',display:'inline-block'}}/>등록됨</span>
+                ? <span style={{fontSize:11,color:'#4ade80',display:'inline-flex',alignItems:'center',gap:4}}><span style={{width:6,height:6,borderRadius:3,background:'#4ade80',display:'inline-block'}}/>등록됨</span>
                 : data.deviceId
-                  ? <span style={{fontSize:11,color:'#e8a557'}}>이름 미설정 — 입력 권장</span>
+                  ? <span style={{fontSize:11,color:'#5eead4'}}>이름 미설정 — 입력 권장</span>
                   : null
               }
             </div>
@@ -1828,16 +1828,16 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
               type="text"
               value={deviceName}
               onChange={e => setDeviceName(e.target.value)}
-              style={{width:'100%',padding:'8px 10px',background:'var(--pm-bg-input,#15120f)',border:'1px solid var(--pm-border,rgba(255,240,220,0.07))',borderRadius:6,color:'var(--pm-text,#ede7dd)',fontSize:12.5,outline:'none',fontFamily:'inherit',boxSizing:'border-box'}}
+              style={{width:'100%',padding:'8px 10px',background:'var(--pm-bg-input,#09090b)',border:'1px solid var(--pm-border,rgba(255,255,255,0.07))',borderRadius:6,color:'var(--pm-text,#f4f4f5)',fontSize:12.5,outline:'none',fontFamily:'inherit',boxSizing:'border-box'}}
               placeholder="예: MyMacPro, 회사맥북, WindowsPC"
               autoFocus={!deviceName && !data.deviceId}
             />
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:5}}>
-              <p style={{fontSize:10.5,color:'var(--pm-text-faint,#6b6459)',fontFamily:"'JetBrains Mono',monospace",margin:0}}>Device ID: {data.deviceId ? data.deviceId.slice(0, 16) + '…' : '자동생성'}</p>
+              <p style={{fontSize:10.5,color:'var(--pm-text-faint,#71717a)',fontFamily:"'JetBrains Mono',monospace",margin:0}}>Device ID: {data.deviceId ? data.deviceId.slice(0, 16) + '…' : '자동생성'}</p>
               {onChangeDevice && (
                 <button
                   onClick={() => { setShowSettings(false); onChangeDevice(); }}
-                  style={{fontSize:10.5,color:'#e8a557',background:'transparent',border:'none',cursor:'pointer',padding:0}}
+                  style={{fontSize:10.5,color:'#5eead4',background:'transparent',border:'none',cursor:'pointer',padding:0}}
                 >
                   단말 변경
                 </button>
@@ -1847,20 +1847,20 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
 
           {/* ── 2. Supabase 연결 ─────────────────────────────────────────────── */}
           <div style={{marginBottom:16}}>
-            <label style={{display:'block',fontSize:11.5,color:'var(--pm-text-muted,#a39a8c)',marginBottom:6}}>Project URL</label>
+            <label style={{display:'block',fontSize:11.5,color:'var(--pm-text-muted,#a1a1aa)',marginBottom:6}}>Project URL</label>
             <input
               type="text"
               value={sbUrl}
               onChange={e => setSbUrl(e.target.value)}
-              style={{width:'100%',padding:'8px 10px',background:'var(--pm-bg-input,#15120f)',border:'1px solid var(--pm-border,rgba(255,240,220,0.07))',borderRadius:6,color:'var(--pm-text,#ede7dd)',fontSize:12.5,outline:'none',fontFamily:'inherit',boxSizing:'border-box',marginBottom:12}}
+              style={{width:'100%',padding:'8px 10px',background:'var(--pm-bg-input,#09090b)',border:'1px solid var(--pm-border,rgba(255,255,255,0.07))',borderRadius:6,color:'var(--pm-text,#f4f4f5)',fontSize:12.5,outline:'none',fontFamily:'inherit',boxSizing:'border-box',marginBottom:12}}
               placeholder="https://xxx.supabase.co"
             />
-            <label style={{display:'block',fontSize:11.5,color:'var(--pm-text-muted,#a39a8c)',marginBottom:6}}>Anon Key</label>
+            <label style={{display:'block',fontSize:11.5,color:'var(--pm-text-muted,#a1a1aa)',marginBottom:6}}>Anon Key</label>
             <input
               type="password"
               value={sbKey}
               onChange={e => setSbKey(e.target.value)}
-              style={{width:'100%',padding:'8px 10px',background:'var(--pm-bg-input,#15120f)',border:'1px solid var(--pm-border,rgba(255,240,220,0.07))',borderRadius:6,color:'var(--pm-text,#ede7dd)',fontSize:12.5,outline:'none',fontFamily:"'JetBrains Mono',monospace",boxSizing:'border-box'}}
+              style={{width:'100%',padding:'8px 10px',background:'var(--pm-bg-input,#09090b)',border:'1px solid var(--pm-border,rgba(255,255,255,0.07))',borderRadius:6,color:'var(--pm-text,#f4f4f5)',fontSize:12.5,outline:'none',fontFamily:"'JetBrains Mono',monospace",boxSizing:'border-box'}}
               placeholder="eyJ..."
             />
             {sbUrl && sbKey && (
@@ -1876,7 +1876,7 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
                     if (dname) p.set('name', dname);
                     window.open(`https://portmanager-portal.vercel.app?${p}`, '_blank');
                   }}
-                  style={{width:'100%',padding:'8px 10px',background:'rgba(139,185,110,0.1)',border:'1px solid rgba(139,185,110,0.25)',borderRadius:6,color:'#8fb96e',fontSize:12,cursor:'pointer',fontFamily:'inherit',textAlign:'center'}}
+                  style={{width:'100%',padding:'8px 10px',background:'rgba(139,185,110,0.1)',border:'1px solid rgba(139,185,110,0.25)',borderRadius:6,color:'#4ade80',fontSize:12,cursor:'pointer',fontFamily:'inherit',textAlign:'center'}}
                 >
                   🔗 Vercel 포털 열기 (자동 인증)
                 </button>
@@ -1944,38 +1944,38 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
       {/* ── Push 히스토리 모달 — 포털 아이템 ─────────────────────────────────── */}
       {showPortalHistory && (
         <div style={{position:'fixed',inset:0,zIndex:60,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,0.6)',backdropFilter:'blur(4px)'}} onClick={() => setShowPortalHistory(false)}>
-          <div style={{background:'#18181b',border:'1px solid var(--pm-border-mid,rgba(255,240,220,0.1))',borderRadius:12,width:'calc(100vw - 24px)',maxWidth:460,margin:'0 12px',boxShadow:'0 24px 48px rgba(0,0,0,0.6)',overflow:'hidden'}} onClick={e => e.stopPropagation()}>
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 16px',borderBottom:'1px solid var(--pm-border,rgba(255,240,220,0.07))'}}>
+          <div style={{background:'#18181b',border:'1px solid var(--pm-border-mid,rgba(255,255,255,0.1))',borderRadius:12,width:'calc(100vw - 24px)',maxWidth:460,margin:'0 12px',boxShadow:'0 24px 48px rgba(0,0,0,0.6)',overflow:'hidden'}} onClick={e => e.stopPropagation()}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 16px',borderBottom:'1px solid var(--pm-border,rgba(255,255,255,0.07))'}}>
               <div style={{display:'flex',alignItems:'center',gap:8}}>
-                <Clock className="w-4 h-4" style={{color:'#e8a557'}} />
-                <span style={{fontSize:13,fontWeight:600,color:'var(--pm-text,#ede7dd)'}}>Push 히스토리 — 포털 북마크</span>
+                <Clock className="w-4 h-4" style={{color:'#5eead4'}} />
+                <span style={{fontSize:13,fontWeight:600,color:'var(--pm-text,#f4f4f5)'}}>Push 히스토리 — 포털 북마크</span>
               </div>
-              <button onClick={() => setShowPortalHistory(false)} style={{background:'transparent',border:'none',color:'var(--pm-text-muted,#a39a8c)',cursor:'pointer',padding:4,display:'flex',alignItems:'center'}}><X className="w-4 h-4" /></button>
+              <button onClick={() => setShowPortalHistory(false)} style={{background:'transparent',border:'none',color:'var(--pm-text-muted,#a1a1aa)',cursor:'pointer',padding:4,display:'flex',alignItems:'center'}}><X className="w-4 h-4" /></button>
             </div>
             <div style={{overflowY:'auto',maxHeight:360}}>
               {portalHistoryLoading ? (
                 <div style={{display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 0'}}>
-                  <RefreshCw className="w-5 h-5" style={{color:'var(--pm-text-faint,#6b6459)',animation:'spin 1s linear infinite'}} />
+                  <RefreshCw className="w-5 h-5" style={{color:'var(--pm-text-faint,#71717a)',animation:'spin 1s linear infinite'}} />
                 </div>
               ) : portalHistoryList.length === 0 ? (
                 <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'40px 0',gap:8}}>
                   <Clock className="w-8 h-8" style={{color:'#3f3a34'}} />
-                  <p style={{fontSize:13,color:'var(--pm-text-faint,#6b6459)',margin:0}}>저장된 히스토리가 없습니다</p>
+                  <p style={{fontSize:13,color:'var(--pm-text-faint,#71717a)',margin:0}}>저장된 히스토리가 없습니다</p>
                   <p style={{fontSize:11,color:'#4a4540',margin:0}}>Push 시 자동으로 스냅샷이 저장됩니다</p>
                 </div>
               ) : portalHistoryList.map((snap, i) => (
-                <div key={snap.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 16px',borderBottom:'1px solid var(--pm-border-faint,rgba(255,240,220,0.05))'}}>
+                <div key={snap.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 16px',borderBottom:'1px solid var(--pm-border-faint,rgba(255,255,255,0.05))'}}>
                   <div style={{minWidth:0}}>
-                    <p style={{fontSize:13,color:'var(--pm-text,#ede7dd)',fontWeight:500,margin:0}}>{new Date(snap.created_at).toLocaleString('ko-KR')}</p>
-                    <p style={{fontSize:11,color:'var(--pm-text-faint,#6b6459)',margin:'3px 0 0',fontFamily:"'JetBrains Mono',monospace"}}>
+                    <p style={{fontSize:13,color:'var(--pm-text,#f4f4f5)',fontWeight:500,margin:0}}>{new Date(snap.created_at).toLocaleString('ko-KR')}</p>
+                    <p style={{fontSize:11,color:'var(--pm-text-faint,#71717a)',margin:'3px 0 0',fontFamily:"'JetBrains Mono',monospace"}}>
                       {snap.row_count}개 항목{snap.device_name ? ` · ${snap.device_name}` : ''}
-                      {i === 0 && <span style={{marginLeft:6,color:'#8fb96e',fontWeight:500}}>최신</span>}
+                      {i === 0 && <span style={{marginLeft:6,color:'#4ade80',fontWeight:500}}>최신</span>}
                     </p>
                   </div>
                   <button
                     onClick={() => restorePortalSnapshot(snap.id)}
                     disabled={portalHistoryRestoring !== null}
-                    style={{marginLeft:12,flexShrink:0,display:'flex',alignItems:'center',gap:4,padding:'6px 10px',fontSize:11.5,background:'rgba(232,165,87,0.08)',color:'#e8a557',border:'1px solid rgba(232,165,87,0.2)',borderRadius:6,cursor:'pointer',fontFamily:'inherit',opacity:portalHistoryRestoring?0.5:1}}
+                    style={{marginLeft:12,flexShrink:0,display:'flex',alignItems:'center',gap:4,padding:'6px 10px',fontSize:11.5,background:'rgba(94,234,212,0.08)',color:'#5eead4',border:'1px solid rgba(94,234,212,0.2)',borderRadius:6,cursor:'pointer',fontFamily:'inherit',opacity:portalHistoryRestoring?0.5:1}}
                   >
                     {portalHistoryRestoring === snap.id
                       ? <RefreshCw className="w-3 h-3" style={{animation:'spin 1s linear infinite'}} />
@@ -1985,7 +1985,7 @@ export default function PortalManager({ showToast, openSettings, onSettingsClose
                 </div>
               ))}
             </div>
-            <div style={{padding:'8px 16px',borderTop:'1px solid var(--pm-border,rgba(255,240,220,0.07))',background:'rgba(255,255,255,0.02)'}}>
+            <div style={{padding:'8px 16px',borderTop:'1px solid var(--pm-border,rgba(255,255,255,0.07))',background:'rgba(255,255,255,0.02)'}}>
               <p style={{fontSize:10.5,color:'#4a4540',margin:0}}>복원 시 현재 Supabase 북마크 데이터를 선택한 시점으로 되돌립니다</p>
             </div>
           </div>
@@ -2144,7 +2144,7 @@ function ItemCard({ item, getCat, getColor, onOpen, onEdit, onDelete, onTogglePi
               {item.visitCount}
             </span>
           )}
-          {item.pinned && <Star style={{ width: 11, height: 11, color: '#e8a557', flexShrink: 0 }} />}
+          {item.pinned && <Star style={{ width: 11, height: 11, color: '#5eead4', flexShrink: 0 }} />}
           <span style={{
             display: 'inline-flex', color: hovered ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.28)',
             transition: 'color .14s, transform .14s',
@@ -2202,7 +2202,7 @@ function ItemCard({ item, getCat, getColor, onOpen, onEdit, onDelete, onTogglePi
             data-help-key="portal-pin-toggle"
             onClick={e => { e.stopPropagation(); onTogglePin(item.id); }}
             title={item.pinned ? '고정 해제' : '고정'}
-            style={{ padding: '4px 7px', borderRadius: 5, border: '1px solid rgba(255,255,255,0.08)', background: item.pinned ? 'rgba(232,165,87,0.12)' : 'transparent', color: item.pinned ? '#e8a557' : 'rgba(255,255,255,0.42)', cursor: 'pointer' }}
+            style={{ padding: '4px 7px', borderRadius: 5, border: '1px solid rgba(255,255,255,0.08)', background: item.pinned ? 'rgba(94,234,212,0.12)' : 'transparent', color: item.pinned ? '#5eead4' : 'rgba(255,255,255,0.42)', cursor: 'pointer' }}
           >
             <Pin style={{ width: 10, height: 10 }} />
           </button>
@@ -2253,20 +2253,20 @@ function Modal({ title, children, onClose, onConfirm, confirmLabel }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{background:'rgba(10,8,6,0.65)',backdropFilter:'blur(2px)'}} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{width:'100%',maxWidth:440,background:'var(--pm-bg,#1c1916)',borderRadius:12,border:'1px solid var(--pm-border-hover,rgba(255,240,220,0.12))',boxShadow:'0 24px 80px rgba(0,0,0,0.6)',overflow:'hidden',maxHeight:'90vh',display:'flex',flexDirection:'column',minWidth:0}}>
-        <div style={{padding:'14px 18px',display:'flex',alignItems:'center',borderBottom:'1px solid var(--pm-border,rgba(255,240,220,0.07))',flexShrink:0}}>
-          <h3 style={{margin:0,fontSize:14,fontWeight:600,letterSpacing:-0.2,color:'var(--pm-text,#ede7dd)'}}>{title}</h3>
+      <div style={{width:'100%',maxWidth:440,background:'var(--pm-bg,#111113)',borderRadius:12,border:'1px solid var(--pm-border-hover,rgba(255,255,255,0.12))',boxShadow:'0 24px 80px rgba(0,0,0,0.6)',overflow:'hidden',maxHeight:'90vh',display:'flex',flexDirection:'column',minWidth:0}}>
+        <div style={{padding:'14px 18px',display:'flex',alignItems:'center',borderBottom:'1px solid var(--pm-border,rgba(255,255,255,0.07))',flexShrink:0}}>
+          <h3 style={{margin:0,fontSize:14,fontWeight:600,letterSpacing:-0.2,color:'var(--pm-text,#f4f4f5)'}}>{title}</h3>
           <div style={{flex:1}}/>
-          <button onClick={onClose} style={{background:'transparent',border:'none',color:'var(--pm-text-muted,#a39a8c)',cursor:'pointer',padding:4,display:'flex',alignItems:'center'}}>
+          <button onClick={onClose} style={{background:'transparent',border:'none',color:'var(--pm-text-muted,#a1a1aa)',cursor:'pointer',padding:4,display:'flex',alignItems:'center'}}>
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
         <div style={{padding:18,flex:1,overflowY:'auto'}}>{children}</div>
-        <div style={{padding:'12px 18px',borderTop:'1px solid var(--pm-border,rgba(255,240,220,0.07))',display:'flex',gap:8,justifyContent:'flex-end',flexShrink:0}}>
-          <button onClick={onClose} style={{padding:'7px 16px',background:'transparent',color:'var(--pm-text,#ede7dd)',border:'1px solid var(--pm-border-hover,rgba(255,240,220,0.12))',borderRadius:6,fontSize:12.5,cursor:'pointer',fontFamily:'inherit'}}>
+        <div style={{padding:'12px 18px',borderTop:'1px solid var(--pm-border,rgba(255,255,255,0.07))',display:'flex',gap:8,justifyContent:'flex-end',flexShrink:0}}>
+          <button onClick={onClose} style={{padding:'7px 16px',background:'transparent',color:'var(--pm-text,#f4f4f5)',border:'1px solid var(--pm-border-hover,rgba(255,255,255,0.12))',borderRadius:6,fontSize:12.5,cursor:'pointer',fontFamily:'inherit'}}>
             취소
           </button>
-          <button onClick={onConfirm} style={{padding:'7px 16px',background:'#e8a557',color:'#15120f',border:'none',borderRadius:6,fontSize:12.5,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>
+          <button onClick={onConfirm} style={{padding:'7px 16px',background:'#5eead4',color:'#09090b',border:'none',borderRadius:6,fontSize:12.5,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>
             {confirmLabel}
           </button>
         </div>
